@@ -27,6 +27,8 @@ KNOWN_TOOLS = {
     "analytics.execute",
     "performance.diagnose",
     "virality.evaluate",
+    "improvement.evaluate",
+    "improvement.status",
 }
 
 

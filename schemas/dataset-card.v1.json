@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/dataset-card.v1.json",
+  "title": "DatasetCard@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_id", "example_count", "split_counts", "manifest_hash", "rights_evidence", "rights_modes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "dataset_id": {"type": "string"},
+    "example_count": {"type": "integer", "minimum": 1},
+    "split_counts": {"type": "array", "items": {"type": "array"}},
+    "manifest_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rights_evidence": {"type": "array", "items": {"type": "string"}},
+    "rights_modes": {"type": "array", "items": {"enum": ["owned_original", "licensed_adaptation"]}, "minItems": 1, "uniqueItems": true}
+  }
+}

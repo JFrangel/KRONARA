@@ -10,6 +10,15 @@ from pathlib import Path
 from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
 from kronara.analytics import AnalysisRequest, AnalyticalToolkit
 from kronara.evidence import EvidenceEngine
+from kronara.improvement import (
+    ADMINISTRATIVE_PARAMETERS,
+    AUTOMATIC_PARAMETERS,
+    SUPERVISED_PARAMETERS,
+    CandidateEvaluation,
+    CandidateVersion,
+    EvaluationSet,
+    ImprovementEngine,
+)
 from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.performance import MetricSnapshot, PerformanceScientist
 from kronara.research import ResearchPlanner, ResearchSynthesizer
@@ -205,6 +214,61 @@ def _json_safe(value):
     return value
 
 
+def _candidate_version(params: dict) -> CandidateVersion:
+    return CandidateVersion(
+        version_id=str(params["version_id"]),
+        parameter=str(params["parameter"]),
+        config_hash=str(params["config_hash"]),
+        created_at=datetime.fromisoformat(str(params["created_at"])),
+        expires_at=datetime.fromisoformat(str(params["expires_at"])),
+    )
+
+
+def _candidate_evaluation(params: dict) -> CandidateEvaluation:
+    raw_set = dict(params["evaluation_set"])
+    return CandidateEvaluation(
+        evaluation_id=str(params["evaluation_id"]),
+        evaluation_set=EvaluationSet(
+            set_id=str(raw_set["set_id"]),
+            version=int(raw_set["version"]),
+            frozen=bool(raw_set["frozen"]),
+            content_hash=str(raw_set["content_hash"]),
+            case_count=int(raw_set["case_count"]),
+        ),
+        sample_size=int(params["sample_size"]),
+        champion_score=float(params["champion_score"]),
+        challenger_score=float(params["challenger_score"]),
+        safety_regressions=tuple(str(item) for item in params.get("safety_regressions", ())),
+        cost_change_ratio=float(params["cost_change_ratio"]),
+        platform_stability=float(params["platform_stability"]),
+    )
+
+
+def _improvement_status(_: dict) -> dict:
+    return {
+        "schema_version": 1,
+        "automatic_parameters": sorted(AUTOMATIC_PARAMETERS),
+        "supervised_parameters": sorted(SUPERVISED_PARAMETERS),
+        "administrative_parameters": sorted(ADMINISTRATIVE_PARAMETERS),
+        "minimum_sample": 100,
+        "minimum_relative_lift": 0.05,
+        "maximum_cost_increase": 0.15,
+        "minimum_platform_stability": 0.8,
+        "direct_policy_mutation": False,
+    }
+
+
+def _improvement_evaluate(params: dict) -> dict:
+    as_of = datetime.fromisoformat(str(params["as_of"]))
+    engine = ImprovementEngine(now=lambda: as_of)
+    decision = engine.evaluate(
+        _candidate_version(dict(params["champion"])),
+        _candidate_version(dict(params["challenger"])),
+        _candidate_evaluation(dict(params["evaluation"])),
+    )
+    return asdict(decision)
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -217,6 +281,8 @@ def serve(token: str) -> int:
             "research.evaluate": _research_evaluate,
             "performance.diagnose": _performance_diagnose,
             "virality.evaluate": _virality_evaluate,
+            "improvement.status": _improvement_status,
+            "improvement.evaluate": _improvement_evaluate,
         },
     )
     for raw_line in sys.stdin:

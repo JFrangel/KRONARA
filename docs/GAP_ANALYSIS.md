@@ -83,16 +83,16 @@ Fecha de auditoría: 2026-07-19
 
 ## P2 — Auto-mejora segura
 
-- [ ] Error memory y taxonomía de fallos.
-- [ ] Champion/challenger para prompts, RAG y modelos.
-- [ ] Golden set congelado y regresiones de seguridad.
-- [ ] Promoción con muestra, lift, estabilidad y costo.
-- [ ] Rollback automático de cambios degradantes.
-- [ ] Vigencia y expiración de aprendizajes.
-- [ ] Hipótesis rivales en vez de sobrescritura silenciosa.
-- [ ] Dataset cards y splits reproducibles.
-- [ ] Fine-tuning solo `owned_original` o `licensed_adaptation`.
-- [ ] Prohibición de auto-modificar política, derechos y permisos.
+- [x] Error memory y taxonomía de fallos.
+- [x] Champion/challenger para parámetros, prompts, RAG y modelos.
+- [x] Golden set congelado y bloqueo por regresiones de seguridad.
+- [x] Promoción con muestra, lift, estabilidad y costo.
+- [ ] Rollback automático disparado por métricas (motor y recibo de rollback ya implementados).
+- [x] Vigencia y expiración de candidatos/aprendizajes.
+- [x] Hipótesis rivales en vez de sobrescritura silenciosa.
+- [x] Dataset cards y splits reproducibles.
+- [x] Fine-tuning solo `owned_original` o `licensed_adaptation` con evidencia.
+- [x] Prohibición de auto-modificar política, derechos y permisos.
 
 ## P2 — Producción restante
 
@@ -118,12 +118,12 @@ Fecha de auditoría: 2026-07-19
 
 ## Evidencia del gate local — 2026-07-19
 
-- [x] Python: 107 pruebas aprobadas.
+- [x] Python: 118 pruebas aprobadas.
 - [x] Node/Vite: 3 pruebas aprobadas.
 - [x] Rust: 5 pruebas de integración aprobadas.
 - [x] Contratos JSON: todos parsean correctamente.
 - [x] Build Tauri debug sin bundle completado.
-- [x] Sidecar empaquetado: handshake, 19 agentes, investigación, analítica y `performance.diagnose` verificados.
+- [x] Sidecar empaquetado: handshake, 19 agentes, investigación, analítica, forecast e improvement verificados.
 - [x] `.env` ignorado y ausente del índice Git.
 
 ## Definición de terminado v0.3
@@ -133,5 +133,5 @@ Fecha de auditoría: 2026-07-19
 - [ ] RAG v2 supera el baseline v0.2 en el corpus congelado.
 - [x] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
 - [x] El científico interpreta métricas sin declarar causalidad injustificada.
-- [ ] Una mejora champion/challenger puede promoverse y revertirse.
+- [x] Una mejora champion/challenger puede promoverse y revertirse.
 - [ ] Un Reel original puede publicarse una sola vez y aprender de sus métricas.

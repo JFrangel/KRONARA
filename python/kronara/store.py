@@ -43,6 +43,19 @@ class KronaraStore:
                 node TEXT NOT NULL,
                 state_json TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS improvement_decisions (
+                version_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS error_memories (
+                error_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS learning_hypotheses (
+                hypothesis_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
             """
         )
         self.connection.commit()
@@ -84,8 +97,72 @@ class KronaraStore:
         )
         return [WorkflowEvent(run_id, kind, json.loads(payload)) for kind, payload in rows]
 
+    def save_improvement_decision(
+        self,
+        version_id: str,
+        status: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self._db().execute(
+            """
+            INSERT INTO improvement_decisions(version_id, status, payload_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(version_id) DO UPDATE SET
+                status=excluded.status,
+                payload_json=excluded.payload_json
+            """,
+            (version_id, status, json.dumps(payload, sort_keys=True)),
+        )
+        self._db().commit()
+
+    def load_improvement_decision(self, version_id: str) -> dict[str, Any]:
+        row = self._db().execute(
+            "SELECT status, payload_json FROM improvement_decisions WHERE version_id = ?",
+            (version_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(version_id)
+        payload = json.loads(row[1])
+        payload["status"] = row[0]
+        return payload
+
+    def save_error_memory(self, error_id: str, payload: dict[str, Any]) -> None:
+        self._db().execute(
+            """
+            INSERT INTO error_memories(error_id, payload_json) VALUES (?, ?)
+            ON CONFLICT(error_id) DO UPDATE SET payload_json=excluded.payload_json
+            """,
+            (error_id, json.dumps(payload, sort_keys=True)),
+        )
+        self._db().commit()
+
+    def load_error_memory(self, error_id: str) -> dict[str, Any]:
+        row = self._db().execute(
+            "SELECT payload_json FROM error_memories WHERE error_id = ?", (error_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(error_id)
+        return json.loads(row[0])
+
+    def save_learning_hypothesis(
+        self, hypothesis_id: str, payload: dict[str, Any]
+    ) -> None:
+        self._db().execute(
+            """
+            INSERT INTO learning_hypotheses(hypothesis_id, payload_json) VALUES (?, ?)
+            ON CONFLICT(hypothesis_id) DO UPDATE SET payload_json=excluded.payload_json
+            """,
+            (hypothesis_id, json.dumps(payload, sort_keys=True)),
+        )
+        self._db().commit()
+
+    def list_learning_hypotheses(self) -> list[dict[str, Any]]:
+        rows = self._db().execute(
+            "SELECT payload_json FROM learning_hypotheses ORDER BY hypothesis_id"
+        )
+        return [json.loads(row[0]) for row in rows]
+
     def close(self) -> None:
         if self.connection is not None:
             self.connection.close()
             self.connection = None
-

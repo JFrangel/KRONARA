@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/prompt-candidate.v1.json",
+  "title": "CandidateVersion@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version_id", "parameter", "config_hash", "created_at", "expires_at"],
+  "properties": {
+    "version_id": {"type": "string", "minLength": 1},
+    "parameter": {"type": "string", "minLength": 1},
+    "config_hash": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}

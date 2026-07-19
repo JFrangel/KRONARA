@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/deployment-decision.v1.json",
+  "title": "DeploymentDecision@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision_id", "status", "champion_version", "challenger_version", "parameter", "authority_required", "relative_lift", "reason", "evaluation_set_id", "evaluation_set_hash", "reversible"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "decision_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["promoted", "rejected", "testing", "requires_approval"]},
+    "champion_version": {"type": "string"},
+    "challenger_version": {"type": "string"},
+    "parameter": {"type": "string"},
+    "authority_required": {"enum": ["automatic", "supervised", "administrative"]},
+    "relative_lift": {"type": "number"},
+    "reason": {"type": "string"},
+    "evaluation_set_id": {"type": "string"},
+    "evaluation_set_hash": {"type": "string"},
+    "reversible": {"type": "boolean"}
+  }
+}

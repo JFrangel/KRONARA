@@ -76,3 +76,16 @@ Pendiente para completar la fase 7: bootstrap, sensibilidad, importación real d
 - RPC sin estado oculto `virality.evaluate`.
 
 Pendiente: definir thresholds de outcome desde percentiles reales, calibración por plataforma, backtesting walk-forward y monitoreo de drift.
+
+## Séptimo vertical implementado — mejora continua reversible
+
+- Champion/challenger con evaluation set congelado y hash verificable.
+- Gates por muestra, lift, costo, estabilidad y regresiones de seguridad.
+- Scopes automáticos, supervisados y administrativos calculados por parámetro, no declarados por el modelo.
+- Persistencia SQLite de decisiones, error memories e hipótesis rivales.
+- Rollback de versiones promovidas con recibo y versión restaurada.
+- Expiración de candidatos y estados de aprendizaje sin sobrescritura silenciosa.
+- Dataset cards que aceptan únicamente `owned_original` o `licensed_adaptation` autorizada.
+- RPC `improvement.status` e `improvement.evaluate`.
+
+Pendiente: asignación real de tráfico, integración con model/prompt registry, monitoreo post-release y rollback automático disparado por métricas.
