@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/compiled-context.v1.json",
+  "title": "CompiledContext@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy", "context", "citations", "included_ids", "omitted_ids", "token_estimate", "coverage", "injection_warnings"],
+  "properties": {
+    "policy": {"type": "string"},
+    "context": {"type": "string"},
+    "citations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "included_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "omitted_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "token_estimate": {"type": "integer", "minimum": 0},
+    "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "injection_warnings": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}

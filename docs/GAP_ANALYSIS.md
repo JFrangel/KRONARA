@@ -19,13 +19,13 @@ Fecha de auditoría: 2026-07-19
 
 ## P0 — Necesario antes de conectar credenciales reales
 
-- [ ] Crear `.env.example` documentado y `.env` local ignorado.
-- [ ] Cargar variables exclusivamente en Rust y redactar secretos.
-- [ ] Validar configuración por proveedor sin imprimir valores.
+- [x] Crear `.env.example` documentado y `.env` local ignorado.
+- [x] Cargar variables exclusivamente en Rust y redactar secretos.
+- [x] Validar configuración por proveedor sin imprimir valores.
 - [ ] Añadir contratos v0.3 de investigación, evidencia, contexto y análisis.
-- [ ] Implementar `TrainingRightsDecision` y excluir datasets no autorizados.
-- [ ] Sustituir presupuesto por caracteres por presupuesto estimado de tokens.
-- [ ] Garantizar que evidencia crítica no sea truncada silenciosamente.
+- [x] Implementar `TrainingRightsDecision` y excluir datasets no autorizados.
+- [x] Sustituir presupuesto por caracteres por presupuesto estimado de tokens en Context Compiler v1.
+- [x] Garantizar que evidencia crítica no sea truncada silenciosamente.
 - [ ] Añadir cache, health y circuit breaker por conector externo.
 - [ ] Mantener Reddit `disabled_by_policy` sin acceso oficial aprobado.
 

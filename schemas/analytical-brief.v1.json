@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/analytical-brief.v1.json",
+  "title": "AnalyticalBrief@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["brief_id", "facts", "calculations", "inferences", "hypotheses", "recommendations", "citations", "confidence"],
+  "properties": {
+    "brief_id": {"type": "string", "minLength": 1},
+    "facts": {"type": "array", "items": {"type": "string"}},
+    "calculations": {"type": "array", "items": {"type": "string"}},
+    "inferences": {"type": "array", "items": {"type": "string"}},
+    "hypotheses": {"type": "array", "items": {"type": "string"}},
+    "recommendations": {"type": "array", "items": {"type": "string"}},
+    "citations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}

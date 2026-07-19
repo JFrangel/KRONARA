@@ -44,6 +44,10 @@ class ContextBuilder:
             raise ValueError("context budget must be positive")
         self.max_characters = max_characters
 
+    @classmethod
+    def detect_injection(cls, content: str) -> bool:
+        return cls._INJECTION.search(content) is not None
+
     def build(self, policy: str, items: Iterable[ContextItem]) -> ContextPackage:
         chunks: list[str] = []
         citations: list[str] = []
@@ -51,7 +55,7 @@ class ContextBuilder:
         remaining = self.max_characters
         ordered = sorted(items, key=lambda item: (-item.priority, item.item_id))
         for item in ordered:
-            if item.trust == TrustLevel.UNTRUSTED and self._INJECTION.search(item.content):
+            if item.trust == TrustLevel.UNTRUSTED and self.detect_injection(item.content):
                 warnings.append(item.item_id)
             chunk = (
                 f'<source trust="{item.trust.value}" id="{item.item_id}" '
