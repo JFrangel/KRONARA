@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/reddit-signal-page.v1.json",
+  "title": "RedditSignalPage@1",
+  "type": "object",
+  "required": ["schema_version", "signals", "after", "receipt"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "signals": {"type": "array", "maxItems": 500, "items": {"type": "object"}},
+    "after": {"type": ["string", "null"]},
+    "receipt": {"type": "object"}
+  },
+  "additionalProperties": false
+}

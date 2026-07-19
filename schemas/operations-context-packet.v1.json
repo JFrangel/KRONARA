@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/operations-context-packet.v1.json",
+  "title": "OperationsContextPacket@1",
+  "type": "object",
+  "required": ["schema_version", "packet_id", "run_ids", "workflow_snapshot", "tool_trace_ids", "evidence_refs", "citations", "memory_record_ids", "provider_status", "budget_status", "coverage", "missing_topics"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "packet_id": {"type": "string", "minLength": 1},
+    "run_ids": {"type": "array", "items": {"type": "string"}},
+    "workflow_snapshot": {"type": "object"},
+    "tool_trace_ids": {"type": "array", "items": {"type": "string"}},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "citations": {"type": "array", "items": {"type": "string"}},
+    "memory_record_ids": {"type": "array", "items": {"type": "string"}},
+    "provider_status": {"type": "object", "additionalProperties": {"type": "string"}},
+    "budget_status": {"type": "object", "additionalProperties": {"type": "number"}},
+    "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "missing_topics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

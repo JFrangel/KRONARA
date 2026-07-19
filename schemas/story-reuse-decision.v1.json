@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/story-reuse-decision.v1.json",
+  "title": "StoryReuseDecision@1",
+  "type": "object",
+  "required": ["schema_version", "story_id", "status", "reason", "automatic_action", "requires_administrative_approval", "reversible", "evidence_refs"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "story_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["eligible_owned", "measuring", "supported_example", "rag_candidate", "promoted_rag_example", "dataset_candidate", "approved_training_example", "rejected", "reverted"]},
+    "reason": {"type": "string", "minLength": 1},
+    "automatic_action": {"type": ["string", "null"]},
+    "requires_administrative_approval": {"type": "boolean"},
+    "reversible": {"type": "boolean"},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

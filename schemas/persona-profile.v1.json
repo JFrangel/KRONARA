@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/persona-profile.v1.json",
+  "title": "PersonaProfile@1",
+  "type": "object",
+  "required": ["schema_version", "persona_id", "version", "traits", "rules"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "persona_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "traits": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "rules": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

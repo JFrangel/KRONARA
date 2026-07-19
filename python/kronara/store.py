@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from kronara.operations_contracts import MemoryRecord, ToolTraceEvent
 
 
 @dataclass(frozen=True)
@@ -28,7 +31,8 @@ class KronaraStore:
 
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path)
+        if self.connection is None:
+            self.connection = sqlite3.connect(self.path)
         self.connection.executescript(
             """
             PRAGMA journal_mode=WAL;
@@ -54,6 +58,53 @@ class KronaraStore:
             );
             CREATE TABLE IF NOT EXISTS learning_hypotheses (
                 hypothesis_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS tool_trace_events (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                tool_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_tool_trace_run_sequence
+                ON tool_trace_events(run_id, sequence);
+            CREATE TABLE IF NOT EXISTS memory_records (
+                record_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                status TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_memory_scope_kind
+                ON memory_records(scope, kind);
+            CREATE TABLE IF NOT EXISTS conversation_turns (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_conversation_turns
+                ON conversation_turns(conversation_id, sequence);
+            CREATE TABLE IF NOT EXISTS embedding_index_manifests (
+                index_id TEXT PRIMARY KEY,
+                model_alias TEXT NOT NULL,
+                version_hash TEXT NOT NULL,
+                dimensions INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS reddit_query_receipts (
+                receipt_id TEXT PRIMARY KEY,
+                query_hash TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS owned_story_reuse_decisions (
+                story_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             );
             """
@@ -161,6 +212,109 @@ class KronaraStore:
             "SELECT payload_json FROM learning_hypotheses ORDER BY hypothesis_id"
         )
         return [json.loads(row[0]) for row in rows]
+
+    def save_tool_trace(self, event: ToolTraceEvent) -> None:
+        payload = json.dumps(asdict(event), sort_keys=True, default=self._json_default)
+        self._db().execute(
+            """
+            INSERT INTO tool_trace_events(
+                event_id, run_id, agent_id, tool_id, status, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (event.event_id, event.run_id, event.agent_id, event.tool_id, event.status, payload),
+        )
+        self._db().commit()
+
+    def list_tool_traces(self, run_id: str) -> list[ToolTraceEvent]:
+        rows = self._db().execute(
+            "SELECT payload_json FROM tool_trace_events WHERE run_id = ? ORDER BY sequence",
+            (run_id,),
+        )
+        events: list[ToolTraceEvent] = []
+        for (payload_json,) in rows:
+            payload = json.loads(payload_json)
+            payload["started_at"] = datetime.fromisoformat(payload["started_at"])
+            if payload.get("finished_at") is not None:
+                payload["finished_at"] = datetime.fromisoformat(payload["finished_at"])
+            for key in ("evidence_refs", "artifact_refs", "policy_findings"):
+                payload[key] = tuple(payload.get(key, ()))
+            events.append(ToolTraceEvent(**payload))
+        return events
+
+    def save_memory(self, record: MemoryRecord) -> None:
+        payload = json.dumps(asdict(record), sort_keys=True)
+        self._db().execute(
+            """
+            INSERT INTO memory_records(record_id, kind, scope, status, payload_json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(record_id) DO UPDATE SET
+                kind=excluded.kind,
+                scope=excluded.scope,
+                status=excluded.status,
+                payload_json=excluded.payload_json
+            """,
+            (record.record_id, record.kind, record.scope, record.status, payload),
+        )
+        self._db().commit()
+
+    def search_memory(self, scope: str, kind: str | None = None) -> list[MemoryRecord]:
+        if kind is None:
+            rows = self._db().execute(
+                "SELECT payload_json FROM memory_records WHERE scope = ? ORDER BY record_id",
+                (scope,),
+            )
+        else:
+            rows = self._db().execute(
+                """
+                SELECT payload_json FROM memory_records
+                WHERE scope = ? AND kind = ? ORDER BY record_id
+                """,
+                (scope, kind),
+            )
+        records: list[MemoryRecord] = []
+        for (payload_json,) in rows:
+            payload = json.loads(payload_json)
+            payload["evidence_refs"] = tuple(payload.get("evidence_refs", ()))
+            records.append(MemoryRecord(**payload))
+        return records
+
+    def save_conversation_turn(
+        self,
+        *,
+        conversation_id: str,
+        role: str,
+        content: str,
+        created_at: datetime,
+    ) -> None:
+        if role not in {"user", "assistant", "system"}:
+            raise ValueError("unsupported conversation role")
+        self._db().execute(
+            """
+            INSERT INTO conversation_turns(conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (conversation_id, role, content, created_at.isoformat()),
+        )
+        self._db().commit()
+
+    def list_conversation_turns(self, conversation_id: str) -> list[dict[str, str]]:
+        rows = self._db().execute(
+            """
+            SELECT role, content, created_at FROM conversation_turns
+            WHERE conversation_id = ? ORDER BY sequence
+            """,
+            (conversation_id,),
+        )
+        return [
+            {"role": role, "content": content, "created_at": created_at}
+            for role, content, created_at in rows
+        ]
+
+    @staticmethod
+    def _json_default(value: Any) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        raise TypeError(f"unsupported JSON value: {type(value).__name__}")
 
     def close(self) -> None:
         if self.connection is not None:

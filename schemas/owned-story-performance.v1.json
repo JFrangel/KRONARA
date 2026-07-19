@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/owned-story-performance.v1.json",
+  "title": "OwnedStoryPerformance@1",
+  "type": "object",
+  "required": ["schema_version", "story_id", "platform", "format", "sample_size", "metric_window_hours", "relative_lift", "confidence_low", "confidence_high", "comparable_cohort", "outlier_share", "reputational_risk"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "story_id": {"type": "string", "minLength": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "format": {"type": "string", "minLength": 1},
+    "sample_size": {"type": "integer", "minimum": 0},
+    "metric_window_hours": {"type": "integer", "minimum": 1},
+    "relative_lift": {"type": "number"},
+    "confidence_low": {"type": "number"},
+    "confidence_high": {"type": "number"},
+    "comparable_cohort": {"type": "boolean"},
+    "outlier_share": {"type": "number", "minimum": 0, "maximum": 1},
+    "reputational_risk": {"enum": ["low", "medium", "high", "critical"]}
+  },
+  "additionalProperties": false
+}

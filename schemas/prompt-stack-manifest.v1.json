@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/prompt-stack-manifest.v1.json",
+  "title": "PromptStackManifest@1",
+  "type": "object",
+  "required": ["schema_version", "manifest_id", "version", "layer_ids", "prompt_hash", "estimated_tokens", "selected_skill_ids", "tool_ids", "output_schema_id"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "manifest_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "layer_ids": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "string"}},
+    "prompt_hash": {"type": "string", "minLength": 16},
+    "estimated_tokens": {"type": "integer", "minimum": 1},
+    "selected_skill_ids": {"type": "array", "items": {"type": "string"}},
+    "tool_ids": {"type": "array", "items": {"type": "string"}},
+    "output_schema_id": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

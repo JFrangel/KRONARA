@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/operations-chat-response.v1.json",
+  "title": "OperationsChatResponse@1",
+  "type": "object",
+  "required": ["schema_version", "request_id", "status", "answer", "citations", "tool_trace_ids", "gaps", "action_intent"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "request_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["completed", "partial", "blocked"]},
+    "answer": {"type": "string", "minLength": 1, "maxLength": 24000},
+    "citations": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+    "tool_trace_ids": {"type": "array", "maxItems": 200, "items": {"type": "string"}},
+    "gaps": {"type": "array", "maxItems": 50, "items": {"type": "string"}},
+    "action_intent": {"oneOf": [{"type": "null"}, {"type": "object"}]}
+  },
+  "additionalProperties": false
+}

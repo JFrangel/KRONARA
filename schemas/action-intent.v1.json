@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/action-intent.v1.json",
+  "title": "ActionIntent@1",
+  "type": "object",
+  "required": ["schema_version", "intent_id", "kind", "arguments", "risk_level", "status", "idempotency_key"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "intent_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "arguments": {"type": "object"},
+    "risk_level": {"enum": ["low", "medium", "high", "critical", "administrative"]},
+    "status": {"enum": ["proposed", "requires_approval", "authorized", "denied"]},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/embedding-evaluation.v1.json",
+  "title": "EmbeddingEvaluation@1",
+  "type": "object",
+  "required": ["schema_version", "evaluation_id", "model_alias", "golden_set_hash", "recall_at_k", "mrr", "ndcg_at_k", "citation_precision", "redundancy_rate", "latency_ms", "memory_mb", "cases"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "evaluation_id": {"type": "string", "minLength": 1},
+    "model_alias": {"type": "string", "minLength": 1},
+    "golden_set_hash": {"type": "string", "minLength": 8},
+    "recall_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+    "mrr": {"type": "number", "minimum": 0, "maximum": 1},
+    "ndcg_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+    "citation_precision": {"type": "number", "minimum": 0, "maximum": 1},
+    "redundancy_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "latency_ms": {"type": "number", "minimum": 0},
+    "memory_mb": {"type": "number", "minimum": 0},
+    "cases": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false
+}

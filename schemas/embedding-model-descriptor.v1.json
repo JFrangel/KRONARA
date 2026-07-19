@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/embedding-model-descriptor.v1.json",
+  "title": "EmbeddingModelDescriptor@1",
+  "type": "object",
+  "required": ["schema_version", "alias", "provider", "model_id", "dimensions", "max_tokens", "languages", "normalized", "query_instruction", "license", "version_hash", "privacy", "health"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "alias": {"type": "string", "minLength": 1},
+    "provider": {"type": "string", "minLength": 1},
+    "model_id": {"type": "string", "minLength": 1},
+    "dimensions": {"type": "integer", "minimum": 8},
+    "max_tokens": {"type": "integer", "minimum": 1},
+    "languages": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "normalized": {"type": "boolean"},
+    "query_instruction": {"type": "string"},
+    "license": {"type": "string", "minLength": 1},
+    "version_hash": {"type": "string", "minLength": 8},
+    "privacy": {"type": "string", "minLength": 1},
+    "health": {"enum": ["healthy", "degraded", "unavailable", "development_only"]}
+  },
+  "additionalProperties": false
+}

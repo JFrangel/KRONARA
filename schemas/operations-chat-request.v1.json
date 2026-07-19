@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/operations-chat-request.v1.json",
+  "title": "OperationsChatRequest@1",
+  "type": "object",
+  "required": ["schema_version", "request_id", "conversation_id", "message", "minimum_context_coverage"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "conversation_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "message": {"type": "string", "minLength": 1, "maxLength": 12000},
+    "minimum_context_coverage": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "additionalProperties": false
+}
