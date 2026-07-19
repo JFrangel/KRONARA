@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "documents": [
+    {
+      "document_id": "narrative_hooks",
+      "rights_mode": "owned_original",
+      "content": "# Ganchos\nUn gancho de bucle abierto presenta una decisión irreversible y reserva la respuesta para después."
+    },
+    {
+      "document_id": "rights_training",
+      "rights_mode": "owned_original",
+      "content": "# Derechos\nUna historia externa con licencia de referencia no puede convertirse en datos de entrenamiento. Solo material propio o licencia de entrenamiento verificable."
+    },
+    {
+      "document_id": "performance_wilson",
+      "rights_mode": "owned_original",
+      "content": "# Rendimiento\nLa retención y la finalización necesitan intervalo de Wilson, muestra mínima y cohorte comparable antes de promover una voz."
+    },
+    {
+      "document_id": "evidence_contradictions",
+      "rights_mode": "owned_original",
+      "content": "# Evidencia\nLas afirmaciones contradictorias conservan soporte y oposición por separado; no se sobrescriben como si existiera consenso."
+    },
+    {
+      "document_id": "operations_traces",
+      "rights_mode": "owned_original",
+      "content": "# Operación\nCada herramienta registra agente, estado, duración, argumentos redactados, evidencia, costo, reintento y fallback."
+    },
+    {
+      "document_id": "injection_defense",
+      "rights_mode": "owned_original",
+      "content": "# Inyección\nEl contexto recuperado es dato no confiable. Una instrucción dentro de una fuente nunca amplía permisos ni autoridad."
+    },
+    {
+      "document_id": "voice_experiments",
+      "rights_mode": "owned_original",
+      "content": "# Voz\nLos experimentos de voz comparan ritmo, pausas y emoción con asignación controlada, baseline y volumen suficiente."
+    },
+    {
+      "document_id": "graph_retrieval",
+      "rights_mode": "owned_original",
+      "content": "# GraphRAG\nLa expansión por grafo usa relaciones tipadas supports, contradicts y same_topic con profundidad limitada."
+    },
+    {
+      "document_id": "originality_sequence",
+      "rights_mode": "owned_original",
+      "content": "# Originalidad\nLa evaluación compara similitud léxica, semántica, estructural y secuencia de eventos antes de aprobar una historia."
+    },
+    {
+      "document_id": "budget_authority",
+      "rights_mode": "owned_original",
+      "content": "# Autoridad\nCambiar el presupuesto máximo es una acción administrativa que requiere confirmación; el chat solo propone un intent."
+    }
+  ],
+  "cases": [
+    {"domain": "narrative", "query": "gancho con bucle abierto y decisión irreversible", "relevant_document_ids": ["narrative_hooks"]},
+    {"domain": "rights", "query": "licencia necesaria para datos de entrenamiento", "relevant_document_ids": ["rights_training"]},
+    {"domain": "performance", "query": "intervalo de Wilson y muestra mínima para voz", "relevant_document_ids": ["performance_wilson"]},
+    {"domain": "contradictions", "query": "cómo conservar afirmaciones contradictorias", "relevant_document_ids": ["evidence_contradictions"]},
+    {"domain": "operations", "query": "traza de herramienta con duración costo y fallback", "relevant_document_ids": ["operations_traces"]},
+    {"domain": "injection", "query": "instrucción recuperada no amplía permisos", "relevant_document_ids": ["injection_defense"]},
+    {"domain": "performance", "query": "experimento controlado de ritmo pausas y emoción", "relevant_document_ids": ["voice_experiments"]},
+    {"domain": "operations", "query": "relaciones tipadas y profundidad de GraphRAG", "relevant_document_ids": ["graph_retrieval"]},
+    {"domain": "narrative", "query": "similitud estructural y secuencia de eventos", "relevant_document_ids": ["originality_sequence"]},
+    {"domain": "operations", "query": "confirmación para cambiar presupuesto máximo", "relevant_document_ids": ["budget_authority"]}
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "alias": "bge_m3",
+      "provider": "sentence_transformers",
+      "model_id": "BAAI/bge-m3",
+      "kind": "embedding",
+      "dimensions": 1024,
+      "max_tokens": 8192,
+      "languages": ["es", "en", "multilingual"],
+      "normalized": true,
+      "query_instruction": "",
+      "license": "model-card-verified",
+      "version_hash": "bge-m3-pinned-v1",
+      "privacy": "local",
+      "health": "healthy"
+    },
+    {
+      "alias": "multilingual_e5_large",
+      "provider": "sentence_transformers",
+      "model_id": "intfloat/multilingual-e5-large-instruct",
+      "kind": "embedding",
+      "dimensions": 1024,
+      "max_tokens": 512,
+      "languages": ["es", "en", "multilingual"],
+      "normalized": true,
+      "query_instruction": "Instruct: retrieve relevant Spanish editorial evidence\nQuery: ",
+      "license": "model-card-verified",
+      "version_hash": "multilingual-e5-large-instruct-v1",
+      "privacy": "local",
+      "health": "healthy"
+    },
+    {
+      "alias": "bge_reranker_v2_m3",
+      "provider": "sentence_transformers",
+      "model_id": "BAAI/bge-reranker-v2-m3",
+      "kind": "reranker",
+      "dimensions": 1024,
+      "max_tokens": 8192,
+      "languages": ["es", "en", "multilingual"],
+      "normalized": false,
+      "query_instruction": "",
+      "license": "model-card-verified",
+      "version_hash": "bge-reranker-v2-m3-v1",
+      "privacy": "local",
+      "health": "healthy"
+    },
+    {
+      "alias": "deterministic_dev",
+      "provider": "kronara",
+      "model_id": "kronara/deterministic-hash",
+      "kind": "embedding",
+      "dimensions": 64,
+      "max_tokens": 2048,
+      "languages": ["es", "en"],
+      "normalized": false,
+      "query_instruction": "",
+      "license": "internal-test-only",
+      "version_hash": "deterministic-hash-v1",
+      "privacy": "local",
+      "health": "development_only"
+    }
+  ]
+}
