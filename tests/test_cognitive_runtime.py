@@ -6,7 +6,9 @@ from kronara.cognitive_runtime import (
 )
 from kronara.contracts import EvidenceRef
 from kronara.guardian import Guardian
+from kronara.observable_tools import ObservableToolRegistry
 from kronara.skills import SkillRegistry, SkillSpec
+from kronara.store import KronaraStore
 from kronara.tools import ToolRegistry, ToolSpec
 
 
@@ -177,3 +179,46 @@ def test_runtime_blocks_when_global_deadline_expires_during_planning():
     result = runtime.run("x", ("plan",), "agent", ())
 
     assert result.error_code == "RUNTIME_TIMEOUT"
+
+
+def test_runtime_emits_observable_tool_events_with_explicit_run_id(tmp_path):
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+
+    def draft(_):
+        return {
+            "artifact": "story-1",
+            "claims": ["originality_checked"],
+            "evidence": [
+                EvidenceRef("ev-1", "kronara://qc/1", ("originality_checked",), 0.95)
+            ],
+        }
+
+    runtime = CognitiveRuntime(
+        skills=SkillRegistry([SkillSpec("narrative_planning", 1, ("plan_story",))]),
+        tools=ObservableToolRegistry(
+            ToolRegistry([ToolSpec("story.draft", draft)]),
+            store=store,
+        ),
+        planner=Planner(),
+        critic=Critic(),
+        guardian=Guardian(),
+        limits=RuntimeLimits(max_steps=4, max_tool_calls=4, max_revisions=1),
+    )
+
+    result = runtime.run(
+        objective="Crear historia",
+        required_capabilities=("plan_story",),
+        agent_id="concept_architect",
+        allowed_tools=("story.draft",),
+        run_id="run_observable",
+    )
+
+    assert result.status == "completed"
+    assert [event.status for event in store.list_tool_traces("run_observable")] == [
+        "started",
+        "completed",
+        "started",
+        "completed",
+    ]
+    store.close()

@@ -14,6 +14,13 @@ class ToolSpec:
     handler: Callable[[dict[str, Any]], Any]
     side_effect: bool = False
     timeout_seconds: float = 30.0
+    estimated_cost_usd: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.timeout_seconds <= 0:
+            raise ValueError("tool timeout must be positive")
+        if self.estimated_cost_usd < 0:
+            raise ValueError("tool estimated cost cannot be negative")
 
 
 @dataclass(frozen=True)
@@ -48,6 +55,9 @@ class ToolRegistry:
     @property
     def tool_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._tools))
+
+    def get_spec(self, tool_id: str) -> ToolSpec | None:
+        return self._tools.get(tool_id)
 
     def invoke(
         self,

@@ -6,6 +6,7 @@ from typing import Any, Callable, Protocol
 
 from kronara.contracts import EvidenceRef
 from kronara.guardian import Guardian
+from kronara.observable_tools import ObservableToolRegistry, ToolExecutionContext
 from kronara.skills import SkillRegistry, SkillSpec
 from kronara.tools import ToolRegistry
 
@@ -71,7 +72,7 @@ class CognitiveRuntime:
         self,
         *,
         skills: SkillRegistry,
-        tools: ToolRegistry,
+        tools: ToolRegistry | ObservableToolRegistry,
         planner: Planner,
         critic: Critic,
         guardian: Guardian,
@@ -92,6 +93,7 @@ class CognitiveRuntime:
         required_capabilities: tuple[str, ...],
         agent_id: str,
         allowed_tools: tuple[str, ...],
+        run_id: str | None = None,
     ) -> CognitiveResult:
         started_at = self.clock()
         task = AgentTask(objective, required_capabilities, agent_id, allowed_tools)
@@ -115,14 +117,25 @@ class CognitiveRuntime:
         if sum(step.estimated_cost_usd for step in plan.steps) > self.limits.max_cost_usd:
             return self._blocked("COST_BUDGET_EXCEEDED", plan.decision_summary, families)
 
-        state: dict[str, Any] = {"objective": objective, "artifacts": []}
+        effective_run_id = run_id or f"run:{agent_id}:{int(started_at * 1000)}"
+        state: dict[str, Any] = {
+            "objective": objective,
+            "artifacts": [],
+            "run_id": effective_run_id,
+        }
         last_step: PlanStep | None = None
         calls = 0
         for step in plan.steps:
             if self._expired(started_at):
                 return self._blocked("RUNTIME_TIMEOUT", plan.decision_summary, families, state)
             last_step = step
-            outcome = self.tools.invoke(agent_id, allowed_tools, step.tool_id, step.arguments)
+            outcome = self._invoke_tool(
+                effective_run_id,
+                agent_id,
+                allowed_tools,
+                step.tool_id,
+                step.arguments,
+            )
             calls += 1
             if not outcome.ok:
                 return self._blocked(
@@ -151,7 +164,13 @@ class CognitiveRuntime:
                 return self._blocked("COST_BUDGET_EXCEEDED", plan.decision_summary, families, state)
             arguments = dict(last_step.arguments)
             arguments["revision"] = critique.get("revision", {})
-            outcome = self.tools.invoke(agent_id, allowed_tools, last_step.tool_id, arguments)
+            outcome = self._invoke_tool(
+                effective_run_id,
+                agent_id,
+                allowed_tools,
+                last_step.tool_id,
+                arguments,
+            )
             calls += 1
             revisions += 1
             spent_cost += last_step.estimated_cost_usd
@@ -199,3 +218,24 @@ class CognitiveRuntime:
 
     def _expired(self, started_at: float) -> bool:
         return self.clock() - started_at > self.limits.timeout_seconds
+
+    def _invoke_tool(
+        self,
+        run_id: str,
+        agent_id: str,
+        allowed_tools: tuple[str, ...],
+        tool_id: str,
+        arguments: dict[str, Any],
+    ):
+        if isinstance(self.tools, ObservableToolRegistry):
+            return self.tools.invoke(
+                ToolExecutionContext(
+                    run_id=run_id,
+                    agent_id=agent_id,
+                    allowed_tools=allowed_tools,
+                    cost_budget_usd=self.limits.max_cost_usd,
+                ),
+                tool_id,
+                arguments,
+            )
+        return self.tools.invoke(agent_id, allowed_tools, tool_id, arguments)
