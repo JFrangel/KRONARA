@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScheduleRule",
+  "description": "One entry in the editorial grid that lets a program run unattended.",
+  "type": "object",
+  "required": ["rule_id", "program_id", "cadence"],
+  "properties": {
+    "rule_id": {"type": "string"},
+    "program_id": {"type": "string"},
+    "cadence": {"enum": ["interval", "daily", "weekly"]},
+    "enabled": {"type": "boolean", "default": true},
+    "interval_seconds": {"type": ["integer", "null"], "minimum": 1},
+    "at_second_of_day": {"type": ["integer", "null"], "minimum": 0, "maximum": 86399},
+    "weekday": {"type": ["integer", "null"], "minimum": 0, "maximum": 6, "description": "0=Mon .. 6=Sun"},
+    "params": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"cadence": {"const": "interval"}}}, "then": {"required": ["interval_seconds"]}},
+    {"if": {"properties": {"cadence": {"const": "daily"}}}, "then": {"required": ["at_second_of_day"]}},
+    {"if": {"properties": {"cadence": {"const": "weekly"}}}, "then": {"required": ["at_second_of_day", "weekday"]}}
+  ]
+}
