@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/rag-evaluation.v1.json",
+  "title": "RAGEvaluation@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recall_at_k", "mrr", "ndcg_at_k", "citation_precision", "redundancy_rate", "cases"],
+  "properties": {
+    "recall_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+    "mrr": {"type": "number", "minimum": 0, "maximum": 1},
+    "ndcg_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+    "citation_precision": {"type": "number", "minimum": 0, "maximum": 1},
+    "redundancy_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "cases": {"type": "integer", "minimum": 0}
+  }
+}

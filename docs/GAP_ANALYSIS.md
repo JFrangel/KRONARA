@@ -9,7 +9,7 @@ Fecha de auditoría: 2026-07-19
 - [x] LangGraph con checkpoints SQLite.
 - [x] Runtime plan–act–critic–Guardian.
 - [x] Allowlist de tools, anti-loop, timeout y circuit breaker.
-- [x] 19 manifiestos de agentes y 26 habilidades.
+- [x] 20 manifiestos de agentes y 27 habilidades.
 - [x] Reddit OAuth básico con rate limit y señales sin cuerpo.
 - [x] FTS5 + sqlite-vec + grafo + RRF.
 - [x] ADN narrativo, rúbrica y golden set adversarial.
@@ -33,14 +33,14 @@ Fecha de auditoría: 2026-07-19
 
 - [x] Chunking jerárquico estable documento → sección → fragmento.
 - [x] Metadatos de idioma, ámbito, versión, derechos y vigencia en RAG v2.
-- [ ] Deduplicación exacta y semántica (exacta implementada en cada documento).
-- [ ] Query decomposition y expansión controlada.
+- [ ] Deduplicación exacta y semántica (exacta global implementada; falta semántica evaluada).
+- [ ] Query decomposition y expansión controlada (expansión acotada implementada; falta decomposition específica de recuperación).
 - [x] Filtros previos obligatorios por derechos, fecha, idioma y ámbito.
 - [ ] Reranker multilingüe configurable (interfaz inyectable implementada; falta modelo evaluado).
 - [x] Selección diversa con máximo por documento.
-- [ ] GraphRAG con relaciones tipadas y profundidad limitada (expansión de un salto implementada; faltan tipos).
+- [x] GraphRAG con relaciones tipadas y profundidad máxima de tres saltos.
 - [x] Tombstones para eliminación y expiración.
-- [ ] Benchmark español congelado (evaluador Recall@k, MRR y nDCG implementado; falta corpus juzgado).
+- [x] Benchmark español congelado con Recall@k, MRR, nDCG, precisión de citas y redundancia.
 
 ## P1 — Investigador analítico
 
@@ -118,19 +118,19 @@ Fecha de auditoría: 2026-07-19
 
 ## Evidencia del gate local — 2026-07-19
 
-- [x] Python: 118 pruebas aprobadas.
+- [x] Python: 130 pruebas aprobadas.
 - [x] Node/Vite: 3 pruebas aprobadas.
 - [x] Rust: 5 pruebas de integración aprobadas.
 - [x] Contratos JSON: todos parsean correctamente.
 - [x] Build Tauri debug sin bundle completado.
-- [x] Sidecar empaquetado: handshake, 19 agentes, investigación, analítica, forecast e improvement verificados.
+- [x] Sidecar empaquetado: handshake, 20 agentes, 27 habilidades y `rag.evaluate` verificados.
 - [x] `.env` ignorado y ausente del índice Git.
 
 ## Definición de terminado v0.3
 
 - [ ] Una pregunta produce informe multi-fuente citado y recuperable.
 - [ ] Ningún cálculo numérico depende exclusivamente del LLM.
-- [ ] RAG v2 supera el baseline v0.2 en el corpus congelado.
+- [x] RAG v2 supera el baseline v0.2 en el corpus congelado mínimo.
 - [x] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
 - [x] El científico interpreta métricas sin declarar causalidad injustificada.
 - [x] Una mejora champion/challenger puede promoverse y revertirse.

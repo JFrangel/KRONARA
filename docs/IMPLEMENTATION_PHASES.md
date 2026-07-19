@@ -38,7 +38,7 @@ Ninguna fase externa se considera terminada sin credenciales de prueba, evidenci
 - Selección mínima de habilidades versionadas.
 - Allowlist de herramientas, anti-loop y circuit breaker.
 - Contexto citado con límites de confianza e identificación de prompt injection.
-- 19 manifiestos de agente con modelos, fallbacks, tools y límites.
+- 20 manifiestos de agente y 27 habilidades con modelos, fallbacks, tools y límites.
 - ADN narrativo modular, continuidad y rúbrica 80/110 con piso por dimensión.
 - Golden set adversarial para copia, inyección, giro no sembrado, protagonista pasivo y final inválido.
 - RPC seguro de capacidades y evaluación narrativa.
@@ -89,3 +89,16 @@ Pendiente: definir thresholds de outcome desde percentiles reales, calibración 
 - RPC `improvement.status` e `improvement.evaluate`.
 
 Pendiente: asignación real de tráfico, integración con model/prompt registry, monitoreo post-release y rollback automático disparado por métricas.
+
+## Octavo vertical implementado — RAG v2 evaluado
+
+- Chunking jerárquico con IDs estables y metadatos de derechos, idioma, ámbito, vigencia y versión.
+- Expansión de consulta controlada, deduplicación exacta global y diversidad por documento.
+- Recuperación léxica/vectorial, RRF, reranker inyectable y grafo tipado de hasta tres saltos.
+- Persistencia SQLite de documentos, tombstones y relaciones; índices reconstruibles tras reinicio.
+- Golden set español congelado con cinco dominios adversariales.
+- Recall@k, MRR, nDCG, precisión de citas y redundancia.
+- Gate champion/challenger que exige superar el baseline v0.2 sin regresiones.
+- Agente `rag_curator`, habilidad versionada `rag_curation` y RPC autenticado `rag.evaluate`.
+
+Pendiente: deduplicación semántica, reranker/embeddings multilingües evaluados, query decomposition de recuperación y conexión directa del contrato v2 al índice persistente FTS5/sqlite-vec para escala.

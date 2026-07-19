@@ -21,6 +21,15 @@ from kronara.improvement import (
 )
 from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.performance import MetricSnapshot, PerformanceScientist
+from kronara.rag_v2 import (
+    DeterministicHashEmbedder,
+    IngestDocument,
+    RAGEvaluation,
+    RAGEvaluationCase,
+    RAGEvaluator,
+    RAGPromotionGate,
+    RAGV2Index,
+)
 from kronara.research import ResearchPlanner, ResearchSynthesizer
 from kronara.research_contracts import ResearchQuestion, SourceAssertion, SourceRecord
 from kronara.rpc import JsonRpcServer
@@ -269,6 +278,78 @@ def _improvement_evaluate(params: dict) -> dict:
     return asdict(decision)
 
 
+def _rag_evaluate(params: dict) -> dict:
+    documents = tuple(params.get("documents", ()))
+    raw_cases = tuple(params.get("cases", ()))
+    k = int(params.get("k", 8))
+    now = int(params["now"])
+    if not 1 <= k <= 50:
+        raise ValueError("k must be between 1 and 50")
+    if now < 0:
+        raise ValueError("now cannot be negative")
+    if not 1 <= len(documents) <= 500:
+        raise ValueError("rag evaluation requires at most 500 documents and at least one")
+    if not 1 <= len(raw_cases) <= 100:
+        raise ValueError("rag evaluation requires at most 100 cases and at least one")
+    total_characters = sum(
+        len(str(dict(item).get("title", "")))
+        + len(str(dict(item).get("content", "")))
+        for item in documents
+    )
+    if total_characters > 2_000_000:
+        raise ValueError("rag evaluation document budget exceeds 2000000 characters")
+    index = RAGV2Index(DeterministicHashEmbedder())
+    for raw_document in documents:
+        item = dict(raw_document)
+        index.upsert(
+            IngestDocument(
+                document_id=str(item["document_id"]),
+                title=str(item["title"]),
+                content=str(item["content"]),
+                rights_mode=str(item["rights_mode"]),
+                language=str(item["language"]),
+                scope=str(item["scope"]),
+                valid_from=int(item["valid_from"]),
+                valid_until=(
+                    int(item["valid_until"])
+                    if item.get("valid_until") is not None
+                    else None
+                ),
+                confidence=float(item.get("confidence", 1.0)),
+                version=int(item.get("version", 1)),
+            )
+        )
+    for raw_edge in params.get("edges", ()):
+        edge = dict(raw_edge)
+        index.link_documents(
+            str(edge["source_id"]),
+            str(edge["target_id"]),
+            relation=str(edge.get("relation", "related")),
+            weight=float(edge.get("weight", 1.0)),
+        )
+    cases = tuple(
+        RAGEvaluationCase(
+            query=str(item["query"]),
+            relevant_document_ids=tuple(
+                str(identifier) for identifier in item["relevant_document_ids"]
+            ),
+        )
+        for item in raw_cases
+    )
+    evaluation = RAGEvaluator().evaluate(
+        index,
+        cases,
+        now=now,
+        k=k,
+    )
+    promotion = None
+    if params.get("baseline") is not None:
+        baseline = RAGEvaluation(**dict(params["baseline"]))
+        gate = RAGPromotionGate(**dict(params.get("promotion_thresholds", {})))
+        promotion = asdict(gate.evaluate(baseline, evaluation))
+    return {"evaluation": asdict(evaluation), "promotion": promotion}
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -283,6 +364,7 @@ def serve(token: str) -> int:
             "virality.evaluate": _virality_evaluate,
             "improvement.status": _improvement_status,
             "improvement.evaluate": _improvement_evaluate,
+            "rag.evaluate": _rag_evaluate,
         },
     )
     for raw_line in sys.stdin:

@@ -19,13 +19,14 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 - Proveedor OpenAI-compatible con JSON Schema para Qwen/Kimi.
 - Vertical LangGraph de tendencia a concepto y blueprint narrativo.
 - Runtime cognitivo con habilidades mínimas, herramientas gobernadas, crítica independiente y Guardian.
-- Catálogo de 19 agentes, ADN narrativo modular y golden set adversarial.
+- Catálogo de 20 agentes y 27 habilidades, incluido un curador RAG con límites propios.
 - Investigador analítico con clasificación de intención, subpreguntas no solapadas, presupuesto de fuentes y reglas de parada.
 - Matriz de evidencia que conserva contradicciones, dependencia entre fuentes, vigencia, derechos y cobertura incompleta.
 - Reddit bloqueado por política de forma predeterminada hasta registrar autorización contractual.
 - Científico de rendimiento que segmenta voz, tema, hook, duración, horario y audiencia con Wilson, muestra mínima y advertencias no causales.
 - Forecast de viralidad separado por plataforma con modelo regularizado, holdout temporal, intervalo y abstención.
 - Mejora continua reversible con champion/challenger, golden set congelado, scopes de autoridad, error memory y dataset cards con derechos.
+- RAG v2 con chunking jerárquico, expansión controlada, deduplicación global exacta, grafo tipado, persistencia reconstruible y gate contra baseline español.
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 

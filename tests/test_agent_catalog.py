@@ -20,6 +20,7 @@ def test_required_agent_manifests_are_valid_and_tools_are_known():
         "memory_curator",
         "research_executive",
         "evidence_analyst",
+        "rag_curator",
     }
     assert required <= set(catalog.agent_ids)
     assert catalog.unknown_tools() == ()

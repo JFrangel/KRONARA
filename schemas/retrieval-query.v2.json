@@ -12,6 +12,9 @@
     "scope": {"type": ["string", "null"]},
     "allowed_rights": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "expanded_terms": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "auto_expand": {"type": "boolean", "default": true},
+    "allowed_relations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "graph_depth": {"type": "integer", "minimum": 0, "maximum": 3},
     "limit": {"type": "integer", "minimum": 1, "maximum": 100},
     "max_per_document": {"type": "integer", "minimum": 1, "maximum": 10}
   }

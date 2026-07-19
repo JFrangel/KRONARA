@@ -29,6 +29,7 @@ KNOWN_TOOLS = {
     "virality.evaluate",
     "improvement.evaluate",
     "improvement.status",
+    "rag.evaluate",
 }
 
 
