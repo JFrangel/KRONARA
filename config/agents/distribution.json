@@ -1,0 +1,1 @@
+{"agent_id":"distribution","role":"Submits authorized publication intents and reconciles ambiguous remote state before retrying.","model_family":"qwen","fallback_families":["kimi"],"skills":["safe_distribution"],"allowed_tools":["publication.publish"],"limits":{"max_steps":6,"max_tool_calls":8,"timeout_seconds":900}}

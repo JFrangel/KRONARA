@@ -1,0 +1,1 @@
+{"agent_id":"concept_architect","role":"Creates original concepts from abstract patterns and verified channel DNA.","model_family":"qwen","fallback_families":["kimi"],"skills":["concept_design","originality_guard"],"allowed_tools":["knowledge.retrieve","story.concept","originality.check"],"limits":{"max_steps":10,"max_tool_calls":14,"timeout_seconds":180}}

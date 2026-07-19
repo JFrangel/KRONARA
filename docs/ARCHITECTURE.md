@@ -52,3 +52,6 @@ Los índices son derivados y pueden reconstruirse desde SQLite y los artefactos.
 - Las herramientas inestables pueden entrar en circuit breaker y rehabilitarse tras cooldown.
 - Guardian exige evidencia para afirmaciones operativas.
 
+## Runtime cognitivo
+
+El sidecar separa cinco responsabilidades internas: registro de habilidades, constructor de contexto con niveles de confianza, registro cerrado de herramientas, ciclo cognitivo acotado y evaluadores deterministas. El generador y el crítico usan familias distintas; el Guardian contrasta el resultado final con evidencia real. Los detalles, contratos y límites están en [AGENT_RUNTIME.md](AGENT_RUNTIME.md).

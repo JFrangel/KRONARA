@@ -61,3 +61,51 @@ def test_sidecar_extracts_safe_trend_signal_without_returning_body():
     assert response["result"]["source_id"] == "abc"
     assert "body" not in response["result"]
     assert "private authored" not in completed.stdout
+
+
+def test_sidecar_exposes_agent_capabilities_without_arbitrary_execution():
+    requests = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "handshake",
+            "params": {"token": "secret", "protocol_version": 1},
+        },
+        {"jsonrpc": "2.0", "id": 2, "method": "agent.capabilities", "params": {}},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "agent.evaluate_narrative",
+            "params": {
+                "text": "Todo era un sueño.",
+                "scores": {
+                    "hook": 8,
+                    "clarity": 8,
+                    "conflict": 8,
+                    "escalation": 8,
+                    "agency": 8,
+                    "coherence": 8,
+                    "credibility": 8,
+                    "originality": 8,
+                    "retention": 8,
+                    "payoff": 8,
+                    "production_fit": 8,
+                },
+            },
+        },
+    ]
+    completed = subprocess.run(
+        [sys.executable, "-m", "kronara.sidecar", "--token", "secret"],
+        input="\n".join(json.dumps(request) for request in requests) + "\n",
+        text=True,
+        capture_output=True,
+        check=True,
+        env={**os.environ, "PYTHONPATH": "python"},
+    )
+
+    capabilities = json.loads(completed.stdout.splitlines()[1])["result"]
+    evaluation = json.loads(completed.stdout.splitlines()[2])["result"]
+    assert "executive_orchestrator" in capabilities["agents"]
+    assert "shell.execute" not in capabilities["tools"]
+    assert evaluation["passed"] is False
+    assert "dream_reset" in evaluation["antipatterns"]

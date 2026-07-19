@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/execution-plan.v1.json",
+  "title": "ExecutionPlan@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["objective", "decision_summary", "steps"],
+  "properties": {
+    "objective": {"type": "string", "minLength": 1},
+    "decision_summary": {"type": "string", "minLength": 1, "description": "Concise audit summary; never hidden chain-of-thought."},
+    "steps": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "tool_id", "arguments"],
+        "properties": {
+          "step_id": {"type": "string", "minLength": 1},
+          "tool_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]+\\.[a-z][a-z0-9_]+$"},
+          "arguments": {"type": "object"},
+          "estimated_cost_usd": {"type": "number", "minimum": 0}
+        }
+      }
+    }
+  }
+}

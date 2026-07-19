@@ -22,7 +22,10 @@ Todo agente tiene input/output versionado, tools permitidas, presupuesto, timeou
 
 Los críticos usan una familia de modelo distinta al generador cuando existe una alternativa sana y dentro de presupuesto. Toda salida recuperada se trata como datos no confiables para prevenir prompt injection.
 
+Los manifiestos ejecutables están en `config/agents` y el catálogo versionado de habilidades en `config/skills/catalog.v1.json`. El runtime selecciona el conjunto mínimo de habilidades que cubre la tarea y bloquea una capacidad desconocida; una habilidad aporta instrucciones y criterios, nunca autoridad adicional.
+
 ## Tool governance
 
 Una tool declara nombre, schema, permisos, timeout, side effects e idempotency strategy. El runtime registra input hash, resultado resumido, latencia, error, fallback y trace id. Secretos y contenido sensible se redactan.
 
+La ejecución cognitiva sigue `plan → tools → crítica independiente → revisión local → Guardian`. Exceder pasos, llamadas, costo o revisiones produce un resultado bloqueado. Se persisten el plan y un resumen de decisión para auditoría, no razonamiento privado. Véase [Runtime cognitivo](AGENT_RUNTIME.md).

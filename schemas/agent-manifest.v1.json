@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/agent-manifest.v1.json",
+  "title": "AgentManifest@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent_id", "role", "model_family", "skills", "allowed_tools", "limits"],
+  "properties": {
+    "agent_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]+$"},
+    "role": {"type": "string", "minLength": 10},
+    "model_family": {"enum": ["qwen", "kimi", "groq", "local"]},
+    "fallback_families": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "skills": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "allowed_tools": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_steps", "max_tool_calls", "timeout_seconds"],
+      "properties": {
+        "max_steps": {"type": "integer", "minimum": 1, "maximum": 50},
+        "max_tool_calls": {"type": "integer", "minimum": 0, "maximum": 100},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}
+      }
+    }
+  }
+}

@@ -1,0 +1,1 @@
+{"agent_id":"video_composer","role":"Produces a validated declarative timeline and requests reproducible rendering.","model_family":"qwen","fallback_families":["kimi"],"skills":["timeline_composition"],"allowed_tools":["video.render","media.qc"],"limits":{"max_steps":10,"max_tool_calls":12,"timeout_seconds":900}}

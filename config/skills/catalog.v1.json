@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {"skill_id":"planning","version":1,"capabilities":["decompose_task","select_workflow"],"instruction_uri":"kronara://skills/planning"},
+    {"skill_id":"risk_routing","version":1,"capabilities":["classify_risk","request_authority"],"instruction_uri":"kronara://skills/risk-routing"},
+    {"skill_id":"trend_intelligence","version":1,"capabilities":["extract_trend_signal","score_opportunity"],"instruction_uri":"kronara://skills/trend-intelligence"},
+    {"skill_id":"rights_review","version":1,"capabilities":["verify_rights","verify_provenance"],"instruction_uri":"kronara://skills/rights-review"},
+    {"skill_id":"concept_design","version":1,"capabilities":["create_original_concept"],"instruction_uri":"kronara://knowledge/narrative/channel-dna"},
+    {"skill_id":"narrative_planning","version":1,"capabilities":["plan_story","structure_scenes"],"instruction_uri":"kronara://knowledge/narrative/channel-dna"},
+    {"skill_id":"narrative_writing","version":1,"capabilities":["write_narration","localized_revision"],"instruction_uri":"kronara://knowledge/narrative/channel-dna"},
+    {"skill_id":"retention","version":1,"capabilities":["design_hook","plan_retention"],"instruction_uri":"kronara://knowledge/narrative/hooks-retention"},
+    {"skill_id":"continuity","version":1,"capabilities":["track_continuity","detect_contradiction"],"instruction_uri":"kronara://knowledge/narrative/continuity-ledger"},
+    {"skill_id":"originality_guard","version":1,"capabilities":["check_originality","compare_event_sequence"],"instruction_uri":"kronara://skills/originality-guard"},
+    {"skill_id":"adversarial_review","version":1,"capabilities":["challenge_artifact","score_quality"],"instruction_uri":"kronara://knowledge/narrative/quality-rubric"},
+    {"skill_id":"evidence_verification","version":1,"capabilities":["verify_claims","audit_citations"],"instruction_uri":"kronara://skills/evidence-verification"},
+    {"skill_id":"experiment_design","version":1,"capabilities":["form_hypothesis","assign_experiment"],"instruction_uri":"kronara://skills/experiment-design"},
+    {"skill_id":"memory_curation","version":1,"capabilities":["propose_memory","resolve_competing_hypotheses"],"instruction_uri":"kronara://skills/memory-curation"},
+    {"skill_id":"source_hygiene","version":1,"capabilities":["sanitize_external_context","minimize_source_data"],"instruction_uri":"kronara://skills/source-hygiene"},
+    {"skill_id":"editorial_decision","version":1,"capabilities":["select_format","allocate_budget"],"instruction_uri":"kronara://skills/editorial-decision"},
+    {"skill_id":"hook_design","version":1,"capabilities":["design_hook"],"instruction_uri":"kronara://knowledge/narrative/hooks-retention"},
+    {"skill_id":"voice_direction","version":1,"capabilities":["select_voice","direct_delivery"],"instruction_uri":"kronara://skills/voice-direction"},
+    {"skill_id":"visual_direction","version":1,"capabilities":["create_storyboard","enforce_safe_zones"],"instruction_uri":"kronara://skills/visual-direction"},
+    {"skill_id":"audio_direction","version":1,"capabilities":["direct_mix","validate_loudness"],"instruction_uri":"kronara://skills/audio-direction"},
+    {"skill_id":"timeline_composition","version":1,"capabilities":["compose_timeline","request_render"],"instruction_uri":"kronara://skills/timeline-composition"},
+    {"skill_id":"packaging","version":1,"capabilities":["create_metadata","create_cover_variant"],"instruction_uri":"kronara://skills/packaging"},
+    {"skill_id":"safe_distribution","version":1,"capabilities":["submit_publication","reconcile_remote_state"],"instruction_uri":"kronara://skills/safe-distribution"},
+    {"skill_id":"performance_analysis","version":1,"capabilities":["analyze_metrics","estimate_uncertainty"],"instruction_uri":"kronara://skills/performance-analysis"}
+  ]
+}

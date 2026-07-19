@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "minimum_total": 80,
+  "minimum_dimension": 7,
+  "scale": {"minimum": 0, "maximum": 10},
+  "dimensions": {
+    "hook": "Abre una pregunta concreta y pagable.",
+    "clarity": "Situación, deseo y riesgo se comprenden sin sobreexposición.",
+    "conflict": "La oposición es específica, creciente y relevante.",
+    "escalation": "Cada beat cambia la situación de forma causal.",
+    "agency": "El protagonista toma las decisiones que mueven la historia.",
+    "coherence": "Tiempo, objetos, conocimiento y causalidad son consistentes.",
+    "credibility": "Las afirmaciones verificables tienen evidencia y las ficciones no se presentan como hechos.",
+    "originality": "No replica expresión, estructura distintiva ni secuencia de una fuente.",
+    "retention": "Administra preguntas, cambios y respiraciones sin repetición.",
+    "payoff": "Paga gancho y pistas con consecuencia proporcional.",
+    "production_fit": "Cabe en duración, voz, visuales, subtítulos y formato vertical previstos."
+  }
+}

@@ -18,6 +18,8 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 - RAG híbrido operativo con FTS5, sqlite-vec, grafo y RRF.
 - Proveedor OpenAI-compatible con JSON Schema para Qwen/Kimi.
 - Vertical LangGraph de tendencia a concepto y blueprint narrativo.
+- Runtime cognitivo con habilidades mínimas, herramientas gobernadas, crítica independiente y Guardian.
+- Catálogo de 17 agentes, ADN narrativo modular y golden set adversarial.
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 
@@ -48,6 +50,7 @@ npm.cmd run tauri build
 
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Agentes](docs/AGENTS.md)
+- [Runtime cognitivo](docs/AGENT_RUNTIME.md)
 - [Autonomía y seguridad](docs/AUTONOMY_AND_SECURITY.md)
 - [Memoria y RAG](docs/MEMORY_AND_RAG.md)
 - [Integraciones](docs/INTEGRATIONS.md)

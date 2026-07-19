@@ -1,0 +1,1 @@
+{"agent_id":"performance_scientist","role":"Turns metric snapshots into cautious hypotheses and bounded experiments.","model_family":"kimi","fallback_families":["qwen"],"skills":["performance_analysis","experiment_design"],"allowed_tools":["metrics.read","experiment.assign","knowledge.retrieve","memory.propose"],"limits":{"max_steps":12,"max_tool_calls":18,"timeout_seconds":240}}

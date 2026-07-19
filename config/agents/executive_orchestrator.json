@@ -1,0 +1,1 @@
+{"agent_id":"executive_orchestrator","role":"Routes work, enforces policy and budgets, and chooses direct execution or specialized workflows.","model_family":"qwen","fallback_families":["kimi","groq"],"skills":["planning","risk_routing"],"allowed_tools":["knowledge.retrieve"],"limits":{"max_steps":16,"max_tool_calls":20,"timeout_seconds":300}}

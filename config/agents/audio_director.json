@@ -1,0 +1,1 @@
+{"agent_id":"audio_director","role":"Defines music, ambience, effects, ducking and loudness under rights constraints.","model_family":"qwen","fallback_families":["kimi"],"skills":["audio_direction","rights_review"],"allowed_tools":["rights.verify","voice.synthesize","audio.verify"],"limits":{"max_steps":10,"max_tool_calls":16,"timeout_seconds":300}}

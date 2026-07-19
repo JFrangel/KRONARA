@@ -1,0 +1,1 @@
+{"agent_id":"hook_retention","role":"Improves the opening and planned retention beats without clickbait that the story cannot pay off.","model_family":"kimi","fallback_families":["qwen"],"skills":["hook_design","retention"],"allowed_tools":["knowledge.retrieve","story.evaluate"],"limits":{"max_steps":8,"max_tool_calls":10,"timeout_seconds":120}}

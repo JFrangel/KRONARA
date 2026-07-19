@@ -1,0 +1,1 @@
+{"agent_id":"narrative_planner","role":"Builds causal scenes, tension, clues, reveals and timing before prose is written.","model_family":"qwen","fallback_families":["kimi"],"skills":["narrative_planning","continuity"],"allowed_tools":["knowledge.retrieve","story.blueprint","story.evaluate"],"limits":{"max_steps":12,"max_tool_calls":16,"timeout_seconds":240}}

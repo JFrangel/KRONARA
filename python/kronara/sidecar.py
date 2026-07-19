@@ -4,7 +4,10 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from pathlib import Path
 
+from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
+from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.rpc import JsonRpcServer
 from kronara.trends import RedditSignalExtractor, SourcePost
 
@@ -23,8 +26,49 @@ def _extract_trend(params: dict) -> dict:
     return {key: value for key, value in asdict(signal).items() if key != "source_text"}
 
 
+def _resource_root() -> Path:
+    if getattr(sys, "_MEIPASS", None):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parents[2]
+
+
+def _agent_capabilities(_: dict) -> dict:
+    root = _resource_root()
+    catalog = AgentCatalog.load(root / "config" / "agents")
+    skill_payload = json.loads(
+        (root / "config" / "skills" / "catalog.v1.json").read_text(encoding="utf-8")
+    )
+    return {
+        "schema_version": 1,
+        "agents": list(catalog.agent_ids),
+        "skills": [item["skill_id"] for item in skill_payload["skills"]],
+        "tools": sorted(KNOWN_TOOLS),
+        "arbitrary_shell": False,
+        "private_reasoning_persisted": False,
+    }
+
+
+def _evaluate_narrative(params: dict) -> dict:
+    evaluator = NarrativeQualityEvaluator()
+    report = evaluator.evaluate(params["scores"])
+    antipatterns = evaluator.detect_antipatterns(str(params.get("text", "")))
+    return {
+        "passed": report.passed and not antipatterns,
+        "total": report.total,
+        "blocking_dimensions": list(report.blocking_dimensions),
+        "antipatterns": list(antipatterns),
+    }
+
+
 def serve(token: str) -> int:
-    server = JsonRpcServer(token=token, methods={"trend.extract": _extract_trend})
+    server = JsonRpcServer(
+        token=token,
+        methods={
+            "trend.extract": _extract_trend,
+            "agent.capabilities": _agent_capabilities,
+            "agent.evaluate_narrative": _evaluate_narrative,
+        },
+    )
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:

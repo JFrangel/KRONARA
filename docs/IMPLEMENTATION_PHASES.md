@@ -31,3 +31,14 @@ Ninguna fase externa se considera terminada sin credenciales de prueba, evidenci
 - Transporte OpenAI-compatible con JSON Schema.
 - LangGraph señal → contexto citado → concepto → blueprint.
 - Bloqueo determinista por similitud con la señal fuente.
+
+## Tercer vertical implementado
+
+- Runtime plan–act–critic–Guardian con presupuestos y revisiones locales.
+- Selección mínima de habilidades versionadas.
+- Allowlist de herramientas, anti-loop y circuit breaker.
+- Contexto citado con límites de confianza e identificación de prompt injection.
+- 17 manifiestos de agente con modelos, fallbacks, tools y límites.
+- ADN narrativo modular, continuidad y rúbrica 80/110 con piso por dimensión.
+- Golden set adversarial para copia, inyección, giro no sembrado, protagonista pasivo y final inválido.
+- RPC seguro de capacidades y evaluación narrativa.

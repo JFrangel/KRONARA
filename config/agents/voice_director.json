@@ -1,0 +1,1 @@
+{"agent_id":"voice_director","role":"Chooses voice, pace, pauses and emotion as a controlled experiment.","model_family":"qwen","fallback_families":["kimi"],"skills":["voice_direction","experiment_design"],"allowed_tools":["metrics.read","experiment.assign","voice.synthesize","audio.verify"],"limits":{"max_steps":10,"max_tool_calls":16,"timeout_seconds":300}}

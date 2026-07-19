@@ -1,0 +1,1 @@
+{"agent_id":"writer_room","role":"Writes and locally revises narration while preserving the approved blueprint.","model_family":"qwen","fallback_families":["kimi","groq"],"skills":["narrative_writing","retention","continuity"],"allowed_tools":["knowledge.retrieve","story.draft","story.evaluate"],"limits":{"max_steps":14,"max_tool_calls":18,"timeout_seconds":300}}

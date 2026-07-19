@@ -1,0 +1,1 @@
+{"agent_id":"editorial_executive","role":"Selects the opportunity, platform, format, duration and bounded budget.","model_family":"qwen","fallback_families":["kimi"],"skills":["editorial_decision","experiment_design"],"allowed_tools":["knowledge.retrieve","metrics.read"],"limits":{"max_steps":8,"max_tool_calls":10,"timeout_seconds":120}}

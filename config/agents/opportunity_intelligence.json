@@ -1,0 +1,1 @@
+{"agent_id":"opportunity_intelligence","role":"Finds timely patterns without treating source stories as reusable scripts.","model_family":"kimi","fallback_families":["qwen"],"skills":["trend_intelligence","source_hygiene"],"allowed_tools":["trend.search","knowledge.retrieve","metrics.read"],"limits":{"max_steps":10,"max_tool_calls":16,"timeout_seconds":180}}
