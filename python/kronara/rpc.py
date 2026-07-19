@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Any
 
 
 class JsonRpcServer:
-    def __init__(self, token: str, protocol_version: int = 1):
+    def __init__(
+        self,
+        token: str,
+        protocol_version: int = 1,
+        methods: Mapping[str, Callable[[dict[str, Any]], Any]] | None = None,
+    ):
         self.token = token
         self.protocol_version = protocol_version
         self.authenticated = False
+        self.methods = dict(methods or {})
 
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         request_id = request.get("id")
@@ -24,6 +31,12 @@ class JsonRpcServer:
             return self._error(request_id, -32001, "handshake required")
         if method == "heartbeat":
             return self._result(request_id, {"status": "ok"})
+        handler = self.methods.get(str(method))
+        if handler is not None:
+            try:
+                return self._result(request_id, handler(params))
+            except (KeyError, TypeError, ValueError) as error:
+                return self._error(request_id, -32602, f"invalid params: {error}")
         return self._error(request_id, -32601, "method not found")
 
     @staticmethod
@@ -37,4 +50,3 @@ class JsonRpcServer:
             "id": request_id,
             "error": {"code": code, "message": message},
         }
-

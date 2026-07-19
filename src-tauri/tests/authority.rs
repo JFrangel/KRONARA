@@ -18,4 +18,3 @@ fn critical_rights_failure_cannot_be_overridden_in_full_auto() {
         Err(AuthorityError::Blocked("rights_insufficient".into()))
     );
 }
-

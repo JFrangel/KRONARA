@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kronara://schemas/narrative-concept.v1.json",
+  "title": "NarrativeConcept@1",
+  "type": "object",
+  "required": ["logline", "genre", "originality_angle", "source_refs"],
+  "properties": {
+    "logline": { "type": "string", "minLength": 20 },
+    "genre": { "type": "string", "minLength": 2 },
+    "originality_angle": { "type": "string", "minLength": 20 },
+    "source_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  },
+  "additionalProperties": false
+}
+

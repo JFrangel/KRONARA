@@ -12,9 +12,9 @@
 
 ## Siguientes verticales
 
-1. Conectar credenciales Reddit de desarrollo y persistir señales reales.
-2. Implementar proveedores LLM con structured outputs y golden set narrativo.
-3. Añadir FTS5/sqlite-vec, embeddings y reranker evaluado en español.
+1. Configurar credenciales Reddit de desarrollo en la autoridad Rust y ejecutar una prueba autorizada.
+2. Ampliar el golden set narrativo y conectar aliases Qwen/Kimi reales.
+3. Evaluar embeddings y reranker multilingües con corpus español.
 4. Integrar Azure/Edge TTS y faster-whisper con QC real.
 5. Construir FFmpeg builder Rust, assets y Reel 9:16.
 6. Configurar una Página de prueba Meta, upload privado y reconciliación.
@@ -23,3 +23,11 @@
 
 Ninguna fase externa se considera terminada sin credenciales de prueba, evidencia remota y pruebas de fallo.
 
+## Segundo vertical implementado
+
+- Cliente OAuth Reddit y manejo explícito de rate limit.
+- `TrendSignal` sin cuerpo de historia y RPC seguro de extracción.
+- Índice FTS5 + sqlite-vec + grafo + RRF.
+- Transporte OpenAI-compatible con JSON Schema.
+- LangGraph señal → contexto citado → concepto → blueprint.
+- Bloqueo determinista por similitud con la señal fuente.

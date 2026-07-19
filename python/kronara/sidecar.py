@@ -3,12 +3,28 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 
 from kronara.rpc import JsonRpcServer
+from kronara.trends import RedditSignalExtractor, SourcePost
+
+
+def _extract_trend(params: dict) -> dict:
+    post = SourcePost(
+        source_id=str(params["source_id"]),
+        title=str(params["title"]),
+        body=str(params.get("body", "")),
+        score=int(params.get("score", 0)),
+        comments=int(params.get("comments", 0)),
+        created_at=int(params["created_at"]),
+        source_uri=str(params["source_uri"]),
+    )
+    signal = RedditSignalExtractor().extract(post, now=int(params["now"]))
+    return {key: value for key, value in asdict(signal).items() if key != "source_text"}
 
 
 def serve(token: str) -> int:
-    server = JsonRpcServer(token=token)
+    server = JsonRpcServer(token=token, methods={"trend.extract": _extract_trend})
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:
@@ -35,4 +51,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

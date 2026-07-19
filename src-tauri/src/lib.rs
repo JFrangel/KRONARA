@@ -15,11 +15,17 @@ pub struct RiskDecision {
 
 impl RiskDecision {
     pub fn low() -> Self {
-        Self { level: "low".into(), codes: vec![] }
+        Self {
+            level: "low".into(),
+            codes: vec![],
+        }
     }
 
     pub fn critical(code: &str) -> Self {
-        Self { level: "critical".into(), codes: vec![code.into()] }
+        Self {
+            level: "critical".into(),
+            codes: vec![code.into()],
+        }
     }
 }
 
@@ -37,7 +43,10 @@ pub struct Authority {
 
 impl Authority {
     pub fn new(paused: bool, mode: &str) -> Self {
-        Self { paused, mode: mode.into() }
+        Self {
+            paused,
+            mode: mode.into(),
+        }
     }
 
     pub fn authorize(&self, effect: Effect, risk: RiskDecision) -> Result<(), AuthorityError> {
@@ -58,7 +67,15 @@ impl Authority {
 }
 
 fn is_non_overridable(code: &str) -> bool {
-    matches!(code, "rights_insufficient" | "credentials_invalid" | "platform_policy_violation" | "render_defective" | "publication_ambiguous" | "budget_exhausted")
+    matches!(
+        code,
+        "rights_insufficient"
+            | "credentials_invalid"
+            | "platform_policy_violation"
+            | "render_defective"
+            | "publication_ambiguous"
+            | "budget_exhausted"
+    )
 }
 
 pub fn run() {

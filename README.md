@@ -14,6 +14,10 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 - Timeline de Reel, publicación Meta idempotente y reconciliación tras timeout.
 - Catálogo inicial Marcelo, Lorenzo, Sofía, Gonzalo y Salomé.
 - Aprendizaje experimental que impide promover muestras insuficientes.
+- OAuth Reddit, rate limits y señales `reference_only` sin cuerpo de historia.
+- RAG híbrido operativo con FTS5, sqlite-vec, grafo y RRF.
+- Proveedor OpenAI-compatible con JSON Schema para Qwen/Kimi.
+- Vertical LangGraph de tendencia a concepto y blueprint narrativo.
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 
@@ -47,5 +51,5 @@ npm.cmd run tauri build
 - [Autonomía y seguridad](docs/AUTONOMY_AND_SECURITY.md)
 - [Memoria y RAG](docs/MEMORY_AND_RAG.md)
 - [Integraciones](docs/INTEGRATIONS.md)
+- [Tendencia a blueprint](docs/TREND_TO_BLUEPRINT.md)
 - [Fases](docs/IMPLEMENTATION_PHASES.md)
-

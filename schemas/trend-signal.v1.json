@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kronara://schemas/trend-signal.v1.json",
+  "title": "TrendSignal@1",
+  "type": "object",
+  "required": ["source_id", "source_uri", "theme_hint", "velocity", "engagement", "rights_mode"],
+  "properties": {
+    "source_id": { "type": "string", "minLength": 1 },
+    "source_uri": { "type": "string", "minLength": 1 },
+    "theme_hint": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "velocity": { "type": "number", "minimum": 0 },
+    "engagement": { "type": "integer", "minimum": 0 },
+    "rights_mode": { "const": "reference_only" }
+  },
+  "additionalProperties": false
+}
+
