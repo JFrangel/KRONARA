@@ -61,9 +61,10 @@ El sidecar expone por RPC autenticado:
 
 - `agent.capabilities`: agentes, habilidades y herramientas registradas.
 - `agent.evaluate_narrative`: rúbrica y anti-patrones deterministas.
-- `analytics.execute`: estadística descriptiva, comparación de tasas, funnels y outliers mediante operaciones cerradas y trazables.
+- `analytics.execute`: estadística descriptiva, tasas con Wilson, funnels, curvas de retención, outliers y muestra mínima mediante operaciones cerradas y trazables.
 - `research.plan`: clasificación, subpreguntas, consultas, presupuesto y reglas de parada.
 - `research.evaluate`: matriz de evidencia y `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separados.
+- `performance.diagnose`: segmentación por plataforma, voz, tema, hook, duración, horario y audiencia; solo genera hipótesis acotadas para experimentar.
 - `trend.extract`: señal abstracta sin devolver el cuerpo fuente.
 
 No expone shell, importación arbitraria de módulos, lectura de secretos ni publicación directa.

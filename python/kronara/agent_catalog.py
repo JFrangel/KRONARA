@@ -25,6 +25,7 @@ KNOWN_TOOLS = {
     "research.plan",
     "evidence.build",
     "analytics.execute",
+    "performance.diagnose",
 }
 
 

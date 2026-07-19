@@ -23,6 +23,7 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 - Investigador analítico con clasificación de intención, subpreguntas no solapadas, presupuesto de fuentes y reglas de parada.
 - Matriz de evidencia que conserva contradicciones, dependencia entre fuentes, vigencia, derechos y cobertura incompleta.
 - Reddit bloqueado por política de forma predeterminada hasta registrar autorización contractual.
+- Científico de rendimiento que segmenta voz, tema, hook, duración, horario y audiencia con Wilson, muestra mínima y advertencias no causales.
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 
@@ -57,6 +58,7 @@ npm.cmd run tauri build
 - [Agentes](docs/AGENTS.md)
 - [Runtime cognitivo](docs/AGENT_RUNTIME.md)
 - [Investigación y evidencia](docs/RESEARCH_AND_EVIDENCE.md)
+- [Científico de rendimiento](docs/PERFORMANCE_SCIENTIST.md)
 - [Configuración de entorno](docs/ENVIRONMENT.md)
 - [Análisis de brechas](docs/GAP_ANALYSIS.md)
 - [Plan v0.3 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.3-implementation.md)

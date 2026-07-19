@@ -53,3 +53,15 @@ Ninguna fase externa se considera terminada sin credenciales de prueba, evidenci
 - Reddit oficial con `new`, `hot`, `top`, time filter, cache metadata y bloqueo `disabled_by_policy` predeterminado.
 
 Pendiente para completar la fase 6: ejecutar conectores externos exclusivamente desde Rust, automatizar extracción estructurada de afirmaciones con evaluación golden y persistir replay/costo/artefactos de cada investigación.
+
+## Quinto vertical implementado — ciencia de rendimiento
+
+- `MetricSnapshot@1` conserva métricas originales, ventana de observación y variables editoriales.
+- Segmentación independiente por plataforma, voz, tema, hook, duración, franja horaria y audiencia.
+- Tasas de finalización con intervalos Wilson y abstención por muestra o número de piezas insuficientes.
+- Curva de retención y detección determinista del mayor abandono sin atribución causal.
+- Cálculo aproximado de muestra mínima para comparar dos variantes.
+- Hipótesis observacionales que incluyen baseline, lift, muestra y experimento controlado recomendado.
+- RPC autenticado `performance.diagnose`.
+
+Pendiente para completar la fase 7: bootstrap, sensibilidad, importación real de métricas y ejecución de experimentos asignados.

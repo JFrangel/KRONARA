@@ -11,6 +11,7 @@ from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
 from kronara.analytics import AnalysisRequest, AnalyticalToolkit
 from kronara.evidence import EvidenceEngine
 from kronara.narrative_quality import NarrativeQualityEvaluator
+from kronara.performance import MetricSnapshot, PerformanceScientist
 from kronara.research import ResearchPlanner, ResearchSynthesizer
 from kronara.research_contracts import ResearchQuestion, SourceAssertion, SourceRecord
 from kronara.rpc import JsonRpcServer
@@ -130,6 +131,35 @@ def _research_evaluate(params: dict) -> dict:
     return {"plan": asdict(plan), "evidence": asdict(matrix), "brief": asdict(brief)}
 
 
+def _metric_snapshot(params: dict) -> MetricSnapshot:
+    return MetricSnapshot(
+        schema_version=int(params["schema_version"]),
+        snapshot_id=str(params["snapshot_id"]),
+        content_id=str(params["content_id"]),
+        platform=str(params["platform"]),
+        published_at=datetime.fromisoformat(str(params["published_at"])),
+        observed_at=datetime.fromisoformat(str(params["observed_at"])),
+        metric_window_hours=int(params["metric_window_hours"]),
+        impressions=int(params["impressions"]),
+        starts=int(params["starts"]),
+        completions=int(params["completions"]),
+        replays=int(params["replays"]),
+        shares=int(params["shares"]),
+        watch_time_seconds=float(params["watch_time_seconds"]),
+        duration_seconds=float(params["duration_seconds"]),
+        voice_id=str(params["voice_id"]),
+        topic=str(params["topic"]),
+        hook_id=str(params["hook_id"]),
+        publication_hour=int(params["publication_hour"]),
+        audience_segment=str(params["audience_segment"]),
+    )
+
+
+def _performance_diagnose(params: dict) -> dict:
+    snapshots = tuple(_metric_snapshot(dict(item)) for item in params.get("snapshots", ()))
+    return asdict(PerformanceScientist().diagnose(snapshots))
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -140,6 +170,7 @@ def serve(token: str) -> int:
             "analytics.execute": _analytics_execute,
             "research.plan": _research_plan,
             "research.evaluate": _research_evaluate,
+            "performance.diagnose": _performance_diagnose,
         },
     )
     for raw_line in sys.stdin:

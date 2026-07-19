@@ -59,10 +59,10 @@ Fecha de auditoría: 2026-07-19
 
 - [x] Estadística descriptiva con unidades y missing data.
 - [x] Cambios absolutos/relativos y baseline.
-- [ ] Intervalos de confianza y muestra mínima (Wilson implementado; falta cálculo de muestra).
+- [x] Intervalos Wilson y cálculo aproximado de muestra mínima por variante.
 - [ ] Wilson/Bootstrap para tasas (Wilson implementado; falta bootstrap).
-- [ ] Funnel y curva de retención (funnel implementado; falta curva temporal).
-- [ ] Segmentación voz/tema/hook/duración/hora/audiencia.
+- [x] Funnel y curva de retención con mayor punto de abandono.
+- [x] Segmentación voz/tema/hook/duración/hora/audiencia sin mezclar plataformas.
 - [ ] Outliers robustos y análisis de sensibilidad (MAD implementado; falta sensibilidad).
 - [ ] Experimentos A/B y bandits acotados.
 - [ ] Visualizaciones declarativas reproducibles.
@@ -118,12 +118,12 @@ Fecha de auditoría: 2026-07-19
 
 ## Evidencia del gate local — 2026-07-19
 
-- [x] Python: 91 pruebas aprobadas.
+- [x] Python: 100 pruebas aprobadas.
 - [x] Node/Vite: 3 pruebas aprobadas.
 - [x] Rust: 5 pruebas de integración aprobadas.
 - [x] Contratos JSON: todos parsean correctamente.
 - [x] Build Tauri debug sin bundle completado.
-- [x] Sidecar empaquetado: handshake, catálogo de 19 agentes, `analytics.execute` y `research.plan` verificados.
+- [x] Sidecar empaquetado: handshake, 19 agentes, investigación, analítica y `performance.diagnose` verificados.
 - [x] `.env` ignorado y ausente del índice Git.
 
 ## Definición de terminado v0.3
@@ -132,6 +132,6 @@ Fecha de auditoría: 2026-07-19
 - [ ] Ningún cálculo numérico depende exclusivamente del LLM.
 - [ ] RAG v2 supera el baseline v0.2 en el corpus congelado.
 - [x] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
-- [ ] El científico interpreta métricas sin declarar causalidad injustificada.
+- [x] El científico interpreta métricas sin declarar causalidad injustificada.
 - [ ] Una mejora champion/challenger puede promoverse y revertirse.
 - [ ] Un Reel original puede publicarse una sola vez y aprender de sus métricas.

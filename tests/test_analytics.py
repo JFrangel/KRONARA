@@ -90,3 +90,43 @@ def test_robust_outliers_uses_median_absolute_deviation():
 def test_unknown_operation_fails_closed():
     with pytest.raises(AnalysisInputError, match="unsupported operation"):
         AnalyticalToolkit().execute(AnalysisRequest("run_python", {}))
+
+
+def test_retention_curve_finds_largest_dropoff_without_claiming_cause():
+    trace = AnalyticalToolkit().execute(
+        AnalysisRequest(
+            "retention_curve",
+            {
+                "starts": 1000,
+                "duration_seconds": 60,
+                "checkpoints": [[0, 1000], [3, 800], [15, 400], [60, 250]],
+            },
+            unit="viewers",
+        )
+    )
+
+    assert trace.result["points"][1]["retention_rate"] == 0.8
+    assert trace.result["largest_dropoff"]["from_second"] == 3.0
+    assert trace.result["largest_dropoff"]["to_second"] == 15.0
+    assert trace.result["completion_rate"] == 0.25
+    assert "descriptive_not_causal" in trace.warnings
+
+
+def test_minimum_sample_size_increases_when_detectable_lift_gets_smaller():
+    toolkit = AnalyticalToolkit()
+    large_effect = toolkit.execute(
+        AnalysisRequest(
+            "minimum_sample_size",
+            {"baseline_rate": 0.4, "minimum_detectable_absolute_lift": 0.1},
+        )
+    )
+    small_effect = toolkit.execute(
+        AnalysisRequest(
+            "minimum_sample_size",
+            {"baseline_rate": 0.4, "minimum_detectable_absolute_lift": 0.03},
+        )
+    )
+
+    assert large_effect.result["per_variant"] > 0
+    assert small_effect.result["per_variant"] > large_effect.result["per_variant"]
+    assert small_effect.result["total_for_two_variants"] == 2 * small_effect.result["per_variant"]

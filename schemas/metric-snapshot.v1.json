@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/metric-snapshot.v1.json",
+  "title": "MetricSnapshot@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "content_id", "platform", "published_at", "observed_at", "metric_window_hours", "impressions", "starts", "completions", "replays", "shares", "watch_time_seconds", "duration_seconds", "voice_id", "topic", "hook_id", "publication_hour", "audience_segment"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "content_id": {"type": "string", "minLength": 1},
+    "platform": {"enum": ["facebook_reels", "instagram_reels", "youtube_shorts", "tiktok"]},
+    "published_at": {"type": "string", "format": "date-time"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "metric_window_hours": {"type": "integer", "minimum": 1},
+    "impressions": {"type": "integer", "minimum": 0},
+    "starts": {"type": "integer", "minimum": 0},
+    "completions": {"type": "integer", "minimum": 0},
+    "replays": {"type": "integer", "minimum": 0},
+    "shares": {"type": "integer", "minimum": 0},
+    "watch_time_seconds": {"type": "number", "minimum": 0},
+    "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "voice_id": {"type": "string", "minLength": 1},
+    "topic": {"type": "string", "minLength": 1},
+    "hook_id": {"type": "string", "minLength": 1},
+    "publication_hour": {"type": "integer", "minimum": 0, "maximum": 23},
+    "audience_segment": {"type": "string", "minLength": 1}
+  }
+}
