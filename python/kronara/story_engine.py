@@ -11,6 +11,7 @@ from kronara.narrative_quality import NarrativeQualityEvaluator, NarrativeQualit
 from kronara.observable_tools import ObservableToolRegistry, ToolExecutionContext
 from kronara.store import KronaraStore
 from kronara.tools import ToolRegistry, ToolResult, ToolSpec
+from kronara.voice import MeasuredDuration
 
 
 @dataclass(frozen=True)
@@ -185,6 +186,7 @@ class StoryRunResult:
     originality: OriginalityReport | None = None
     quality: NarrativeQualityReport | None = None
     craft: CraftReport | None = None
+    voice_duration: MeasuredDuration | None = None
     retention: RetentionPlan | None = None
     packaging: StoryPackaging | None = None
     memory_proposal: StoryMemoryProposal | None = None
@@ -434,6 +436,7 @@ class StoryEngine:
         generator: StoryGenerator,
         critic: StoryCritic,
         cancellation_requested: Callable[[], bool] = lambda: False,
+        duration_measurer: Any = None,
     ):
         if generator.family == critic.family:
             raise ValueError("story critic must use an independent model family")
@@ -441,6 +444,9 @@ class StoryEngine:
         self.generator = generator
         self.critic = critic
         self.cancellation_requested = cancellation_requested
+        # Optional: measures real narration duration via synthesized voice.
+        # When absent, duration falls back to the words-per-second estimate.
+        self.duration_measurer = duration_measurer
 
     def run(self, brief: StoryBrief) -> StoryRunResult:
         run_id = f"story:{brief.story_id}"
@@ -476,7 +482,10 @@ class StoryEngine:
             script = self._script(scenes)
             continuity = self._continuity(scenes)
             duration_revision_applied = False
-            duration_qc = self._duration_qc(brief, script, revision_applied=False)
+            measured_seconds, voice_duration = self._measured_seconds(scenes, script)
+            duration_qc = self._duration_qc(
+                brief, script, revision_applied=False, measured_seconds=measured_seconds
+            )
             if not duration_qc.passed:
                 runtime["revision"] = {
                     "operation": "fit_duration",
@@ -489,7 +498,10 @@ class StoryEngine:
                 script = self._script(scenes)
                 continuity = self._continuity(scenes)
                 duration_revision_applied = True
-                duration_qc = self._duration_qc(brief, script, revision_applied=True)
+                measured_seconds, voice_duration = self._measured_seconds(scenes, script)
+                duration_qc = self._duration_qc(
+                    brief, script, revision_applied=True, measured_seconds=measured_seconds
+                )
                 if not duration_qc.passed:
                     raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
             runtime.update({"script": script, "continuity": continuity})
@@ -523,8 +535,12 @@ class StoryEngine:
                 critique = self._invoke(
                     tools, run_id, "story.evaluate", {"phase": "post_revision"}
                 )
+            measured_seconds, voice_duration = self._measured_seconds(scenes, script)
             duration_qc = self._duration_qc(
-                brief, script, revision_applied=duration_revision_applied
+                brief,
+                script,
+                revision_applied=duration_revision_applied,
+                measured_seconds=measured_seconds,
             )
             if not duration_qc.passed:
                 raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
@@ -567,6 +583,7 @@ class StoryEngine:
                 originality=originality,
                 quality=quality,
                 craft=craft,
+                voice_duration=voice_duration,
                 retention=retention,
                 packaging=packaging,
                 memory_proposal=memory,
@@ -739,23 +756,34 @@ class StoryEngine:
         words = len(text.split())
         return StoryScript(text=text, word_count=words, estimated_seconds=words / 2.5)
 
+    def _measured_seconds(
+        self, scenes: tuple[StoryScene, ...], script: StoryScript
+    ) -> tuple[float, MeasuredDuration | None]:
+        """Real synthesized duration when a measurer is set, else the estimate."""
+        if self.duration_measurer is None:
+            return script.estimated_seconds, None
+        measured = self.duration_measurer.measure(scenes)
+        return measured.total_seconds, measured
+
     @staticmethod
     def _duration_qc(
         brief: StoryBrief,
         script: StoryScript,
         *,
         revision_applied: bool,
+        measured_seconds: float | None = None,
     ) -> DurationQCReport:
+        seconds = script.estimated_seconds if measured_seconds is None else measured_seconds
         minimum = brief.target_duration_seconds * 0.90
         maximum = brief.target_duration_seconds * 1.10
         return DurationQCReport(
             target_seconds=brief.target_duration_seconds,
-            estimated_seconds=script.estimated_seconds,
+            estimated_seconds=seconds,
             minimum_seconds=minimum,
             maximum_seconds=maximum,
             target_word_count=round(brief.target_duration_seconds * 2.5),
             actual_word_count=script.word_count,
-            passed=minimum <= script.estimated_seconds <= maximum,
+            passed=minimum <= seconds <= maximum,
             revision_applied=revision_applied,
         )
 

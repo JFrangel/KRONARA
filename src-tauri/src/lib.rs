@@ -9,6 +9,7 @@ pub mod meta;
 pub mod model_gateway;
 pub mod reddit;
 pub mod sidecar_bridge;
+pub mod voice;
 
 use sidecar_bridge::{is_effectful_method, SidecarBridge};
 

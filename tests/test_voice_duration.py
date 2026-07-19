@@ -1,0 +1,100 @@
+from kronara.story_engine import (
+    DeterministicIndependentCritic,
+    DeterministicStoryProvider,
+    StoryBrief,
+    StoryEngine,
+)
+from kronara.store import KronaraStore
+from kronara.voice import (
+    EstimatingVoiceProvider,
+    SceneDurationMeasurer,
+    VoiceSynthesisRequest,
+    VoiceSynthesisResult,
+    WordBoundary,
+)
+
+
+def brief(**overrides):
+    payload = {
+        "story_id": "owned_voice_1",
+        "title": "La llamada que nadie quería contestar",
+        "premise": "Una restauradora descubre una decisión capaz de dividir a su familia.",
+        "theme": "lealtad frente a verdad",
+        "target_duration_seconds": 90,
+        "rights_mode": "owned_original",
+        "source_uri": "kronara://artifacts/owned_voice_1",
+        "evidence_refs": ("ev_owned_1",),
+    }
+    payload.update(overrides)
+    return StoryBrief(**payload)
+
+
+class FakeVoiceProvider:
+    """Reports a fixed per-call duration so the measured total is deterministic."""
+
+    def __init__(self, ms_per_scene):
+        self.ms_per_scene = ms_per_scene
+        self.calls = 0
+
+    def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
+        self.calls += 1
+        return VoiceSynthesisResult(
+            voice_id=request.voice_id,
+            duration_ms=self.ms_per_scene,
+            word_boundaries=(WordBoundary("palabra", 0, 200),),
+        )
+
+
+def test_story_engine_uses_real_measured_duration(tmp_path):
+    store = KronaraStore(tmp_path / "voice.db")
+    store.initialize()
+    # 8 scenes * ~11.25s each = 90s total (inside the +-10% window at 90s target).
+    provider = FakeVoiceProvider(ms_per_scene=11_250)
+    measurer = SceneDurationMeasurer(provider, voice_id="es-BO-SofiaNeural")
+    engine = StoryEngine(
+        store=store,
+        generator=DeterministicStoryProvider(),
+        critic=DeterministicIndependentCritic(),
+        duration_measurer=measurer,
+    )
+
+    result = engine.run(brief())
+
+    assert result.status == "completed"
+    assert result.voice_duration is not None
+    assert result.voice_duration.degraded is False
+    # QC used the synthesized total, not the words/2.5 estimate.
+    assert abs(result.duration_qc.estimated_seconds - result.voice_duration.total_seconds) < 0.001
+    assert provider.calls >= len(result.scenes)
+    store.close()
+
+
+def test_estimating_provider_marks_degraded_but_measures():
+    provider = EstimatingVoiceProvider(words_per_minute=150)
+    result = provider.synthesize(
+        VoiceSynthesisRequest(text="una dos tres cuatro cinco", voice_id="es-CL-LorenzoNeural")
+    )
+    assert result.degraded is True
+    assert result.duration_ms > 0
+
+
+def test_authority_voice_provider_caches(tmp_path):
+    class OneShotAuthority:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, tool_id, arguments):
+            assert tool_id == "voice.synthesize"
+            self.calls += 1
+            return {"voice_id": arguments["voice_id"], "duration_ms": 4000, "word_boundaries": []}
+
+    from kronara.voice import AuthorityVoiceProvider
+
+    authority = OneShotAuthority()
+    provider = AuthorityVoiceProvider(authority)
+    request = VoiceSynthesisRequest(text="hola mundo", voice_id="es-BO-MarceloNeural")
+    first = provider.synthesize(request)
+    second = provider.synthesize(request)
+    assert first.duration_ms == 4000
+    assert second.cached is True
+    assert authority.calls == 1  # second call served from cache

@@ -184,6 +184,7 @@ impl AuthorityToolExecutor for ProductionAuthorityTools {
                 serde_json::to_value(gateway.read(remote_id)?)
                     .map_err(|_| "Meta metric receipt serialization failed".to_string())
             }
+            "voice.synthesize" => crate::voice::synthesize(arguments),
             _ => Err("authority tool is not allowed".into()),
         }
     }
