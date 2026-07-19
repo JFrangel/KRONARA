@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/retrieval-query.v2.json",
+  "title": "RetrievalQuery@2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text", "now", "limit", "max_per_document"],
+  "properties": {
+    "text": {"type": "string", "minLength": 1},
+    "now": {"type": "integer", "minimum": 0},
+    "language": {"type": ["string", "null"]},
+    "scope": {"type": ["string", "null"]},
+    "allowed_rights": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "expanded_terms": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+    "max_per_document": {"type": "integer", "minimum": 1, "maximum": 10}
+  }
+}

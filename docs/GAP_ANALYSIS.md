@@ -31,16 +31,16 @@ Fecha de auditoría: 2026-07-19
 
 ## P1 — RAG v2
 
-- [ ] Chunking jerárquico documento → sección → fragmento → afirmación.
-- [ ] Metadatos de idioma, ámbito, versión, derechos y vigencia.
-- [ ] Deduplicación exacta y semántica.
+- [x] Chunking jerárquico estable documento → sección → fragmento.
+- [x] Metadatos de idioma, ámbito, versión, derechos y vigencia en RAG v2.
+- [ ] Deduplicación exacta y semántica (exacta implementada en cada documento).
 - [ ] Query decomposition y expansión controlada.
-- [ ] Filtros previos obligatorios por derechos y fecha.
-- [ ] Reranker multilingüe configurable.
-- [ ] Selección diversa para reducir redundancia.
-- [ ] GraphRAG con relaciones tipadas y profundidad limitada.
-- [ ] Tombstones para eliminación y expiración.
-- [ ] Benchmark español Recall@k, MRR, nDCG y precisión de citas.
+- [x] Filtros previos obligatorios por derechos, fecha, idioma y ámbito.
+- [ ] Reranker multilingüe configurable (interfaz inyectable implementada; falta modelo evaluado).
+- [x] Selección diversa con máximo por documento.
+- [ ] GraphRAG con relaciones tipadas y profundidad limitada (expansión de un salto implementada; faltan tipos).
+- [x] Tombstones para eliminación y expiración.
+- [ ] Benchmark español congelado (evaluador Recall@k, MRR y nDCG implementado; falta corpus juzgado).
 
 ## P1 — Investigador analítico
 
