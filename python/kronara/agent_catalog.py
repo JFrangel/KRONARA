@@ -22,6 +22,9 @@ KNOWN_TOOLS = {
     "metrics.read",
     "experiment.assign",
     "memory.propose",
+    "research.plan",
+    "evidence.build",
+    "analytics.execute",
 }
 
 

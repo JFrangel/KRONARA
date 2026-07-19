@@ -24,6 +24,8 @@
     {"skill_id":"timeline_composition","version":1,"capabilities":["compose_timeline","request_render"],"instruction_uri":"kronara://skills/timeline-composition"},
     {"skill_id":"packaging","version":1,"capabilities":["create_metadata","create_cover_variant"],"instruction_uri":"kronara://skills/packaging"},
     {"skill_id":"safe_distribution","version":1,"capabilities":["submit_publication","reconcile_remote_state"],"instruction_uri":"kronara://skills/safe-distribution"},
-    {"skill_id":"performance_analysis","version":1,"capabilities":["analyze_metrics","estimate_uncertainty"],"instruction_uri":"kronara://skills/performance-analysis"}
+    {"skill_id":"performance_analysis","version":1,"capabilities":["analyze_metrics","estimate_uncertainty"],"instruction_uri":"kronara://skills/performance-analysis"},
+    {"skill_id":"research_planning","version":1,"capabilities":["classify_question","decompose_question","allocate_source_budget","evaluate_coverage"],"instruction_uri":"kronara://skills/research-planning"},
+    {"skill_id":"evidence_analysis","version":1,"capabilities":["normalize_claims","detect_source_dependence","detect_contradictions","calibrate_confidence"],"instruction_uri":"kronara://skills/evidence-analysis"}
   ]
 }

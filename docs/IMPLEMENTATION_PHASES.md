@@ -38,7 +38,18 @@ Ninguna fase externa se considera terminada sin credenciales de prueba, evidenci
 - Selección mínima de habilidades versionadas.
 - Allowlist de herramientas, anti-loop y circuit breaker.
 - Contexto citado con límites de confianza e identificación de prompt injection.
-- 17 manifiestos de agente con modelos, fallbacks, tools y límites.
+- 19 manifiestos de agente con modelos, fallbacks, tools y límites.
 - ADN narrativo modular, continuidad y rúbrica 80/110 con piso por dimensión.
 - Golden set adversarial para copia, inyección, giro no sembrado, protagonista pasivo y final inválido.
 - RPC seguro de capacidades y evaluación narrativa.
+
+## Cuarto vertical implementado — investigación y evidencia
+
+- `ResearchQuestion@1`, `ResearchPlan@1`, `SourceRecord@1`, `EvidenceMatrix@1` y `AnalyticalBrief@1` cerrados y versionados.
+- Clasificación determinista de intención y riesgo, descomposición por focos, presupuesto de fuentes y condición de parada.
+- Evidencia favorable y contraria, dependencia por familia o cita explícita, contradicciones, derechos, vigencia y cobertura.
+- Separación estricta entre hechos soportados, cálculos, inferencias, hipótesis y recomendaciones.
+- RPC autenticado `research.plan` y `research.evaluate`.
+- Reddit oficial con `new`, `hot`, `top`, time filter, cache metadata y bloqueo `disabled_by_policy` predeterminado.
+
+Pendiente para completar la fase 6: ejecutar conectores externos exclusivamente desde Rust, automatizar extracción estructurada de afirmaciones con evaluación golden y persistir replay/costo/artefactos de cada investigación.

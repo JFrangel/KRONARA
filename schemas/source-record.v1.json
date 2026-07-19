@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/source-record.v1.json",
+  "title": "SourceRecord@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record_id", "source_uri", "publisher", "source_family", "published_at", "retrieved_at", "valid_until", "rights_mode", "assertions", "depends_on"],
+  "properties": {
+    "record_id": {"type": "string", "minLength": 1},
+    "source_uri": {"type": "string", "minLength": 1},
+    "publisher": {"type": "string", "minLength": 1},
+    "source_family": {"type": "string", "minLength": 1},
+    "published_at": {"type": "string", "format": "date-time"},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": ["string", "null"], "format": "date-time"},
+    "rights_mode": {"enum": ["owned_original", "licensed_adaptation", "reference_only", "denied", "unknown"]},
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "subquestion_id", "text", "kind", "stance", "confidence"],
+        "properties": {
+          "claim_id": {"type": "string", "minLength": 1},
+          "subquestion_id": {"type": "string", "minLength": 1},
+          "text": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["fact", "calculation", "inference", "hypothesis", "recommendation"]},
+          "stance": {"enum": ["support", "oppose"]},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "depends_on": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}

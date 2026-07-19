@@ -37,7 +37,7 @@ Antes de ejecutar se comprueba que el catálogo cubra todas las capacidades soli
 
 Los manifiestos viven en `config/agents`. Cada uno fija rol, habilidades, herramientas, familia preferida, fallbacks, pasos, llamadas y timeout. El catálogo cubre orquestación, oportunidades, derechos, decisión editorial, concepto, planificación, escritura, hook, voz, visual, audio, composición, QC, packaging, distribución, ciencia de rendimiento y curación de memoria.
 
-El orquestador puede elegir ejecución directa, workflow o deliberación profunda, pero no puede ampliar permisos. Distribution es el único agente cognitivo que puede solicitar `publication.publish`; Rust todavía revalida esa solicitud antes del efecto externo.
+El catálogo incluye además `Research Executive`, que clasifica y divide preguntas dentro de presupuesto, y `Evidence Analyst`, que usa una familia de modelo distinta para desafiar fuentes, independencia y contradicciones. El orquestador puede elegir ejecución directa, workflow o deliberación profunda, pero no puede ampliar permisos. Distribution es el único agente cognitivo que puede solicitar `publication.publish`; Rust todavía revalida esa solicitud antes del efecto externo.
 
 ## Conocimiento narrativo
 
@@ -62,6 +62,8 @@ El sidecar expone por RPC autenticado:
 - `agent.capabilities`: agentes, habilidades y herramientas registradas.
 - `agent.evaluate_narrative`: rúbrica y anti-patrones deterministas.
 - `analytics.execute`: estadística descriptiva, comparación de tasas, funnels y outliers mediante operaciones cerradas y trazables.
+- `research.plan`: clasificación, subpreguntas, consultas, presupuesto y reglas de parada.
+- `research.evaluate`: matriz de evidencia y `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separados.
 - `trend.extract`: señal abstracta sin devolver el cuerpo fuente.
 
 No expone shell, importación arbitraria de módulos, lectura de secretos ni publicación directa.

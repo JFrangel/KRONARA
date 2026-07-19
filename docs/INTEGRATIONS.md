@@ -2,7 +2,7 @@
 
 ## Reddit
 
-El cliente OAuth y los endpoints oficiales están implementados detrás de un transporte probado. `SourcePost` existe solo durante la extracción; se persiste `TrendSignal` con URI, título reducido, engagement, velocity y `rights_mode=reference_only`. El cuerpo no se conserva. En producción, OAuth se ejecutará como tool Rust para mantener secretos fuera de Python. Uso comercial queda bloqueado hasta documentar autorización contractual aplicable.
+El adaptador OAuth y los endpoints oficiales `new`, `hot` y `top` están implementados detrás de un transporte probado, con time filters válidos, ETag, cache metadata y estado de rate limit. Su estado predeterminado es `disabled_by_policy`; habilitarlo exige una referencia contractual explícita. `SourcePost` existe solo durante la extracción; se persiste `TrendSignal` con URI, título reducido, engagement, velocity y `rights_mode=reference_only`. El cuerpo no se conserva. En producción, OAuth se ejecutará como tool Rust para mantener secretos fuera de Python. Uso comercial queda bloqueado hasta documentar autorización contractual aplicable.
 
 ## Modelos
 

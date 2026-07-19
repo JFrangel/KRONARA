@@ -9,7 +9,7 @@ Fecha de auditoría: 2026-07-19
 - [x] LangGraph con checkpoints SQLite.
 - [x] Runtime plan–act–critic–Guardian.
 - [x] Allowlist de tools, anti-loop, timeout y circuit breaker.
-- [x] 17 manifiestos de agentes y 24 habilidades.
+- [x] 19 manifiestos de agentes y 26 habilidades.
 - [x] Reddit OAuth básico con rate limit y señales sin cuerpo.
 - [x] FTS5 + sqlite-vec + grafo + RRF.
 - [x] ADN narrativo, rúbrica y golden set adversarial.
@@ -22,12 +22,12 @@ Fecha de auditoría: 2026-07-19
 - [x] Crear `.env.example` documentado y `.env` local ignorado.
 - [x] Cargar variables exclusivamente en Rust y redactar secretos.
 - [x] Validar configuración por proveedor sin imprimir valores.
-- [ ] Añadir contratos v0.3 de investigación, evidencia, contexto y análisis.
+- [x] Añadir contratos v0.3 de investigación, evidencia, contexto y análisis.
 - [x] Implementar `TrainingRightsDecision` y excluir datasets no autorizados.
 - [x] Sustituir presupuesto por caracteres por presupuesto estimado de tokens en Context Compiler v1.
 - [x] Garantizar que evidencia crítica no sea truncada silenciosamente.
 - [ ] Añadir cache, health y circuit breaker por conector externo.
-- [ ] Mantener Reddit `disabled_by_policy` sin acceso oficial aprobado.
+- [x] Mantener Reddit `disabled_by_policy` sin acceso oficial aprobado.
 
 ## P1 — RAG v2
 
@@ -44,15 +44,15 @@ Fecha de auditoría: 2026-07-19
 
 ## P1 — Investigador analítico
 
-- [ ] Clasificar intención y riesgo de pregunta.
-- [ ] Dividir en subpreguntas no solapadas.
-- [ ] Planificar fuentes, consultas, presupuesto y condición de parada.
+- [x] Clasificar intención y riesgo de pregunta.
+- [x] Dividir en subpreguntas no solapadas.
+- [x] Planificar fuentes, consultas, presupuesto y condición de parada.
 - [ ] Integrar Reddit oficial mediante Rust cuando existan credenciales aprobadas.
-- [ ] Normalizar fuentes y detectar dependencia circular.
-- [ ] Extraer afirmaciones atómicas.
-- [ ] Construir matriz/grafo de evidencia favorable y contraria.
-- [ ] Detectar contradicciones, vigencia y cobertura insuficiente.
-- [ ] Producir `AnalyticalBrief` con hechos, inferencias e hipótesis separadas.
+- [x] Normalizar `SourceRecord` y detectar dependencia por familia o referencia explícita, incluidos ciclos.
+- [ ] Extraer afirmaciones atómicas automáticamente (el contrato estructurado y su validación ya existen).
+- [x] Construir matriz/grafo de evidencia favorable y contraria.
+- [x] Detectar contradicciones, vigencia y cobertura insuficiente.
+- [x] Producir `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separadas.
 - [ ] Guardar replay, citas, costos y artefactos.
 
 ## P1 — Herramientas analíticas
@@ -118,12 +118,12 @@ Fecha de auditoría: 2026-07-19
 
 ## Evidencia del gate local — 2026-07-19
 
-- [x] Python: 75 pruebas aprobadas.
+- [x] Python: 91 pruebas aprobadas.
 - [x] Node/Vite: 3 pruebas aprobadas.
 - [x] Rust: 5 pruebas de integración aprobadas.
 - [x] Contratos JSON: todos parsean correctamente.
 - [x] Build Tauri debug sin bundle completado.
-- [x] Sidecar empaquetado: handshake, catálogo de 17 agentes y `analytics.execute` verificados.
+- [x] Sidecar empaquetado: handshake, catálogo de 19 agentes, `analytics.execute` y `research.plan` verificados.
 - [x] `.env` ignorado y ausente del índice Git.
 
 ## Definición de terminado v0.3
@@ -131,7 +131,7 @@ Fecha de auditoría: 2026-07-19
 - [ ] Una pregunta produce informe multi-fuente citado y recuperable.
 - [ ] Ningún cálculo numérico depende exclusivamente del LLM.
 - [ ] RAG v2 supera el baseline v0.2 en el corpus congelado.
-- [ ] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
+- [x] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
 - [ ] El científico interpreta métricas sin declarar causalidad injustificada.
 - [ ] Una mejora champion/challenger puede promoverse y revertirse.
 - [ ] Un Reel original puede publicarse una sola vez y aprender de sus métricas.

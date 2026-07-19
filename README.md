@@ -1,4 +1,4 @@
-# Kronara OS v0.2
+# Kronara OS v0.3 (en desarrollo)
 
 Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust controla los efectos externos; el sidecar Python ejecuta LangGraph, memoria, RAG, agentes y aprendizaje.
 
@@ -19,7 +19,10 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 - Proveedor OpenAI-compatible con JSON Schema para Qwen/Kimi.
 - Vertical LangGraph de tendencia a concepto y blueprint narrativo.
 - Runtime cognitivo con habilidades mínimas, herramientas gobernadas, crítica independiente y Guardian.
-- Catálogo de 17 agentes, ADN narrativo modular y golden set adversarial.
+- Catálogo de 19 agentes, ADN narrativo modular y golden set adversarial.
+- Investigador analítico con clasificación de intención, subpreguntas no solapadas, presupuesto de fuentes y reglas de parada.
+- Matriz de evidencia que conserva contradicciones, dependencia entre fuentes, vigencia, derechos y cobertura incompleta.
+- Reddit bloqueado por política de forma predeterminada hasta registrar autorización contractual.
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 
@@ -53,6 +56,7 @@ npm.cmd run tauri build
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Agentes](docs/AGENTS.md)
 - [Runtime cognitivo](docs/AGENT_RUNTIME.md)
+- [Investigación y evidencia](docs/RESEARCH_AND_EVIDENCE.md)
 - [Configuración de entorno](docs/ENVIRONMENT.md)
 - [Análisis de brechas](docs/GAP_ANALYSIS.md)
 - [Plan v0.3 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.3-implementation.md)

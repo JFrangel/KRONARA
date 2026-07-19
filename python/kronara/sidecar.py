@@ -4,11 +4,15 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 
 from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
 from kronara.analytics import AnalysisRequest, AnalyticalToolkit
+from kronara.evidence import EvidenceEngine
 from kronara.narrative_quality import NarrativeQualityEvaluator
+from kronara.research import ResearchPlanner, ResearchSynthesizer
+from kronara.research_contracts import ResearchQuestion, SourceAssertion, SourceRecord
 from kronara.rpc import JsonRpcServer
 from kronara.trends import RedditSignalExtractor, SourcePost
 
@@ -71,6 +75,61 @@ def _analytics_execute(params: dict) -> dict:
     return asdict(AnalyticalToolkit().execute(request))
 
 
+def _research_question(params: dict) -> ResearchQuestion:
+    return ResearchQuestion(
+        question_id=str(params["question_id"]),
+        question=str(params["question"]),
+        language=str(params.get("language", "es")),
+        max_cost_usd=float(params["max_cost_usd"]),
+        max_sources=int(params.get("max_sources", 12)),
+        sensitive=bool(params.get("sensitive", False)),
+    )
+
+
+def _research_plan(params: dict) -> dict:
+    return asdict(ResearchPlanner().plan(_research_question(params)))
+
+
+def _source_record(params: dict) -> SourceRecord:
+    assertions = tuple(
+        SourceAssertion(
+            claim_id=str(item["claim_id"]),
+            subquestion_id=str(item["subquestion_id"]),
+            text=str(item["text"]),
+            kind=str(item["kind"]),
+            stance=str(item["stance"]),
+            confidence=float(item["confidence"]),
+        )
+        for item in params.get("assertions", ())
+    )
+    valid_until = params.get("valid_until")
+    return SourceRecord(
+        record_id=str(params["record_id"]),
+        source_uri=str(params["source_uri"]),
+        publisher=str(params["publisher"]),
+        source_family=str(params["source_family"]),
+        published_at=datetime.fromisoformat(str(params["published_at"])),
+        retrieved_at=datetime.fromisoformat(str(params["retrieved_at"])),
+        valid_until=datetime.fromisoformat(str(valid_until)) if valid_until else None,
+        rights_mode=str(params["rights_mode"]),
+        assertions=assertions,
+        depends_on=tuple(str(item) for item in params.get("depends_on", ())),
+    )
+
+
+def _research_evaluate(params: dict) -> dict:
+    question = _research_question(dict(params["question"]))
+    plan = ResearchPlanner().plan(question)
+    records = tuple(_source_record(dict(item)) for item in params.get("records", ()))
+    as_of = max((record.retrieved_at for record in records), default=None)
+    matrix = EvidenceEngine(now=as_of).build(
+        records,
+        expected_subquestion_ids=tuple(item.subquestion_id for item in plan.subquestions),
+    )
+    brief = ResearchSynthesizer().synthesize(plan, matrix)
+    return {"plan": asdict(plan), "evidence": asdict(matrix), "brief": asdict(brief)}
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -79,6 +138,8 @@ def serve(token: str) -> int:
             "agent.capabilities": _agent_capabilities,
             "agent.evaluate_narrative": _evaluate_narrative,
             "analytics.execute": _analytics_execute,
+            "research.plan": _research_plan,
+            "research.evaluate": _research_evaluate,
         },
     )
     for raw_line in sys.stdin:

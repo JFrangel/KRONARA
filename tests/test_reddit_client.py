@@ -1,6 +1,12 @@
 import pytest
 
-from kronara.reddit_client import RateLimitError, RedditClient, RedditCredentials
+from kronara.reddit_client import (
+    RateLimitError,
+    RedditAccessPolicy,
+    RedditClient,
+    RedditCredentials,
+    RedditPolicyDisabledError,
+)
 
 
 class FakeHttp:
@@ -43,6 +49,7 @@ def test_reddit_client_uses_oauth_and_returns_abstract_signals():
         RedditCredentials("client", "secret", "kronara/0.2 contact@example.com"),
         http=http,
         clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
     )
 
     signals = client.hot_signals("stories", limit=10)
@@ -62,7 +69,10 @@ def test_reddit_client_surfaces_retry_after_on_rate_limit():
         ]
     )
     client = RedditClient(
-        RedditCredentials("client", "secret", "agent"), http=http, clock=lambda: 200
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
     )
 
     with pytest.raises(RateLimitError) as error:
@@ -70,3 +80,90 @@ def test_reddit_client_surfaces_retry_after_on_rate_limit():
 
     assert error.value.retry_after_seconds == 30
 
+
+def test_reddit_is_disabled_by_policy_until_access_is_explicitly_approved():
+    http = FakeHttp([])
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+    )
+
+    with pytest.raises(RedditPolicyDisabledError) as error:
+        client.list_signals("stories", sort="new")
+
+    assert error.value.status == "disabled_by_policy"
+    assert http.calls == []
+
+
+def test_reddit_listing_supports_top_time_filter_and_cache_metadata():
+    http = FakeHttp(
+        [
+            {"status": 200, "json": {"access_token": "token", "expires_in": 3600}},
+            {
+                "status": 200,
+                "json": {"data": {"children": []}},
+                "headers": {
+                    "ETag": '"listing-v1"',
+                    "Cache-Control": "private, max-age=60",
+                    "X-Ratelimit-Remaining": "58.0",
+                    "X-Ratelimit-Reset": "42",
+                },
+            },
+        ]
+    )
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+
+    listing = client.list_signals(
+        "stories",
+        sort="top",
+        time_filter="week",
+        limit=10,
+        etag='"listing-v0"',
+    )
+
+    request = http.calls[1]
+    assert request[1].endswith("/r/stories/top")
+    assert request[2]["params"]["t"] == "week"
+    assert request[2]["headers"]["If-None-Match"] == '"listing-v0"'
+    assert listing.cache.etag == '"listing-v1"'
+    assert listing.cache.cache_control == "private, max-age=60"
+    assert listing.rate_limit.remaining == 58.0
+    assert listing.rate_limit.reset_seconds == 42
+
+
+@pytest.mark.parametrize("sort", ["new", "hot", "top"])
+def test_reddit_listing_accepts_supported_orderings(sort):
+    http = FakeHttp(
+        [
+            {"status": 200, "json": {"access_token": "token", "expires_in": 3600}},
+            {"status": 200, "json": {"data": {"children": []}}, "headers": {}},
+        ]
+    )
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+
+    listing = client.list_signals("stories", sort=sort)
+
+    assert listing.sort == sort
+
+
+def test_reddit_rejects_time_filter_for_non_top_listing():
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=FakeHttp([]),
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+
+    with pytest.raises(ValueError, match="time_filter"):
+        client.list_signals("stories", sort="new", time_filter="week")
