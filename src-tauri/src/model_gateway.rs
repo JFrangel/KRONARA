@@ -8,6 +8,7 @@ const GROQ_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
 const ALLOWED_MODELS: &[&str] = &[
     "qwen/qwen3-235b-a22b",
     "moonshotai/kimi-k2",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "tencent/hy3:free",
 ];

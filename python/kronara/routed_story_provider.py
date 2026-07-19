@@ -327,7 +327,7 @@ class RoutedIndependentCritic:
         script: StoryScript,
     ) -> StoryCritique:
         payload = self.router.complete(
-            alias="long_context_primary",
+            alias="critic",
             requirements=ModelRequirements(
                 frozenset({"critique"}), structured_output=True
             ),

@@ -56,6 +56,19 @@
     },
     {
       "provider": "openrouter",
+      "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "capabilities": ["planning", "deep_reasoning", "critique", "long_context", "structured_output", "tool_calling", "multilingual", "creative"],
+      "context_tokens": 1000000,
+      "structured_output": true,
+      "tool_calling": true,
+      "expires_on": null,
+      "quality_score": 0.97,
+      "reliability_score": 0.80,
+      "cost_score": 1.0,
+      "privacy": "remote"
+    },
+    {
+      "provider": "openrouter",
       "model_id": "tencent/hy3:free",
       "capabilities": ["long_context", "research", "critique", "creative"],
       "context_tokens": 131072,
@@ -71,10 +84,11 @@
   ],
   "aliases": {
     "fast_tools": ["groq-live-catalog", "qwen/qwen3-235b-a22b", "nvidia/nemotron-3-super-120b-a12b:free"],
-    "planning_primary": ["qwen/qwen3-235b-a22b", "nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2"],
-    "long_context_primary": ["moonshotai/kimi-k2", "nvidia/nemotron-3-super-120b-a12b:free", "tencent/hy3:free"],
-    "deep_reasoning_primary": ["nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2", "qwen/qwen3-235b-a22b"],
-    "experimental_hy3": ["tencent/hy3:free", "nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2"],
-    "creative_primary": ["qwen/qwen3-235b-a22b", "moonshotai/kimi-k2", "nvidia/nemotron-3-super-120b-a12b:free", "tencent/hy3:free"]
+    "planning_primary": ["qwen/qwen3-235b-a22b", "nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2"],
+    "long_context_primary": ["nvidia/nemotron-3-ultra-550b-a55b:free", "moonshotai/kimi-k2", "nvidia/nemotron-3-super-120b-a12b:free", "tencent/hy3:free"],
+    "deep_reasoning_primary": ["nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2", "qwen/qwen3-235b-a22b"],
+    "experimental_hy3": ["tencent/hy3:free", "nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "moonshotai/kimi-k2"],
+    "creative_primary": ["qwen/qwen3-235b-a22b", "nvidia/nemotron-3-ultra-550b-a55b:free", "moonshotai/kimi-k2", "nvidia/nemotron-3-super-120b-a12b:free", "tencent/hy3:free"],
+    "critic": ["moonshotai/kimi-k2", "nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free"]
   }
 }
