@@ -12,3 +12,4 @@ target/
 .pyinstaller-build/
 .pyinstaller-spec/
 src-tauri/binaries/*.exe
+.worktrees/
