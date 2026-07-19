@@ -111,10 +111,20 @@ Fecha de auditoría: 2026-07-19
 - [x] Repositorio Git local con historial y rama de trabajo.
 - [ ] GitHub CLI instalado y autenticado.
 - [ ] Rama `main` creada e integración verificada.
-- [ ] Repositorio GitHub privado creado.
+- [x] Repositorio GitHub existente enlazado como `origin` (`JFrangel/Proyecto-Redit`).
 - [ ] `main` publicada con tracking.
 - [ ] Protección de rama y plantilla de pull request.
-- [ ] Revisión de secretos e historial antes de publicación.
+- [x] Revisión de secretos del árbol rastreable antes de publicación.
+
+## Evidencia del gate local — 2026-07-19
+
+- [x] Python: 75 pruebas aprobadas.
+- [x] Node/Vite: 3 pruebas aprobadas.
+- [x] Rust: 5 pruebas de integración aprobadas.
+- [x] Contratos JSON: todos parsean correctamente.
+- [x] Build Tauri debug sin bundle completado.
+- [x] Sidecar empaquetado: handshake, catálogo de 17 agentes y `analytics.execute` verificados.
+- [x] `.env` ignorado y ausente del índice Git.
 
 ## Definición de terminado v0.3
 
