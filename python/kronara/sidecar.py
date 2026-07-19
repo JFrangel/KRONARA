@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
+from kronara.analytics import AnalysisRequest, AnalyticalToolkit
 from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.rpc import JsonRpcServer
 from kronara.trends import RedditSignalExtractor, SourcePost
@@ -60,6 +61,16 @@ def _evaluate_narrative(params: dict) -> dict:
     }
 
 
+def _analytics_execute(params: dict) -> dict:
+    request = AnalysisRequest(
+        operation=str(params["operation"]),
+        inputs=dict(params["inputs"]),
+        unit=str(params["unit"]) if params.get("unit") is not None else None,
+        assumptions=tuple(str(item) for item in params.get("assumptions", ())),
+    )
+    return asdict(AnalyticalToolkit().execute(request))
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -67,6 +78,7 @@ def serve(token: str) -> int:
             "trend.extract": _extract_trend,
             "agent.capabilities": _agent_capabilities,
             "agent.evaluate_narrative": _evaluate_narrative,
+            "analytics.execute": _analytics_execute,
         },
     )
     for raw_line in sys.stdin:
