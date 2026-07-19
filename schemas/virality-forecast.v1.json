@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/virality-forecast.v1.json",
+  "title": "ViralityForecast@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model_version", "platform", "status", "probability", "interval", "reason", "unknown_factors", "explanation", "guaranteed"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "model_version": {"type": "string", "minLength": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "status": {"enum": ["estimated", "abstained"]},
+    "probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "interval": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "array", "prefixItems": [{"type": "number", "minimum": 0, "maximum": 1}, {"type": "number", "minimum": 0, "maximum": 1}], "items": false, "minItems": 2, "maxItems": 2}
+      ]
+    },
+    "reason": {"type": ["string", "null"]},
+    "unknown_factors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "explanation": {"type": "string", "minLength": 10},
+    "guaranteed": {"const": false}
+  }
+}

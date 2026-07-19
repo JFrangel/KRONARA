@@ -26,6 +26,7 @@ KNOWN_TOOLS = {
     "evidence.build",
     "analytics.execute",
     "performance.diagnose",
+    "virality.evaluate",
 }
 
 

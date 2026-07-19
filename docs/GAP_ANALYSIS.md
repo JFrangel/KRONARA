@@ -72,14 +72,14 @@ Fecha de auditoría: 2026-07-19
 
 - [ ] Ontología común de métricas Meta/YouTube/TikTok.
 - [ ] Adaptadores que conserven la métrica original.
-- [ ] `PlatformFeatureVector` por pieza y versión.
-- [ ] Score con velocidad, aceleración, saturación y decaimiento.
+- [x] `PlatformFeatureVector` por pieza y versión.
+- [x] Score con velocidad, aceleración, saturación y decaimiento.
 - [ ] Baselines por plataforma, duración y audiencia.
-- [ ] Modelo interpretable regularizado.
-- [ ] Modelo jerárquico sin mezclar causalidad entre plataformas.
-- [ ] Backtesting temporal y calibración de probabilidad.
-- [ ] `ViralityForecast` con intervalo y factores desconocidos.
-- [ ] Bloqueo de cualquier promesa de viralidad garantizada.
+- [x] Modelo interpretable regularizado.
+- [ ] Modelo jerárquico (la separación estricta por plataforma ya impide pooling causal; falta jerarquía parcial).
+- [ ] Backtesting temporal y calibración de probabilidad (holdout y Brier implementados; falta walk-forward/calibración).
+- [x] `ViralityForecast` con intervalo y factores desconocidos.
+- [x] Bloqueo de cualquier promesa de viralidad garantizada.
 
 ## P2 — Auto-mejora segura
 
@@ -118,7 +118,7 @@ Fecha de auditoría: 2026-07-19
 
 ## Evidencia del gate local — 2026-07-19
 
-- [x] Python: 100 pruebas aprobadas.
+- [x] Python: 107 pruebas aprobadas.
 - [x] Node/Vite: 3 pruebas aprobadas.
 - [x] Rust: 5 pruebas de integración aprobadas.
 - [x] Contratos JSON: todos parsean correctamente.

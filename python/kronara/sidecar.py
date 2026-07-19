@@ -16,6 +16,7 @@ from kronara.research import ResearchPlanner, ResearchSynthesizer
 from kronara.research_contracts import ResearchQuestion, SourceAssertion, SourceRecord
 from kronara.rpc import JsonRpcServer
 from kronara.trends import RedditSignalExtractor, SourcePost
+from kronara.virality import PlatformFeatureVector, PlatformObservation, ViralityModel
 
 
 def _extract_trend(params: dict) -> dict:
@@ -160,6 +161,50 @@ def _performance_diagnose(params: dict) -> dict:
     return asdict(PerformanceScientist().diagnose(snapshots))
 
 
+def _platform_features(params: dict) -> PlatformFeatureVector:
+    return PlatformFeatureVector(
+        schema_version=int(params["schema_version"]),
+        vector_id=str(params["vector_id"]),
+        content_id=str(params["content_id"]),
+        platform=str(params["platform"]),
+        observed_at=datetime.fromisoformat(str(params["observed_at"])),
+        age_hours=float(params["age_hours"]),
+        completion_rate=float(params["completion_rate"]),
+        share_rate=float(params["share_rate"]),
+        replay_rate=float(params["replay_rate"]),
+        velocity_per_hour=float(params["velocity_per_hour"]),
+        acceleration_per_hour2=float(params["acceleration_per_hour2"]),
+        saturation_index=float(params["saturation_index"]),
+        duration_seconds=float(params["duration_seconds"]),
+    )
+
+
+def _virality_evaluate(params: dict) -> dict:
+    observations = tuple(
+        PlatformObservation(
+            observation_id=str(item["observation_id"]),
+            features=_platform_features(dict(item["features"])),
+            outcome_viral=int(item["outcome_viral"]),
+            finalized_at=datetime.fromisoformat(str(item["finalized_at"])),
+        )
+        for item in params.get("observations", ())
+    )
+    model = ViralityModel()
+    version = model.fit(observations)
+    forecast = model.predict(_platform_features(dict(params["candidate"])))
+    return {"model": _json_safe(asdict(version)), "forecast": _json_safe(asdict(forecast))}
+
+
+def _json_safe(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def serve(token: str) -> int:
     server = JsonRpcServer(
         token=token,
@@ -171,6 +216,7 @@ def serve(token: str) -> int:
             "research.plan": _research_plan,
             "research.evaluate": _research_evaluate,
             "performance.diagnose": _performance_diagnose,
+            "virality.evaluate": _virality_evaluate,
         },
     )
     for raw_line in sys.stdin:

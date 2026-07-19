@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/platform-feature-vector.v1.json",
+  "title": "PlatformFeatureVector@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "vector_id", "content_id", "platform", "observed_at", "age_hours", "completion_rate", "share_rate", "replay_rate", "velocity_per_hour", "acceleration_per_hour2", "saturation_index", "duration_seconds"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "vector_id": {"type": "string", "minLength": 1},
+    "content_id": {"type": "string", "minLength": 1},
+    "platform": {"enum": ["facebook_reels", "instagram_reels", "youtube_shorts", "tiktok"]},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "age_hours": {"type": "number", "minimum": 0},
+    "completion_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "share_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "replay_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "velocity_per_hour": {"type": "number", "minimum": 0},
+    "acceleration_per_hour2": {"type": "number"},
+    "saturation_index": {"type": "number", "minimum": 0, "maximum": 1},
+    "duration_seconds": {"type": "number", "exclusiveMinimum": 0}
+  }
+}

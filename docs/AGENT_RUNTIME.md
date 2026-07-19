@@ -65,6 +65,7 @@ El sidecar expone por RPC autenticado:
 - `research.plan`: clasificación, subpreguntas, consultas, presupuesto y reglas de parada.
 - `research.evaluate`: matriz de evidencia y `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separados.
 - `performance.diagnose`: segmentación por plataforma, voz, tema, hook, duración, horario y audiencia; solo genera hipótesis acotadas para experimentar.
+- `virality.evaluate`: entrenamiento y forecast efímero, separado por plataforma, con holdout temporal y prohibición contractual de garantías.
 - `trend.extract`: señal abstracta sin devolver el cuerpo fuente.
 
 No expone shell, importación arbitraria de módulos, lectura de secretos ni publicación directa.

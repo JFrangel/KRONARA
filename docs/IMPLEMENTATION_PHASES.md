@@ -65,3 +65,14 @@ Pendiente para completar la fase 6: ejecutar conectores externos exclusivamente 
 - RPC autenticado `performance.diagnose`.
 
 Pendiente para completar la fase 7: bootstrap, sensibilidad, importación real de métricas y ejecución de experimentos asignados.
+
+## Sexto vertical implementado — forecast de viralidad
+
+- `PlatformFeatureVector@1` con finalización, compartidos, repeticiones, velocidad, aceleración, saturación, frescura y duración.
+- Baseline logístico regularizado, interpretable y entrenado de forma independiente por plataforma.
+- Split temporal obligatorio y Brier score en holdout posterior.
+- Abstención cuando faltan observaciones o clases suficientes.
+- `ViralityForecast@1` con probabilidad, intervalo, factores desconocidos y `guaranteed=false` no anulable.
+- RPC sin estado oculto `virality.evaluate`.
+
+Pendiente: definir thresholds de outcome desde percentiles reales, calibración por plataforma, backtesting walk-forward y monitoreo de drift.
