@@ -110,6 +110,8 @@ Las promociones usarán champion/challenger, conjunto congelado y rollback. El a
 
 El fine-tuning será una fase posterior. Solo admitirá guiones propios, artefactos autorizados, decisiones aprobadas y resultados verificados. Se conservarán dataset cards, licencias, splits congelados y comparación contra el baseline RAG. Si no supera el baseline de forma material, no se despliega.
 
+Una historia adaptada podrá entrar al dataset únicamente si `TrainingRightsDecision@1` confirma titular, licencia o permiso expreso, alcance de entrenamiento, uso comercial, atribución, vigencia y evidencia. La transformación creativa no sustituye el permiso. Historias propias nacidas de señales abstractas podrán marcarse `owned_original`; adaptaciones autorizadas serán `licensed_adaptation`; cualquier otra fuente permanecerá `reference_only` y excluida de embeddings de entrenamiento, ejemplos y fine-tuning.
+
 ## 4. RAG v2
 
 ### 4.1 Ingesta
@@ -162,6 +164,7 @@ El corpus español incluirá consultas narrativas, métricas, políticas, derech
 - `RetrievalQuery@2`, `RetrievalResult@2`, `RAGEvaluation@1`.
 - `PromptCandidate@1`, `ModelEvaluation@1`, `ErrorMemory@1`.
 - `DatasetManifest@1`, `TrainingRun@1`, `DeploymentDecision@1`.
+- `TrainingRightsDecision@1`, `TrainingExample@1`, `DatasetCard@1`.
 
 Todos serán versionados, con `additionalProperties: false` en fronteras RPC y hashes sobre entradas relevantes.
 
