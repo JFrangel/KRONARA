@@ -10,6 +10,7 @@ from pathlib import Path
 
 from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
 from kronara.analytics import AnalysisRequest, AnalyticalToolkit
+from kronara.authority_client import StdioAuthorityClient
 from kronara.evidence import EvidenceEngine
 from kronara.improvement import (
     ADMINISTRATIVE_PARAMETERS,
@@ -352,10 +353,19 @@ def _rag_evaluate(params: dict) -> dict:
     return {"evaluation": asdict(evaluation), "promotion": promotion}
 
 
-def serve(token: str, data_dir: Path | None = None) -> int:
+def serve(
+    token: str,
+    data_dir: Path | None = None,
+    *,
+    embedding_alias: str = "bge_m3",
+    reranker_alias: str | None = "bge_reranker_v2_m3",
+) -> int:
     services = OperationsService(
         data_dir or Path(".kronara") / "runtime",
         resource_root=_resource_root(),
+        authority=StdioAuthorityClient(reader=sys.stdin, writer=sys.stdout),
+        embedding_alias=embedding_alias,
+        reranker_alias=reranker_alias,
     )
     methods = {
         "trend.extract": _extract_trend,
@@ -399,11 +409,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Kronara cognitive sidecar")
     parser.add_argument("--token")
     parser.add_argument("--data-dir", type=Path)
+    parser.add_argument("--embedding-alias", default="bge_m3")
+    parser.add_argument("--reranker-alias", default="bge_reranker_v2_m3")
     args = parser.parse_args()
     token = args.token or os.environ.get("KRONARA_RPC_SESSION_TOKEN")
     if not token:
         parser.error("an RPC session token is required")
-    return serve(token, args.data_dir)
+    return serve(
+        token,
+        args.data_dir,
+        embedding_alias=args.embedding_alias,
+        reranker_alias=args.reranker_alias,
+    )
 
 
 if __name__ == "__main__":

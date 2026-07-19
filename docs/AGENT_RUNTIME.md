@@ -1,4 +1,4 @@
-# Runtime cognitivo v0.4
+# Runtime cognitivo v0.5
 
 Kronara aumenta capacidad mediante contexto útil, herramientas gobernadas, evaluación y memoria verificable; no mediante un prompt ilimitado ni razonamiento privado persistido.
 
@@ -26,11 +26,11 @@ Cada agente tiene entrada/salida estructurada, herramientas mínimas, presupuest
 - `nvidia/nemotron-3-super-120b-a12b:free`: razonamiento profundo experimental.
 - `tencent/hy3:free`: fallback creativo experimental y de disponibilidad limitada.
 
-El registro no convierte automáticamente una API configurada en una ejecución de producción. El chat operativo actual usa un resumen local determinista y citado; el adaptador de inferencia remoto gobernado por Rust es una fase pendiente. Esto evita que Python lea claves de `.env`.
+El registro no convierte automáticamente una API configurada en una ejecución válida: Rust exige proveedor permitido, credencial, modelo allowlisted, esquema JSON y límites. `AuthorityModelRouter` consulta salud y envía candidatos en orden; Qwen genera y estructura, Hy3 aporta ángulos mientras esté disponible, Nemotron sirve como fallback profundo y Kimi critica desde una familia independiente. Python nunca lee claves de `.env`.
 
 ## Calidad narrativa
 
-El motor de historias propias exige tres conceptos, blueprint causal, escenas, continuidad, similitud léxica/semántica/estructural/secuencial, crítico independiente y a lo sumo una revisión localizada. Detecta inyección antes de las tools, admite cancelación cooperativa y persiste las trazas del run.
+El motor de historias propias exige tres conceptos, blueprint causal, escenas, continuidad, similitud léxica/semántica/estructural/secuencial, crítico independiente y revisión localizada. Además calcula palabras, segundos y presupuesto por escena a 150 palabras por minuto: comprime una vez y bloquea fuera de ±10 %. Detecta inyección antes de las tools, admite cancelación cooperativa y persiste las trazas del run.
 
 ## Chat operativo
 

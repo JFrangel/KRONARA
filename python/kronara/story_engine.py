@@ -93,6 +93,18 @@ class StoryScript:
 
 
 @dataclass(frozen=True)
+class DurationQCReport:
+    target_seconds: int
+    estimated_seconds: float
+    minimum_seconds: float
+    maximum_seconds: float
+    target_word_count: int
+    actual_word_count: int
+    passed: bool
+    revision_applied: bool
+
+
+@dataclass(frozen=True)
 class ContinuityLedger:
     facts: tuple[str, ...]
     seeds: tuple[str, ...]
@@ -160,6 +172,7 @@ class StoryRunResult:
     blueprint: tuple[CausalBeat, ...] = ()
     scenes: tuple[StoryScene, ...] = ()
     script: StoryScript | None = None
+    duration_qc: DurationQCReport | None = None
     continuity: ContinuityLedger | None = None
     originality: OriginalityReport | None = None
     quality: NarrativeQualityReport | None = None
@@ -322,6 +335,27 @@ class DeterministicStoryProvider:
     def revise(
         self, scenes: tuple[StoryScene, ...], revision: dict[str, Any]
     ) -> tuple[StoryScene, ...]:
+        if revision.get("operation") == "fit_duration":
+            target_words = max(len(scenes), int(revision["target_word_count"]))
+            base = target_words // len(scenes)
+            remainder = target_words % len(scenes)
+            fitted: list[StoryScene] = []
+            for index, scene in enumerate(scenes):
+                budget = base + (1 if index < remainder else 0)
+                words = scene.narration.split()
+                narration = " ".join(words[:budget]).rstrip(".,;:") + "."
+                fitted.append(
+                    StoryScene(
+                        scene_id=scene.scene_id,
+                        purpose=scene.purpose,
+                        narration=narration,
+                        target_seconds=scene.target_seconds,
+                        characters=scene.characters,
+                        seed_ids=scene.seed_ids,
+                        payoff_ids=scene.payoff_ids,
+                    )
+                )
+            return tuple(fitted)
         target = int(revision.get("scene_index", 0))
         revised = list(scenes)
         scene = revised[target]
@@ -432,6 +466,23 @@ class StoryEngine:
             runtime["scenes"] = scenes
             script = self._script(scenes)
             continuity = self._continuity(scenes)
+            duration_revision_applied = False
+            duration_qc = self._duration_qc(brief, script, revision_applied=False)
+            if not duration_qc.passed:
+                runtime["revision"] = {
+                    "operation": "fit_duration",
+                    "target_word_count": duration_qc.target_word_count,
+                }
+                scenes = self._invoke(
+                    tools, run_id, "story.draft", {"phase": "duration_revision"}
+                )
+                runtime["scenes"] = scenes
+                script = self._script(scenes)
+                continuity = self._continuity(scenes)
+                duration_revision_applied = True
+                duration_qc = self._duration_qc(brief, script, revision_applied=True)
+                if not duration_qc.passed:
+                    raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
             runtime.update({"script": script, "continuity": continuity})
             self._checkpoint(run_id, "script_assembly", "running", script.word_count)
 
@@ -463,7 +514,15 @@ class StoryEngine:
                 critique = self._invoke(
                     tools, run_id, "story.evaluate", {"phase": "post_revision"}
                 )
-            quality = NarrativeQualityEvaluator().evaluate(critique.scores)
+            duration_qc = self._duration_qc(
+                brief, script, revision_applied=duration_revision_applied
+            )
+            if not duration_qc.passed:
+                raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
+            quality_evaluator = NarrativeQualityEvaluator()
+            if quality_evaluator.detect_antipatterns(script.text):
+                raise StoryEngineFailure("NARRATIVE_ANTIPATTERN")
+            quality = quality_evaluator.evaluate(critique.scores)
             if not critique.passed or not quality.passed:
                 raise StoryEngineFailure("QUALITY_FAILED")
             self._checkpoint(run_id, "independent_critique", "running", "passed")
@@ -491,6 +550,7 @@ class StoryEngine:
                 blueprint=blueprint,
                 scenes=scenes,
                 script=script,
+                duration_qc=duration_qc,
                 continuity=continuity,
                 originality=originality,
                 quality=quality,
@@ -541,7 +601,7 @@ class StoryEngine:
             return self.generator.blueprint(brief, runtime["selected"])
 
         def draft(arguments: dict) -> tuple[StoryScene, ...]:
-            if arguments.get("phase") == "localized_revision":
+            if arguments.get("phase") in {"localized_revision", "duration_revision"}:
                 return self.generator.revise(runtime["scenes"], runtime["revision"])
             return self.generator.scenes(brief, runtime["selected"], runtime["blueprint"])
 
@@ -665,6 +725,26 @@ class StoryEngine:
         text = "\n\n".join(scene.narration for scene in scenes)
         words = len(text.split())
         return StoryScript(text=text, word_count=words, estimated_seconds=words / 2.5)
+
+    @staticmethod
+    def _duration_qc(
+        brief: StoryBrief,
+        script: StoryScript,
+        *,
+        revision_applied: bool,
+    ) -> DurationQCReport:
+        minimum = brief.target_duration_seconds * 0.90
+        maximum = brief.target_duration_seconds * 1.10
+        return DurationQCReport(
+            target_seconds=brief.target_duration_seconds,
+            estimated_seconds=script.estimated_seconds,
+            minimum_seconds=minimum,
+            maximum_seconds=maximum,
+            target_word_count=round(brief.target_duration_seconds * 2.5),
+            actual_word_count=script.word_count,
+            passed=minimum <= script.estimated_seconds <= maximum,
+            revision_applied=revision_applied,
+        )
 
     @staticmethod
     def _continuity(scenes: tuple[StoryScene, ...]) -> ContinuityLedger:

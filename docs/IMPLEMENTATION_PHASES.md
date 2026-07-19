@@ -1,4 +1,4 @@
-# Fases de implementación v0.4
+# Fases de implementación v0.5
 
 ## Completado y probado localmente
 
@@ -11,14 +11,17 @@
 7. RAG v3, índice persistente, GraphRAG, evaluación y candidatos de embeddings.
 8. Reutilización segura de historias propias y motor narrativo completo.
 9. Bridge Tauri–Python autenticado, pausa global Rust y cancelación cooperativa.
+10. Gateway Rust para Qwen, Kimi, Nemotron 3 Super y Hy3 con JSON estructurado y fallback.
+11. Vertical Reddit → oportunidad abstracta → RAG → historia propia con duración y QC.
+12. BGE-M3/reranker local con degradación explícita y promoción RAG reversible.
+13. Lectura de métricas Meta, cohortes comparables e intervalos para aprendizaje prudente.
 
 ## Siguiente fase: primer Reel real
 
-1. Implementar adaptador Rust de inferencia remota que use claves sin exponerlas al sidecar.
-2. Integrar Azure/Edge TTS, Whisper y QC de pronunciación.
-3. Implementar FFmpeg Rust sobre `MediaTimeline` y QC de video/subtítulos.
-4. Configurar Página Meta sandbox, publicación idempotente e insights.
-5. Ejecutar manual → supervised_auto → full_auto con límites diarios y rollback.
+1. Integrar Azure/Edge TTS, Whisper y QC de pronunciación.
+2. Implementar FFmpeg Rust sobre `MediaTimeline` y QC de video/subtítulos.
+3. Configurar Página Meta sandbox y publicación/reconciliación idempotente.
+4. Ejecutar manual → supervised_auto → full_auto con límites diarios y rollback.
 
 ## Criterios de salida
 

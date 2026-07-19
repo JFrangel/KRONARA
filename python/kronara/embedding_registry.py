@@ -201,7 +201,7 @@ class SentenceTransformerEmbeddingProvider:
             raise RuntimeError(
                 "sentence-transformers extra is required for real local embeddings"
             ) from error
-        return SentenceTransformer(model_id)
+        return SentenceTransformer(model_id, local_files_only=True)
 
 
 class CrossEncoderReranker:
@@ -218,10 +218,20 @@ class CrossEncoderReranker:
         self._model: Any | None = None
 
     def score(self, query: str, chunk: "KnowledgeChunk") -> float:
+        model = self._load()
+        scores = model.predict([(query, chunk.content)])
+        return float(scores[0])
+
+    def warmup(self) -> None:
+        scores = self._load().predict([("consulta de salud", "fragmento local")])
+        if not scores:
+            raise ValueError("reranker returned no health score")
+        float(scores[0])
+
+    def _load(self) -> Any:
         if self._model is None:
             self._model = self._model_loader(self.descriptor.model_id)
-        scores = self._model.predict([(query, chunk.content)])
-        return float(scores[0])
+        return self._model
 
     @staticmethod
     def _default_loader(model_id: str) -> Any:
@@ -231,4 +241,59 @@ class CrossEncoderReranker:
             raise RuntimeError(
                 "sentence-transformers extra is required for the local reranker"
             ) from error
-        return CrossEncoder(model_id)
+        return CrossEncoder(model_id, local_files_only=True)
+
+
+@dataclass(frozen=True)
+class ProductionEmbeddingRuntime:
+    descriptor: EmbeddingModelDescriptor
+    embedder: Any
+    reranker: Any | None
+    degradations: tuple[str, ...]
+
+
+class ProductionEmbeddingFactory:
+    """Activates local production models without allowing implicit network downloads."""
+
+    def __init__(
+        self,
+        registry: EmbeddingRegistry,
+        *,
+        embedding_loader: Callable[[str], Any] | None = None,
+        reranker_loader: Callable[[str], Any] | None = None,
+    ):
+        self.registry = registry
+        self.embedding_loader = embedding_loader
+        self.reranker_loader = reranker_loader
+
+    def build(
+        self,
+        embedding_alias: str,
+        *,
+        reranker_alias: str | None = None,
+    ) -> ProductionEmbeddingRuntime:
+        descriptor = self.registry.get(embedding_alias)
+        try:
+            embedder = SentenceTransformerEmbeddingProvider(
+                descriptor,
+                model_loader=self.embedding_loader,
+            )
+            embedder.embed("prueba local de salud del modelo multilingüe")
+            reranker = None
+            if reranker_alias is not None:
+                reranker = CrossEncoderReranker(
+                    self.registry.get(reranker_alias),
+                    model_loader=self.reranker_loader,
+                )
+                reranker.warmup()
+            return ProductionEmbeddingRuntime(descriptor, embedder, reranker, ())
+        except (ImportError, OSError, RuntimeError, ValueError):
+            from kronara.rag_v2 import DeterministicHashEmbedder
+
+            fallback = self.registry.get("deterministic_dev")
+            return ProductionEmbeddingRuntime(
+                fallback,
+                DeterministicHashEmbedder(fallback.dimensions),
+                None,
+                ("production_embedding_unavailable",),
+            )

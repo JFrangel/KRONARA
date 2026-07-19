@@ -1,4 +1,4 @@
-# Arquitectura v0.4
+# Arquitectura v0.5
 
 ## Decisión central
 
@@ -33,15 +33,15 @@ La pausa global vive en Rust. Al activarse se sincroniza con el sidecar, cancela
 - Los turnos del chat se guardan como hash y longitud, no como texto bruto, para que una fuente externa pegada por el usuario no contamine la memoria durable.
 - Los workfows LangGraph existentes y el motor narrativo conservan checkpoints para replay o reanudación.
 
-## RPC operativo
+## RPC operativo y herramientas anidadas
 
-El bridge solo publica `operations.chat`, `operations.context`, `tools.timeline`, `memory.search`, `rag.retrieve_v3`, `story.test`, `run.progress`, `run.cancel` y `agent.capabilities`. El handshake exige versión y token. Errores inesperados se devuelven como error interno saneado.
+El bridge publica una lista cerrada que ahora incluye `content.run` y `performance.learn`, además de chat, contexto, timeline, memoria, RAG, pruebas narrativas, progreso, cancelación y capacidades. Durante una ejecución Python puede solicitar únicamente `model.health`, `model.complete`, `reddit.list_signals` y `meta.metrics.read`; Rust valida la petición, usa la credencial y devuelve datos estructurados. El handshake exige versión y token. Errores inesperados se devuelven como error interno saneado.
 
 `ActionIntent@1` describe propuestas administrativas. Rust rechaza intents con secretos, estado falsamente autorizado o identidad inválida; un intent no es un efecto.
 
 ## Estados de entrega
 
-- Implementado: contratos, persistencia, chat, timeline, historia propia, RAG v3, filtros Reddit y bridge autenticado.
-- Degradado: el endpoint local de RAG usa embeddings deterministas solo para desarrollo cuando no hay un modelo local evaluado.
-- Experimental: modelos remotos del registro y `tencent/hy3:free` como fallback de disponibilidad limitada.
-- Planificado: TTS/Whisper/FFmpeg reales, publicación Meta y worker remoto.
+- Implementado: contratos, persistencia, chat, timeline, vertical Reddit oficial, modelos remotos gobernados, historia propia, duración/QC, RAG v3, métricas Meta y aprendizaje reversible.
+- Degradado: si BGE-M3 o su reranker no están instalados localmente se usa un embedding determinista marcado exclusivamente como desarrollo.
+- Temporal: `tencent/hy3:free` se omite automáticamente después del 21 de julio de 2026; continúan Qwen, Kimi y Nemotron según salud.
+- Planificado: TTS/Whisper/FFmpeg reales, publicación/reconciliación Meta y worker remoto.

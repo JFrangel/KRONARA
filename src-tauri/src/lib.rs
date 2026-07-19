@@ -3,7 +3,10 @@ use serde_json::Value;
 use std::sync::Mutex;
 use tauri::Manager;
 
+pub mod authority_tools;
 pub mod config;
+pub mod meta;
+pub mod model_gateway;
 pub mod reddit;
 pub mod sidecar_bridge;
 
@@ -207,7 +210,7 @@ pub fn run() {
         .manage(OperationalControl::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?.join("runtime");
-            app.manage(SidecarBridge::new(data_dir));
+            app.manage(SidecarBridge::new(data_dir)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

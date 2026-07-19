@@ -206,6 +206,11 @@ class RAGV3Index:
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS promoted_story_evidence_v3 (
+                story_id TEXT PRIMARY KEY,
+                evidence_refs_json TEXT NOT NULL,
+                promoted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         try:
@@ -362,6 +367,56 @@ class RAGV3Index:
             (source_id, target_id, relation, weight),
         )
         self.connection.commit()
+
+    def promote_owned_story(
+        self,
+        story_id: str,
+        content: str,
+        evidence_refs: tuple[str, ...],
+    ) -> None:
+        if not story_id.strip() or not content.strip() or not evidence_refs:
+            raise ValueError("owned story promotion requires identity, content and evidence")
+        if any(not item.strip() for item in evidence_refs):
+            raise ValueError("owned story promotion evidence cannot be empty")
+        row = self.connection.execute(
+            "SELECT version FROM knowledge_documents_v3 WHERE document_id = ?",
+            (story_id,),
+        ).fetchone()
+        version = int(row["version"]) + 1 if row is not None else 1
+        self.upsert(
+            IngestDocument(
+                document_id=story_id,
+                title=f"Historia propia promovida {story_id}",
+                content=content.strip(),
+                rights_mode="promoted_learning",
+                language="es",
+                scope="narrative",
+                valid_from=0,
+                valid_until=None,
+                confidence=0.9,
+                version=version,
+            )
+        )
+        self.connection.execute(
+            """
+            INSERT INTO promoted_story_evidence_v3(story_id, evidence_refs_json)
+            VALUES (?, ?)
+            ON CONFLICT(story_id) DO UPDATE SET
+                evidence_refs_json=excluded.evidence_refs_json,
+                promoted_at=CURRENT_TIMESTAMP
+            """,
+            (story_id, json.dumps(evidence_refs, ensure_ascii=False)),
+        )
+        self.connection.commit()
+
+    def promotion_evidence(self, story_id: str) -> tuple[str, ...]:
+        row = self.connection.execute(
+            "SELECT evidence_refs_json FROM promoted_story_evidence_v3 WHERE story_id = ?",
+            (story_id,),
+        ).fetchone()
+        if row is None:
+            return ()
+        return tuple(str(item) for item in json.loads(row["evidence_refs_json"]))
 
     def tombstone(self, document_id: str) -> None:
         self.connection.execute(

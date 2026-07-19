@@ -20,10 +20,10 @@ filtros de derechos/vigencia/idioma/ámbito
 ## Embeddings y evaluación
 
 - `BAAI/bge-m3`, `intfloat/multilingual-e5-large-instruct` y `BAAI/bge-reranker-v2-m3` están registrados como candidatos locales.
-- El endpoint de desarrollo utiliza `deterministic_dev`; se marca explícitamente `development_embedding_only`.
+- `ProductionEmbeddingFactory` intenta cargar BGE-M3 y `bge-reranker-v2-m3` solo desde pesos locales (`local_files_only`). Si faltan, utiliza `deterministic_dev` y declara `development_embedding_only`; nunca descarga modelos desde Python.
 - El golden `benchmarks/rag/spanish-golden.v2.json` mide Recall@k, MRR, nDCG, precisión de citas y redundancia.
 - Un embedding o reranker solo se promueve si gana sobre baseline comparable sin regresiones; instalar un nombre de modelo no es promoción.
 
 ## Historias propias y aprendizaje
 
-Una historia solo puede alimentar RAG o un dataset cuando es `owned_original` o está licenciada, tiene evidencia de calidad y rendimiento, muestra suficiente, intervalo de confianza, revisión reputacional y decisión reversible. Historias externas de Reddit no pasan esa compuerta por defecto.
+Una historia solo puede alimentar RAG cuando es `owned_original`, conserva el hash del artefacto, supera derechos, narrativa, originalidad, seguridad y golden set, y sus métricas comparables alcanzan muestra e intervalo de confianza suficientes. `promote_owned_story` crea una versión `promoted_learning` con evidencia; un tombstone la revierte sin borrar la auditoría. Historias externas de Reddit son rechazadas por esa compuerta y nunca se reutilizan como ejemplo creativo.

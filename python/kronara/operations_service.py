@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import threading
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from kronara.embedding_registry import EmbeddingRegistry
+from kronara.authority_client import AuthorityClient, UnavailableAuthorityClient
+from kronara.content_pipeline import ProductionContentPipeline, TracingAuthorityClient
+from kronara.embedding_registry import EmbeddingRegistry, ProductionEmbeddingFactory
+from kronara.model_registry_v2 import ModelCapabilityRegistryV2
 from kronara.observable_tools import ObservableToolRegistry
 from kronara.operations_chat import OperationsChatAgent
 from kronara.operations_contracts import OperationsChatRequest
 from kronara.prompt_stack import PersonaProfile, PromptStackCompiler
-from kronara.rag_v2 import DeterministicHashEmbedder, IngestDocument
+from kronara.rag_v2 import IngestDocument
 from kronara.rag_v3 import RAGV3Index, RetrievalQueryV3
 from kronara.store import KronaraStore
+from kronara.performance import MetricSnapshot
+from kronara.performance_learning import PerformanceLearningService
+from kronara.story_reuse import StoryExampleRepository, StoryQualityEvidence
+from kronara.training_rights import RightsMode, TrainingAsset
 from kronara.story_engine import (
     DeterministicIndependentCritic,
     DeterministicStoryProvider,
@@ -40,10 +48,21 @@ class LocalOperationsResponder:
 class OperationsService:
     """Bounded RPC facade for chat, retrieval, traces and recoverable story tests."""
 
-    def __init__(self, data_dir: Path, *, resource_root: Path | None = None):
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        resource_root: Path | None = None,
+        authority: AuthorityClient | None = None,
+        embedding_alias: str = "bge_m3",
+        reranker_alias: str | None = "bge_reranker_v2_m3",
+    ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.resource_root = resource_root or Path(__file__).resolve().parents[2]
+        self.authority = authority or UnavailableAuthorityClient()
+        self.embedding_alias = embedding_alias
+        self.reranker_alias = reranker_alias
         self.database_path = self.data_dir / "kronara.db"
         self.store = KronaraStore(self.database_path)
         self.store.initialize()
@@ -52,6 +71,9 @@ class OperationsService:
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.RLock()
         self._paused = False
+        self._model_registry = ModelCapabilityRegistryV2.load(
+            self.resource_root / "config" / "models" / "registry.v2.json"
+        )
         self._rag = self._build_rag()
         self._chat = self._build_chat()
 
@@ -63,6 +85,8 @@ class OperationsService:
             "memory.search": self.memory_search,
             "rag.retrieve_v3": self.rag_retrieve,
             "story.test": self.story_test,
+            "content.run": self.content_run,
+            "performance.learn": self.performance_learn,
             "run.cancel": self.cancel,
             "run.progress": self.progress,
             "operations.control_snapshot": self.control_snapshot,
@@ -144,9 +168,110 @@ class OperationsService:
         )
         payload = self._json(asdict(packet))
         payload["degradations"] = list(
-            dict.fromkeys((*payload["degradations"], "development_embedding_only"))
+            dict.fromkeys((*payload["degradations"], *self._rag_degradations))
         )
         return payload
+
+    def content_run(self, params: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            if self._paused:
+                raise ValueError("global pause blocks content runs")
+        return ProductionContentPipeline(
+            authority=self.authority,
+            store=self.store,
+            rag=self._rag,
+            model_registry=self._model_registry,
+            artifact_root=self.data_dir / "artifacts",
+        ).run(params)
+
+    def performance_learn(self, params: dict[str, Any]) -> dict[str, Any]:
+        story_id = str(params["story_id"])
+        artifact = self.store.load_owned_story_artifact(story_id)
+        path = Path(str(artifact["path"]))
+        content = path.read_text(encoding="utf-8")
+        if hashlib.sha256(content.encode("utf-8")).hexdigest() != artifact["sha256"]:
+            raise ValueError("owned story artifact hash mismatch")
+        traced = TracingAuthorityClient(
+            delegate=self.authority,
+            store=self.store,
+            run_id=f"performance:{story_id}",
+        )
+        receipt = traced.invoke(
+            "meta.metrics.read", {"remote_id": str(params["remote_id"])}
+        )
+        metrics = dict(receipt.get("metrics", {}))
+        observed_at = datetime.fromtimestamp(int(receipt["observed_at"]), UTC)
+        published_at = datetime.fromisoformat(str(params["published_at"]))
+        plays = max(0, int(metrics.get("plays", 0)))
+        reach = max(plays, int(metrics.get("reach", plays)))
+        completions = min(plays, max(0, int(metrics.get("completions", 0))))
+        average_watch_ms = max(0.0, float(metrics.get("average_watch_time_ms", 0)))
+        target = MetricSnapshot(
+            schema_version=1,
+            snapshot_id=str(receipt["evidence_ref"]),
+            content_id=story_id,
+            platform="facebook",
+            published_at=published_at,
+            observed_at=observed_at,
+            metric_window_hours=max(
+                1, round((observed_at - published_at).total_seconds() / 3600)
+            ),
+            impressions=reach,
+            starts=plays,
+            completions=completions,
+            replays=max(0, int(metrics.get("replays", 0))),
+            shares=max(0, int(metrics.get("shares", 0))),
+            watch_time_seconds=average_watch_ms / 1000 * plays,
+            duration_seconds=float(params["duration_seconds"]),
+            voice_id=str(params["voice_id"]),
+            topic=str(params["topic"]),
+            hook_id=str(params["hook_id"]),
+            publication_hour=int(params["publication_hour"]),
+            audience_segment=str(params["audience_segment"]),
+        )
+        cohort = tuple(
+            self._metric_snapshot(dict(item))
+            for item in params.get("cohort_snapshots", ())
+        )
+        snapshots = (target, *cohort)
+        for snapshot in snapshots:
+            payload = asdict(snapshot)
+            payload["published_at"] = snapshot.published_at.isoformat()
+            payload["observed_at"] = snapshot.observed_at.isoformat()
+            self.store.save_metric_snapshot(payload)
+        metadata = dict(artifact["metadata"])
+        quality = StoryQualityEvidence(
+            narrative_passed=bool(metadata.get("narrative_passed", False)),
+            originality_passed=bool(metadata.get("originality_passed", False)),
+            safety_passed=bool(metadata.get("safety_passed", False)),
+            publication_succeeded=True,
+            golden_no_regression=bool(metadata.get("golden_no_regression", False)),
+            evidence_refs=(
+                str(receipt["evidence_ref"]),
+                f"artifact://sha256/{artifact['sha256']}",
+            ),
+        )
+        learned = PerformanceLearningService(
+            repository=StoryExampleRepository(store=self.store, index=self._rag)
+        ).learn(
+            target_story_id=story_id,
+            snapshots=snapshots,
+            quality=quality,
+            asset=TrainingAsset(
+                asset_id=story_id,
+                rights_mode=RightsMode.OWNED_ORIGINAL,
+                source_uri=f"kronara://artifacts/{story_id}",
+            ),
+            content=content,
+        )
+        return self._json(
+            {
+                "schema_version": 1,
+                "diagnosis": asdict(learned.diagnosis),
+                "performance": asdict(learned.performance),
+                "decision": asdict(learned.decision),
+            }
+        )
 
     def story_test(self, params: dict[str, Any]) -> dict[str, Any]:
         if bool(params.get("wait", False)):
@@ -289,11 +414,17 @@ class OperationsService:
         registry = EmbeddingRegistry.load(
             self.resource_root / "config" / "models" / "embeddings.v1.json"
         )
-        descriptor = registry.get("deterministic_dev")
+        runtime = ProductionEmbeddingFactory(registry).build(
+            self.embedding_alias,
+            reranker_alias=self.reranker_alias,
+        )
+        descriptor = runtime.descriptor
+        self._rag_degradations = runtime.degradations
         index = RAGV3Index(
             self.data_dir / "knowledge.db",
             descriptor,
-            DeterministicHashEmbedder(descriptor.dimensions),
+            runtime.embedder,
+            reranker=runtime.reranker,
         )
         index.upsert(
             IngestDocument(
@@ -316,6 +447,30 @@ class OperationsService:
             )
         )
         return index
+
+    @staticmethod
+    def _metric_snapshot(params: dict[str, Any]) -> MetricSnapshot:
+        return MetricSnapshot(
+            schema_version=int(params["schema_version"]),
+            snapshot_id=str(params["snapshot_id"]),
+            content_id=str(params["content_id"]),
+            platform=str(params["platform"]),
+            published_at=datetime.fromisoformat(str(params["published_at"])),
+            observed_at=datetime.fromisoformat(str(params["observed_at"])),
+            metric_window_hours=int(params["metric_window_hours"]),
+            impressions=int(params["impressions"]),
+            starts=int(params["starts"]),
+            completions=int(params["completions"]),
+            replays=int(params["replays"]),
+            shares=int(params["shares"]),
+            watch_time_seconds=float(params["watch_time_seconds"]),
+            duration_seconds=float(params["duration_seconds"]),
+            voice_id=str(params["voice_id"]),
+            topic=str(params["topic"]),
+            hook_id=str(params["hook_id"]),
+            publication_hour=int(params["publication_hour"]),
+            audience_segment=str(params["audience_segment"]),
+        )
 
     def _status_snapshot(self) -> dict[str, Any]:
         with self._lock:

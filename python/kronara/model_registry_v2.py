@@ -148,6 +148,12 @@ class ModelCapabilityRegistryV2:
             selection_reasons=tuple(reasons),
         )
 
+    def provider_for(self, model_id: str) -> str:
+        try:
+            return self._candidates[model_id].provider
+        except KeyError as error:
+            raise NoHealthyModelError(f"unknown model {model_id}") from error
+
     @staticmethod
     def _candidate(payload: dict) -> ModelCandidate:
         expires = payload.get("expires_on")

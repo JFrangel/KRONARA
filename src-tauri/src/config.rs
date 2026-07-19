@@ -47,8 +47,23 @@ pub struct RedditConfig {
     pub contract_reference: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct MetaConfig {
+    pub enabled: bool,
+    pub page_id: Option<String>,
+    pub page_token: Option<SecretString>,
+    pub graph_version: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RedditState {
+    Ready,
+    DisabledByPolicy,
+    DisabledMissingCredential,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetaState {
     Ready,
     DisabledByPolicy,
     DisabledMissingCredential,
@@ -62,6 +77,9 @@ pub struct AppConfig {
     pub max_research_cost_usd: f64,
     pub providers: Vec<ProviderConfig>,
     pub reddit: RedditConfig,
+    pub meta: MetaConfig,
+    pub embedding_alias: String,
+    pub reranker_alias: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +153,47 @@ impl AppConfig {
                 }
             }
         }
+        let meta_enabled = parse_bool(values, "KRONARA_META_ENABLED", false)?;
+        let meta = MetaConfig {
+            enabled: meta_enabled,
+            page_id: non_empty(values, "KRONARA_META_PAGE_ID"),
+            page_token: non_empty(values, "KRONARA_META_PAGE_TOKEN").map(SecretString),
+            graph_version: non_empty(values, "KRONARA_META_GRAPH_VERSION"),
+        };
+        if meta.enabled {
+            for (variable, present) in [
+                ("KRONARA_META_PAGE_ID", meta.page_id.is_some()),
+                ("KRONARA_META_PAGE_TOKEN", meta.page_token.is_some()),
+                ("KRONARA_META_GRAPH_VERSION", meta.graph_version.is_some()),
+            ] {
+                if !present {
+                    return Err(ConfigError {
+                        variable: variable.to_owned(),
+                        message: "required when Meta is enabled".to_owned(),
+                    });
+                }
+            }
+        }
+        let embedding_alias = value_or(values, "KRONARA_EMBEDDING_ALIAS", "bge_m3");
+        if !matches!(
+            embedding_alias.as_str(),
+            "bge_m3" | "multilingual_e5_large" | "deterministic_dev"
+        ) {
+            return Err(ConfigError {
+                variable: "KRONARA_EMBEDDING_ALIAS".into(),
+                message: "unknown embedding alias".into(),
+            });
+        }
+        let reranker_alias = non_empty(values, "KRONARA_RERANKER_ALIAS");
+        if reranker_alias
+            .as_deref()
+            .is_some_and(|value| value != "bge_reranker_v2_m3")
+        {
+            return Err(ConfigError {
+                variable: "KRONARA_RERANKER_ALIAS".into(),
+                message: "unknown reranker alias".into(),
+            });
+        }
         Ok(Self {
             environment: value_or(values, "KRONARA_ENV", "development"),
             data_dir: PathBuf::from(value_or(values, "KRONARA_DATA_DIR", ".kronara")),
@@ -142,6 +201,9 @@ impl AppConfig {
             max_research_cost_usd,
             providers,
             reddit,
+            meta,
+            embedding_alias,
+            reranker_alias,
         })
     }
 
@@ -169,6 +231,19 @@ impl AppConfig {
             RedditState::DisabledMissingCredential
         } else {
             RedditState::Ready
+        }
+    }
+
+    pub fn meta_status(&self) -> MetaState {
+        if !self.meta.enabled {
+            MetaState::DisabledByPolicy
+        } else if self.meta.page_id.is_none()
+            || self.meta.page_token.is_none()
+            || self.meta.graph_version.is_none()
+        {
+            MetaState::DisabledMissingCredential
+        } else {
+            MetaState::Ready
         }
     }
 }

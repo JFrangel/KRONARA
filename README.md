@@ -1,4 +1,4 @@
-# Kronara OS v0.4
+# Kronara OS v0.5
 
 Kronara es una fábrica editorial local-first para Windows. Su propósito es investigar oportunidades permitidas, crear historias originales, evaluar su calidad y aprender de resultados sin copiar fuentes ni ampliar sus propios permisos.
 
@@ -8,14 +8,17 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 |---|---|---|
 | Chat operativo y trazas visibles | Implementado | `tests/test_operations_rpc.py` |
 | 24 agentes y 35 habilidades | Implementado | `config/agents`, `config/skills/catalog.v1.json` |
-| Historia propia con crítica, originalidad y recuperación | Implementado | `tests/test_story_engine.py` |
-| RAG v3 local: FTS5, vectores, grafo y filtros | Implementado, embeddings de desarrollo | `tests/test_rag_v3.py` |
-| Reddit OAuth oficial y filtros | Implementado, desactivado por política | `src-tauri/tests/reddit.rs` |
-| Qwen, Kimi, Groq, Nemotron y Hy3 | Registro/configuración implementados | `config/models/registry.v2.json` |
-| Voz, Whisper, FFmpeg y Meta Reels reales | Planificado; contratos o abstracciones existentes | `docs/INTEGRATIONS.md` |
+| Vertical Reddit → historia propia | Implementado y trazable | `tests/test_production_content_vertical.py` |
+| Historia propia con crítica, originalidad, duración y recuperación | Implementado | `tests/test_story_duration_qc.py` |
+| RAG v3: FTS5, vectores, grafo, filtros y promoción reversible | Implementado | `tests/test_story_learning_pipeline.py` |
+| Reddit OAuth oficial y filtros | Implementado; activación sujeta a credenciales y términos | `src-tauri/tests/reddit.rs` |
+| Qwen, Kimi, Groq, Nemotron y Hy3 | Inferencia gobernada por Rust con fallback | `src-tauri/tests/model_gateway.rs` |
+| BGE-M3 y reranker BGE | Carga local productiva; degradación explícita si faltan pesos | `tests/test_production_embeddings.py` |
+| Métricas Meta y aprendizaje | Lectura versionada y promoción prudente implementadas | `tests/test_performance_learning.py` |
+| Voz, Whisper, FFmpeg y publicación Meta Reels | Pendiente | `docs/INTEGRATIONS.md` |
 | Fine-tuning automático | Bloqueado por diseño | `tests/test_story_reuse.py` |
 
-`full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. La primera publicación real en Facebook todavía requiere completar los adaptadores de media/Meta y una cuenta sandbox autorizada.
+`full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. Kronara ya crea historias propias desde señales abstractas y puede analizar métricas de una pieza remota; la primera publicación real en Facebook todavía requiere completar audio, video, upload/reconciliación y una Página sandbox autorizada.
 
 ## Uso local
 
@@ -63,3 +66,4 @@ Rust crea un token de sesión, limpia el entorno heredado del sidecar y solo per
 - [Brechas comprobables](docs/GAP_ANALYSIS.md)
 - [ADR de autoridad Rust/Python](docs/adr/002-rust-python-authority.md)
 - [Plan v0.4 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.4-agent-operations-implementation.md)
+- [Plan v0.5 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.5-production-intelligence-implementation.md)

@@ -1,4 +1,4 @@
-# Catálogo de agentes v0.4
+# Catálogo de agentes v0.5
 
 Hay 24 manifiestos en `config/agents` y 35 habilidades versionadas en `config/skills/catalog.v1.json`. Una habilidad orienta el trabajo; no concede autoridad.
 

@@ -9,6 +9,7 @@ target/
 .env
 *.db
 .test-tmp/
+.test-tmp*/
 .pyinstaller-build/
 .pyinstaller-spec/
 src-tauri/binaries/*.exe

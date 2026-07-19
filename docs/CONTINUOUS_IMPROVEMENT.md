@@ -48,8 +48,9 @@ La card registra hash del manifiesto, splits, modos de derechos y evidencias. Fi
 
 - `improvement.status`: scopes y umbrales públicos del motor.
 - `improvement.evaluate`: evaluación stateless de un candidato; no despliega ni cambia políticas.
+- `performance.learn`: importa métricas oficiales, persiste el diagnóstico y puede promover únicamente una historia propia como documento RAG reversible.
 
-La persistencia y los efectos de deployment se ejecutarán mediante autoridad Rust en el vertical de producción.
+La promoción editorial al RAG ya persiste evidencia y versión; los efectos de deployment de modelos, prompts o políticas seguirán ejecutándose únicamente mediante autoridad Rust y aprobación adecuada.
 
 ## Pendiente
 

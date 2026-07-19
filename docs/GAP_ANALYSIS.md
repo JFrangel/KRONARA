@@ -1,13 +1,13 @@
-# Brechas y checklist de release v0.4
+# Brechas y checklist de release v0.5
 
 Fecha de auditoría: 2026-07-19.
 
 ## Evidencia de release
 
-- [x] Gate final: 194 pruebas Python, 6 pruebas Node, pruebas/build Rust y build Vite aprobados.
-- [x] Sidecar empaquetado: handshake y `operations.context` verificados.
-- [x] Secret scan: `.env` no rastreado y sin coincidencias de claves reales.
-- [x] `main` publicado y verificado contra `origin/main` en `265e8aa`.
+- [x] Gate final: 212 pruebas Python, 7 Node, 28 Rust, formato Rust, build Vite y sidecar aprobados.
+- [x] Prueba integral: Reddit abstracto → RAG → modelos enrutados → historia propia → QC.
+- [x] Secret scan: `.env` no rastreado y sin claves reales en diff/trazas.
+- [ ] `main` publicado y verificado contra `origin/main`.
 
 ## Cerrado en esta entrega
 
@@ -19,17 +19,23 @@ Fecha de auditoría: 2026-07-19.
 - [x] Motor de historia propia con Guardian, crítico independiente y cancelación.
 - [x] Reddit Rust con OAuth, filtros y bodies descartados.
 - [x] Bridge Tauri–Python autenticado con allowlist y entorno saneado.
+- [x] Subprotocolo de herramientas Rust con `reddit.list_signals`, `model.complete`, `model.health` y `meta.metrics.read`.
+- [x] Vertical `content.run`: filtros, deduplicación, oportunidad abstracta y RAG citado sin cuerpos externos.
+- [x] Qwen para creación, Hy3 para ángulos, Nemotron como fallback y Kimi como crítico independiente.
+- [x] Control de duración ±10 %, originalidad y Guardian narrativo antes de persistir el artefacto.
+- [x] Embeddings BGE-M3/reranker locales con degradación explícita y sin descarga desde Python.
+- [x] Métricas Meta versionadas, análisis por cohortes e intervalos y promoción reversible de historias propias.
+- [x] UI para ejecutar el vertical y observar modelos, RAG, resultado y herramientas utilizadas.
 - [x] Pausa global conservada por Rust.
 - [x] Pausa global sincronizada que cancela cooperativamente runs activos y bloquea nuevos.
 - [x] Conversación durable sin texto bruto de usuario o fuentes externas pegadas.
 
 ## Bloqueado o pendiente antes de producción pública
 
-- [ ] Adaptador de LLM remoto gobernado por Rust para usar claves configuradas sin exponerlas a Python.
-- [ ] Benchmark real y promoción de BGE/E5/reranker en corpus español.
+- [ ] Instalar y ejecutar benchmark real de BGE-M3/reranker en el equipo de producción.
 - [ ] Síntesis Azure/Edge, Whisper y QC de audio.
 - [ ] FFmpeg, assets autorizados y QC real de video vertical.
-- [ ] Página Meta sandbox, publicación, reconciliación e importación de métricas.
+- [ ] Página Meta sandbox, publicación y reconciliación idempotente (la importación de métricas ya está implementada).
 - [ ] Experimentos de voz/contenido con tráfico real y muestra suficiente.
 - [ ] Activación gradual de publicación `full_auto`.
 

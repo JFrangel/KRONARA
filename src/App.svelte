@@ -13,6 +13,9 @@
   let operations = createOperationsState();
   let question = '';
   let notice = '';
+  let subreddit = 'Historias';
+  let contentRunning = false;
+  let contentResult = null;
 
   const stages = [
     ['Opportunity Intelligence', 'Señales permitidas y deduplicadas'],
@@ -89,6 +92,33 @@
     }
   }
 
+  async function runProductionContent() {
+    if (contentRunning || operations.connection !== 'connected') return;
+    const community = subreddit.trim().replace(/^r\//, '');
+    if (!community) {
+      notice = 'Escribe una comunidad de Reddit para investigar.';
+      return;
+    }
+    contentRunning = true;
+    contentResult = null;
+    notice = '';
+    try {
+      const result = await callOperations('content.run', {
+        story_id: `owned_reddit_${Date.now()}`,
+        subreddits: [community],
+        sort: 'hot',
+        limit: 25,
+        target_duration_seconds: 90,
+      });
+      contentResult = result;
+      await refreshTimeline(result.run_id);
+    } catch (error) {
+      notice = 'El vertical productivo se detuvo: ninguna historia se publica si falla Reddit, los modelos, los derechos o la calidad.';
+    } finally {
+      contentRunning = false;
+    }
+  }
+
   async function pollRun(runId) {
     const progress = await callOperations('run.progress', { run_id: runId });
     operations = { ...operations, activeRun: progress };
@@ -117,7 +147,7 @@
 <main>
   <header>
     <div>
-      <span class="eyebrow">KRONARA OS · v0.4</span>
+      <span class="eyebrow">KRONARA OS · v0.5</span>
       <h1>La fábrica editorial está <em>{control.paused ? 'en pausa' : 'bajo control'}</em></h1>
       <p>Agentes autónomos con evidencia, límites, memoria y recuperación.</p>
     </div>
@@ -145,6 +175,45 @@
       <strong class="compact">RUST</strong>
       <p>secretos y efectos externos</p>
     </article>
+  </section>
+
+  <section class="production-vertical" aria-label="Crear historia original desde señales de Reddit">
+    <div class="section-title">
+      <span>VERTICAL PRODUCTIVO</span>
+      <small>Reddit oficial → oportunidad abstracta → historia propia</small>
+    </div>
+    <div class="production-controls">
+      <label for="subreddit">Comunidad para observar</label>
+      <input id="subreddit" bind:value={subreddit} autocomplete="off" placeholder="Historias" />
+      <button onclick={runProductionContent} disabled={contentRunning || operations.connection !== 'connected'}>
+        {contentRunning ? 'Investigando y creando…' : 'Crear historia gobernada'}
+      </button>
+    </div>
+    <p class="tool-route"><code>reddit.list_signals</code> usa solo señales abstractas; nunca entrega el cuerpo externo al escritor.</p>
+    {#if contentResult}
+      <div class="production-result" data-status={contentResult.status}>
+        <div>
+          <span class="label">RESULTADO</span>
+          <h2>{contentResult.story?.title ?? contentResult.status}</h2>
+          <p>{contentResult.story?.hook ?? 'La ejecución fue bloqueada de forma segura.'}</p>
+        </div>
+        {#if contentResult.story}
+          <dl>
+            <div><dt>Generador</dt><dd>{contentResult.story.generator_family}</dd></div>
+            <div><dt>Crítico</dt><dd>{contentResult.story.critic_family}</dd></div>
+            <div><dt>Duración</dt><dd>{Math.round(contentResult.story.estimated_seconds)} s</dd></div>
+            <div><dt>RAG citado</dt><dd>{contentResult.rag_citations?.length ?? 0}</dd></div>
+          </dl>
+          <details>
+            <summary>Ver guion propio y evidencia</summary>
+            <p class="script">{contentResult.story.script}</p>
+            {#each contentResult.rag_citations ?? [] as citation}
+              <small class="citation">{citation}</small>
+            {/each}
+          </details>
+        {/if}
+      </div>
+    {/if}
   </section>
 
   <div class="workspace-grid">

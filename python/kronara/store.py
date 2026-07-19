@@ -107,6 +107,21 @@ class KronaraStore:
                 status TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS owned_story_artifacts (
+                story_id TEXT PRIMARY KEY,
+                artifact_uri TEXT NOT NULL,
+                path TEXT NOT NULL,
+                sha256 TEXT NOT NULL,
+                metadata_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS performance_metric_snapshots (
+                snapshot_id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                content_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_performance_metrics_platform
+                ON performance_metric_snapshots(platform, content_id);
             """
         )
         self.connection.commit()
@@ -338,6 +353,91 @@ class KronaraStore:
         payload = json.loads(row[1])
         payload["status"] = row[0]
         return payload
+
+    def save_owned_story_artifact(
+        self,
+        *,
+        story_id: str,
+        artifact_uri: str,
+        path: str,
+        sha256: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if not all((story_id, artifact_uri, path, sha256)):
+            raise ValueError("owned story artifact identity is required")
+        self._db().execute(
+            """
+            INSERT INTO owned_story_artifacts(
+                story_id, artifact_uri, path, sha256, metadata_json
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(story_id) DO UPDATE SET
+                artifact_uri=excluded.artifact_uri,
+                path=excluded.path,
+                sha256=excluded.sha256,
+                metadata_json=excluded.metadata_json
+            """,
+            (
+                story_id,
+                artifact_uri,
+                path,
+                sha256,
+                json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+            ),
+        )
+        self._db().commit()
+
+    def load_owned_story_artifact(self, story_id: str) -> dict[str, Any]:
+        row = self._db().execute(
+            """
+            SELECT artifact_uri, path, sha256, metadata_json
+            FROM owned_story_artifacts WHERE story_id = ?
+            """,
+            (story_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(story_id)
+        return {
+            "story_id": story_id,
+            "artifact_uri": row[0],
+            "path": row[1],
+            "sha256": row[2],
+            "metadata": json.loads(row[3]),
+        }
+
+    def save_metric_snapshot(self, payload: dict[str, Any]) -> None:
+        snapshot_id = str(payload.get("snapshot_id", ""))
+        platform = str(payload.get("platform", ""))
+        content_id = str(payload.get("content_id", ""))
+        if not all((snapshot_id, platform, content_id)):
+            raise ValueError("metric snapshot identity is required")
+        self._db().execute(
+            """
+            INSERT INTO performance_metric_snapshots(
+                snapshot_id, platform, content_id, payload_json
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(snapshot_id) DO UPDATE SET
+                platform=excluded.platform,
+                content_id=excluded.content_id,
+                payload_json=excluded.payload_json
+            """,
+            (
+                snapshot_id,
+                platform,
+                content_id,
+                json.dumps(payload, sort_keys=True, ensure_ascii=False),
+            ),
+        )
+        self._db().commit()
+
+    def list_metric_snapshots(self, platform: str) -> list[dict[str, Any]]:
+        rows = self._db().execute(
+            """
+            SELECT payload_json FROM performance_metric_snapshots
+            WHERE platform = ? ORDER BY snapshot_id
+            """,
+            (platform,),
+        )
+        return [json.loads(row[0]) for row in rows]
 
     @staticmethod
     def _json_default(value: Any) -> str:

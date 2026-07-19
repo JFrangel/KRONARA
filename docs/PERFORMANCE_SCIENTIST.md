@@ -43,13 +43,9 @@ Los modelos Qwen/Kimi pueden interpretar el resultado y diseñar una prueba, per
 
 ## RPC
 
-`performance.diagnose` recibe únicamente snapshots estructurados y devuelve el diagnóstico. El método requiere handshake, no ejecuta código libre y rechaza el pooling entre plataformas.
+`performance.diagnose` recibe snapshots estructurados y devuelve el diagnóstico. `performance.learn` solicita a Rust `meta.metrics.read`, persiste el snapshot, compara cohortes compatibles, calcula intervalos Wilson y consulta la compuerta de reutilización. El método requiere handshake, no ejecuta código libre y rechaza el pooling entre plataformas.
 
-## Pendiente
+## Implementado y pendiente
 
-- importar snapshots desde APIs oficiales mediante Rust;
-- curvas reales por cohortes y ventanas comparables;
-- bootstrap y análisis de sensibilidad;
-- asignación persistente de experimentos;
-- comparación causal después de aleatorización;
-- promoción o rollback mediante el motor de mejora continua.
+- Implementado: importación Meta mediante Rust, snapshots persistentes, cohortes comparables, intervalos Wilson, control de outliers, decisión reversible y promoción al RAG solo con evidencia propia.
+- Pendiente: curvas de retención por checkpoint cuando Meta las exponga de forma compatible, bootstrap, asignación aleatoria persistente y análisis causal posterior a experimentos controlados.

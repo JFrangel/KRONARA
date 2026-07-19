@@ -2,13 +2,13 @@
 
 | Integración | Estado | Límite actual |
 |---|---|---|
-| Reddit Data API | Adaptador Rust implementado | Desactivado hasta OAuth oficial y referencia contractual; bodies descartados |
-| Model registry | Implementado | Registro y health routing, no inferencia remota gobernada desde el chat todavía |
-| BGE-M3, E5 y reranker BGE | Candidatos configurados | No promocionados sin evaluación local congelada |
+| Reddit Data API | Integrada en `content.run` mediante Rust | Requiere OAuth oficial y referencia contractual; bodies descartados |
+| Qwen/Kimi/Nemotron/Hy3 | Gateway Rust e inferencia estructurada | Depende de credenciales, salud y vigencia del modelo; Hy3 free expira 2026-07-21 |
+| BGE-M3 y reranker BGE | Carga local productiva | Degrada de forma visible si no están instalados/evaluados |
 | Azure Speech / Edge TTS | Planificado/experimental | No hay síntesis productiva conectada al pipeline |
 | faster-whisper | Planificado | Sin alineación ni QC de audio reales |
 | FFmpeg | Planificado | Timeline declarativa sin render Rust de producción |
-| Meta/Facebook Reels | Abstracción y pruebas unitarias | Sin Page sandbox, upload ni insights remotos |
+| Meta/Facebook Reels | Insights versionados mediante Rust | Sin Page sandbox, upload ni reconciliación de publicación |
 
 ## Reddit
 
@@ -20,4 +20,4 @@ Los aliases no se incrustan en prompts. El router considera capacidad, calidad m
 
 ## Facebook Reels
 
-El criterio de éxito final sigue siendo una publicación única, original y recuperable. Falta: proveer assets permitidos, generar audio, validar/reproducir un render 9:16, usar una Página sandbox, reconciliar upload ambiguo e importar métricas. Hasta entonces no se debe afirmar que Kronara publica Reels reales.
+El adaptador de métricas usa `graph.facebook.com`, una versión fijada explícitamente, token de Página custodiado por Rust y un mapeo normalizado de reproducciones, finalizaciones, tiempo medio, alcance y compartidos. El criterio de éxito final sigue siendo una publicación única, original y recuperable. Falta: proveer assets permitidos, generar audio, validar/reproducir un render 9:16, usar una Página sandbox y reconciliar uploads ambiguos. Hasta entonces no se debe afirmar que Kronara publica Reels reales.
