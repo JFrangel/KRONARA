@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any, Callable, Protocol
 
 from kronara.context import ContextBuilder
+from kronara.narrative_craft import CraftReport, LiteraryCraftEvaluator
 from kronara.narrative_quality import NarrativeQualityEvaluator, NarrativeQualityReport
 from kronara.observable_tools import ObservableToolRegistry, ToolExecutionContext
 from kronara.store import KronaraStore
@@ -176,6 +177,7 @@ class StoryRunResult:
     continuity: ContinuityLedger | None = None
     originality: OriginalityReport | None = None
     quality: NarrativeQualityReport | None = None
+    craft: CraftReport | None = None
     retention: RetentionPlan | None = None
     packaging: StoryPackaging | None = None
     memory_proposal: StoryMemoryProposal | None = None
@@ -525,6 +527,9 @@ class StoryEngine:
             quality = quality_evaluator.evaluate(critique.scores)
             if not critique.passed or not quality.passed:
                 raise StoryEngineFailure("QUALITY_FAILED")
+            craft = LiteraryCraftEvaluator().assess(script.text)
+            if craft.blocking:
+                raise StoryEngineFailure("CRAFT_ANTIPATTERN")
             self._checkpoint(run_id, "independent_critique", "running", "passed")
 
             self._ensure_active()
@@ -554,6 +559,7 @@ class StoryEngine:
                 continuity=continuity,
                 originality=originality,
                 quality=quality,
+                craft=craft,
                 retention=retention,
                 packaging=packaging,
                 memory_proposal=memory,
