@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GraphEntity",
+  "description": "A bitemporal node in the KronaraGraph narrative knowledge graph.",
+  "type": "object",
+  "required": ["entity_id", "entity_type", "name", "series_id", "valid_from", "valid_to", "recorded_at"],
+  "properties": {
+    "entity_id": {"type": "string"},
+    "entity_type": {"enum": ["character", "place", "object", "topic", "voice", "program", "series", "fact"]},
+    "name": {"type": "string"},
+    "series_id": {"type": "string"},
+    "attributes": {"type": "object", "additionalProperties": {"type": "string"}},
+    "valid_from": {"type": "integer", "description": "World-time start (epoch)."},
+    "valid_to": {"type": "integer", "description": "World-time end; OPEN sentinel means still valid."},
+    "recorded_at": {"type": "integer", "description": "Transaction-time: when Kronara learned it."},
+    "version": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false
+}

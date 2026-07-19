@@ -138,12 +138,15 @@ class ProductionContentPipeline:
         rag: RAGV3Index,
         model_registry: ModelCapabilityRegistryV2,
         artifact_root: Path,
+        graph: "KronaraGraph | None" = None,
     ):
         self.authority = authority
         self.store = store
         self.rag = rag
         self.model_registry = model_registry
         self.artifacts = ArtifactStore(artifact_root)
+        # Optional bitemporal knowledge graph for serialized (multi-part) stories.
+        self.graph = graph
 
     def run(self, params: dict[str, Any]) -> dict[str, Any]:
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
@@ -244,6 +247,17 @@ class ProductionContentPipeline:
                 )
             )
         )
+        series_id = params.get("series_id")
+        part_number = int(params.get("part_number", 1)) if series_id else None
+        canon_builder = None
+        series_context = ""
+        if self.graph is not None and series_id:
+            from kronara.series import SeriesCanonBuilder
+
+            canon_builder = SeriesCanonBuilder(self.graph)
+            series_context = canon_builder.context_for_part(
+                str(series_id), part_number, now=observed_at
+            ).context_block
         brief = StoryBrief(
             story_id=story_id,
             title=str(editorial["title"]),
@@ -254,6 +268,9 @@ class ProductionContentPipeline:
             source_uri=f"kronara://artifacts/{story_id}",
             evidence_refs=evidence,
             reference_texts=(selected.theme_hint,),
+            series_id=str(series_id) if series_id else None,
+            part_number=part_number,
+            series_context=series_context,
         )
         generator = RoutedStoryProvider(router)
         result = StoryEngine(
@@ -301,6 +318,16 @@ class ProductionContentPipeline:
                 "rag_citation_count": len(citations),
             },
         )
+        if canon_builder is not None and series_id:
+            cliffhanger = str(params.get("cliffhanger", ""))
+            canon_builder.ingest_story_result(
+                str(series_id),
+                part_number,
+                result,
+                now=observed_at,
+                cliffhanger=cliffhanger,
+                is_final=bool(params.get("is_final", not cliffhanger)),
+            )
         return {
             "schema_version": 1,
             "run_id": run_id,

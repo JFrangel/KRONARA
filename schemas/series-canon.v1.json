@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SeriesContext",
+  "description": "Canon reconstructed from earlier parts, fed into the next part's brief.",
+  "type": "object",
+  "required": ["series_id", "next_part", "established_characters", "established_facts", "open_threads", "context_block"],
+  "properties": {
+    "series_id": {"type": "string"},
+    "next_part": {"type": "integer", "minimum": 1},
+    "established_characters": {"type": "array", "items": {"type": "string"}},
+    "established_facts": {"type": "array", "items": {"type": "string"}},
+    "open_threads": {"type": "array", "items": {"type": "string"}, "description": "Cliffhangers still to be answered."},
+    "context_block": {"type": "string", "description": "Promptable canon block injected into StoryBrief.series_context."}
+  },
+  "additionalProperties": false
+}

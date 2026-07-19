@@ -25,6 +25,10 @@ class StoryBrief:
     evidence_refs: tuple[str, ...]
     reference_texts: tuple[str, ...] = ()
     forbidden_event_sequence: tuple[str, ...] = ()
+    # Serialized multi-part stories: optional canon inherited from earlier parts.
+    series_id: str | None = None
+    part_number: int | None = None
+    series_context: str = ""
 
     def __post_init__(self) -> None:
         if not all((self.story_id, self.title, self.premise, self.theme, self.source_uri)):
@@ -53,6 +57,9 @@ class StoryBrief:
             forbidden_event_sequence=tuple(
                 str(item) for item in payload.get("forbidden_event_sequence", ())
             ),
+            series_id=(str(payload["series_id"]) if payload.get("series_id") else None),
+            part_number=(int(payload["part_number"]) if payload.get("part_number") else None),
+            series_context=str(payload.get("series_context", "")),
         )
 
 

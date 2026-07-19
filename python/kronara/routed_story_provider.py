@@ -260,6 +260,13 @@ class RoutedStoryProvider:
                 "blueprint": [asdict(item) for item in blueprint],
                 "target_word_count": round(brief.target_duration_seconds * 2.5),
                 "craft_directives": _SCENE_CRAFT_DIRECTIVES,
+                "series_canon": brief.series_context,
+                "series_instruction": (
+                    "Si hay canon de la serie, respétalo: no contradigas personajes ni "
+                    "hechos establecidos y retoma las preguntas abiertas."
+                    if brief.series_context
+                    else ""
+                ),
             },
             response_schema=_object_schema(("scenes",)),
         )

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoryPart",
+  "description": "One installment of a serialized (multi-part) story.",
+  "type": "object",
+  "required": ["series_id", "part_number", "story_id"],
+  "properties": {
+    "series_id": {"type": "string"},
+    "part_number": {"type": "integer", "minimum": 1},
+    "story_id": {"type": "string"},
+    "cliffhanger": {"type": "string", "description": "Open question closing a non-final part."},
+    "is_final": {"type": "boolean", "default": false}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"is_final": {"const": false}}},
+      "then": {"properties": {"cliffhanger": {"minLength": 1}}, "required": ["cliffhanger"]}
+    }
+  ]
+}
