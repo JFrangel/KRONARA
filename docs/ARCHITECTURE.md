@@ -23,13 +23,14 @@ El puente Rust genera un token efímero, permite una lista cerrada de métodos y
 | Rust | Guardar secretos, red, archivos, pausa, validar intents | Delegar autoridad sin validación |
 | Python | Planificar, recuperar contexto, evaluar, proponer | Shell libre, leer `.env`, publicar directamente |
 
-La pausa global vive en Rust. Antes de cada RPC, Rust sincroniza su estado con el sidecar y bloquea nuevas acciones cognitivas locales, como una prueba narrativa. Las consultas y una cancelación siguen disponibles.
+La pausa global vive en Rust. Al activarse se sincroniza con el sidecar, cancela cooperativamente ejecuciones cognitivas activas y bloquea nuevas acciones locales, como una prueba narrativa. Las consultas y una cancelación siguen disponibles.
 
 ## Persistencia y recuperación
 
 - SQLite es la fuente transaccional: checkpoints, eventos, conversaciones, memorias, trazas y decisiones de reutilización.
 - FTS5, `sqlite-vec` y el grafo editorial son índices locales reconstruibles.
 - Cada tool genera eventos `started` y finales con argumentos redactados, evidencia, costo y resultado resumido.
+- Los turnos del chat se guardan como hash y longitud, no como texto bruto, para que una fuente externa pegada por el usuario no contamine la memoria durable.
 - Los workfows LangGraph existentes y el motor narrativo conservan checkpoints para replay o reanudación.
 
 ## RPC operativo

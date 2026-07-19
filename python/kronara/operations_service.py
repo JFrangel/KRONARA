@@ -149,15 +149,18 @@ class OperationsService:
         return payload
 
     def story_test(self, params: dict[str, Any]) -> dict[str, Any]:
+        if bool(params.get("wait", False)):
+            raise ValueError("synchronous story execution is not permitted")
         brief = self._story_brief(params)
         run_id = f"story:{brief.story_id}"
-        if bool(params.get("wait", False)):
-            with self._lock:
-                self._states[run_id] = self._run_state(run_id, "running", 10, "guardian_input")
-            result = self._execute_story(brief, self.store)
-            return result
         cancellation = threading.Event()
         with self._lock:
+            if self._paused:
+                blocked = self._run_state(
+                    run_id, "blocked", 0, "global_pause", error_code="GLOBAL_PAUSE"
+                )
+                self._states[run_id] = blocked
+                return dict(blocked)
             existing = self._states.get(run_id)
             if existing and existing["status"] in {"queued", "running"}:
                 return dict(existing)
@@ -207,6 +210,18 @@ class OperationsService:
             raise ValueError("paused must be a boolean")
         with self._lock:
             self._paused = paused
+            if paused:
+                for run_id, event in self._cancellations.items():
+                    event.set()
+                    current = self._states.get(run_id)
+                    if current and current["status"] in {"queued", "running"}:
+                        self._states[run_id] = self._run_state(
+                            run_id,
+                            "cancellation_requested",
+                            int(current["progress_percent"]),
+                            str(current["node"]),
+                            error_code="GLOBAL_PAUSE",
+                        )
         return {"schema_version": 1, "paused": paused}
 
     def cancel(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -414,7 +429,14 @@ class OperationsService:
         return event.is_set if event is not None else (lambda: False)
 
     @staticmethod
-    def _run_state(run_id: str, status: str, progress: int, node: str) -> dict[str, Any]:
+    def _run_state(
+        run_id: str,
+        status: str,
+        progress: int,
+        node: str,
+        *,
+        error_code: str | None = None,
+    ) -> dict[str, Any]:
         return {
             "schema_version": 1,
             "run_id": run_id,
@@ -422,6 +444,7 @@ class OperationsService:
             "progress_percent": progress,
             "node": node,
             "external_effect": False,
+            "error_code": error_code,
         }
 
     @classmethod

@@ -35,3 +35,5 @@ El motor de historias propias exige tres conceptos, blueprint causal, escenas, c
 ## Chat operativo
 
 El chat consulta `operations.status` y `tools.timeline`, compila contexto, cita evidencia y devuelve `partial` cuando no puede cubrir lo necesario. Una solicitud de presupuesto produce `ActionIntent@1` con `requires_approval`; no cambia el límite.
+
+Los turnos se conservan para auditoría mediante hash, rol y longitud; el texto bruto del usuario o de la respuesta no entra a la memoria durable.

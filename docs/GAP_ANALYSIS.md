@@ -13,6 +13,8 @@ Fecha de auditoría: 2026-07-19.
 - [x] Reddit Rust con OAuth, filtros y bodies descartados.
 - [x] Bridge Tauri–Python autenticado con allowlist y entorno saneado.
 - [x] Pausa global conservada por Rust.
+- [x] Pausa global sincronizada que cancela cooperativamente runs activos y bloquea nuevos.
+- [x] Conversación durable sin texto bruto de usuario o fuentes externas pegadas.
 
 ## Bloqueado o pendiente antes de producción pública
 

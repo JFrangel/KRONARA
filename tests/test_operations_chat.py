@@ -134,3 +134,15 @@ def test_repeated_conversation_turns_do_not_trigger_a_false_tool_loop(tmp_path):
     assert all(response.status == "completed" for response in responses)
     assert all(response.tool_trace_ids for response in responses)
     store.close()
+
+
+def test_chat_never_persists_raw_user_text_that_may_contain_external_source_body(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path)
+    source_body = "reddit.com/r/example: EXTERNAL STORY BODY THAT MUST NOT BE DURABLE"
+
+    agent.answer(request(source_body, request_id="req_external_body"))
+
+    persisted = str(store.list_conversation_turns("conv_1"))
+    assert source_body not in persisted
+    assert "sha256=" in persisted
+    store.close()

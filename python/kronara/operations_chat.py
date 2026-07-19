@@ -188,16 +188,21 @@ class OperationsChatAgent:
         self.store.save_conversation_turn(
             conversation_id=request.conversation_id,
             role="user",
-            content=request.message,
+            content=self._durable_turn_summary("user", request.message),
             created_at=now,
         )
         self.store.save_conversation_turn(
             conversation_id=request.conversation_id,
             role="assistant",
-            content=response.answer,
+            content=self._durable_turn_summary("assistant", response.answer),
             created_at=now,
         )
         return response
+
+    @staticmethod
+    def _durable_turn_summary(role: str, content: str) -> str:
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        return f"[{role} turn omitted from durable memory; sha256={digest}; chars={len(content)}]"
 
     @staticmethod
     def _classify(message: str) -> ChatIntent:

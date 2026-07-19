@@ -190,13 +190,16 @@ fn get_control_state(
 #[tauri::command]
 fn set_global_pause(
     control: tauri::State<'_, OperationalControl>,
+    bridge: tauri::State<'_, SidecarBridge>,
     paused: bool,
 ) -> Result<ControlStateSnapshot, String> {
     *control
         .paused
         .lock()
         .map_err(|_| "operational control is unavailable".to_string())? = paused;
-    control.snapshot()
+    let snapshot = control.snapshot()?;
+    let _ = bridge.sync_control(snapshot.paused);
+    Ok(snapshot)
 }
 
 pub fn run() {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from kronara.operations_service import OperationsService
@@ -54,17 +55,28 @@ def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path
 def test_story_test_exposes_progress_and_completed_tool_timeline(tmp_path):
     server, service = _server(tmp_path)
 
-    story = server.handle(_request("story.test", {"wait": True}))
+    story = server.handle(_request("story.test", {"wait": False}))
     run_id = story["result"]["run_id"]
+    service._threads[run_id].join(timeout=5)
     progress = server.handle(_request("run.progress", {"run_id": run_id}, 3))
     timeline = server.handle(_request("tools.timeline", {"run_id": run_id}, 4))
 
-    assert story["result"]["status"] == "completed"
-    assert story["result"]["concept_count"] == 3
+    assert story["result"]["status"] in {"queued", "running", "completed"}
     assert progress["result"]["status"] == "completed"
     assert progress["result"]["progress_percent"] == 100
+    assert progress["result"]["concept_count"] == 3
     assert any(event["tool_id"] == "story.concept" for event in timeline["result"]["events"])
     assert all("arguments_redacted" in event for event in timeline["result"]["events"])
+    service.close()
+
+
+def test_story_test_rejects_synchronous_execution_that_cannot_be_cancelled(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("story.test", {"wait": True}))
+
+    assert response["error"]["code"] == -32602
+    assert "synchronous" in response["error"]["message"]
     service.close()
 
 
@@ -113,4 +125,19 @@ def test_rust_control_snapshot_is_reflected_in_operations_context(tmp_path):
 
     assert synced["paused"] is True
     assert context["workflow_snapshot"]["paused"] is True
+    service.close()
+
+
+def test_paused_control_blocks_new_story_runs_and_cancels_active_runs(tmp_path):
+    server, service = _server(tmp_path)
+    active_run_id = "story:active"
+    service._states[active_run_id] = service._run_state(active_run_id, "running", 25, "draft")
+    service._cancellations[active_run_id] = threading.Event()
+
+    server.handle(_request("operations.control_snapshot", {"paused": True}, 3))
+    blocked = server.handle(_request("story.test", {"wait": False}, 4))["result"]
+
+    assert service._cancellations[active_run_id].is_set()
+    assert blocked["status"] == "blocked"
+    assert blocked["error_code"] == "GLOBAL_PAUSE"
     service.close()
