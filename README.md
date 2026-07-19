@@ -23,6 +23,8 @@ Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust c
 
 Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
 
+Repositorio remoto: [JFrangel/Proyecto-Redit](https://github.com/JFrangel/Proyecto-Redit). La rama `main` está integrada y verificada localmente; su publicación remota permanece pendiente de autenticación de GitHub CLI.
+
 ## Desarrollo
 
 ```powershell

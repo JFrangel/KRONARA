@@ -110,7 +110,7 @@ Fecha de auditoría: 2026-07-19
 
 - [x] Repositorio Git local con historial y rama de trabajo.
 - [ ] GitHub CLI instalado y autenticado.
-- [ ] Rama `main` creada e integración verificada.
+- [x] Rama `main` creada e integración verificada.
 - [x] Repositorio GitHub existente enlazado como `origin` (`JFrangel/Proyecto-Redit`).
 - [ ] `main` publicada con tracking.
 - [ ] Protección de rama y plantilla de pull request.
