@@ -1,137 +1,34 @@
-# Kronara — Análisis de brechas y checklist maestro
+# Brechas y checklist de release v0.4
 
-Fecha de auditoría: 2026-07-19
+Fecha de auditoría: 2026-07-19.
 
-## Estado comprobado
+## Cerrado en esta entrega
 
-- [x] Tauri/Svelte y autoridad Rust mínima.
-- [x] Sidecar Python autenticado por JSON-RPC.
-- [x] LangGraph con checkpoints SQLite.
-- [x] Runtime plan–act–critic–Guardian.
-- [x] Allowlist de tools, anti-loop, timeout y circuit breaker.
-- [x] 20 manifiestos de agentes y 27 habilidades.
-- [x] Reddit OAuth básico con rate limit y señales sin cuerpo.
-- [x] FTS5 + sqlite-vec + grafo + RRF.
-- [x] ADN narrativo, rúbrica y golden set adversarial.
-- [x] Publicación Meta idempotente como abstracción.
-- [x] Aprendizaje básico por muestra y lift.
-- [x] Especificación v0.3 aprobada.
+- [x] Contratos de operación, memoria, tools y aprendizaje con tests.
+- [x] 24 agentes, personalidad y prompt stack estructurado.
+- [x] Tool traces persistentes, redactadas y visibles en la UI.
+- [x] Chat de operación con contexto, citas, intents y estado parcial honesto.
+- [x] RAG v3 con FTS5, sqlite-vec, GraphRAG, RRF, deduplicación y golden español.
+- [x] Motor de historia propia con Guardian, crítico independiente y cancelación.
+- [x] Reddit Rust con OAuth, filtros y bodies descartados.
+- [x] Bridge Tauri–Python autenticado con allowlist y entorno saneado.
+- [x] Pausa global conservada por Rust.
 
-## P0 — Necesario antes de conectar credenciales reales
+## Bloqueado o pendiente antes de producción pública
 
-- [x] Crear `.env.example` documentado y `.env` local ignorado.
-- [x] Cargar variables exclusivamente en Rust y redactar secretos.
-- [x] Validar configuración por proveedor sin imprimir valores.
-- [x] Añadir contratos v0.3 de investigación, evidencia, contexto y análisis.
-- [x] Implementar `TrainingRightsDecision` y excluir datasets no autorizados.
-- [x] Sustituir presupuesto por caracteres por presupuesto estimado de tokens en Context Compiler v1.
-- [x] Garantizar que evidencia crítica no sea truncada silenciosamente.
-- [ ] Añadir cache, health y circuit breaker por conector externo.
-- [x] Mantener Reddit `disabled_by_policy` sin acceso oficial aprobado.
+- [ ] Adaptador de LLM remoto gobernado por Rust para usar claves configuradas sin exponerlas a Python.
+- [ ] Benchmark real y promoción de BGE/E5/reranker en corpus español.
+- [ ] Síntesis Azure/Edge, Whisper y QC de audio.
+- [ ] FFmpeg, assets autorizados y QC real de video vertical.
+- [ ] Página Meta sandbox, publicación, reconciliación e importación de métricas.
+- [ ] Experimentos de voz/contenido con tráfico real y muestra suficiente.
+- [ ] Activación gradual de publicación `full_auto`.
 
-## P1 — RAG v2
+## Prohibiciones comprobables
 
-- [x] Chunking jerárquico estable documento → sección → fragmento.
-- [x] Metadatos de idioma, ámbito, versión, derechos y vigencia en RAG v2.
-- [ ] Deduplicación exacta y semántica (exacta global implementada; falta semántica evaluada).
-- [ ] Query decomposition y expansión controlada (expansión acotada implementada; falta decomposition específica de recuperación).
-- [x] Filtros previos obligatorios por derechos, fecha, idioma y ámbito.
-- [ ] Reranker multilingüe configurable (interfaz inyectable implementada; falta modelo evaluado).
-- [x] Selección diversa con máximo por documento.
-- [x] GraphRAG con relaciones tipadas y profundidad máxima de tres saltos.
-- [x] Tombstones para eliminación y expiración.
-- [x] Benchmark español congelado con Recall@k, MRR, nDCG, precisión de citas y redundancia.
-
-## P1 — Investigador analítico
-
-- [x] Clasificar intención y riesgo de pregunta.
-- [x] Dividir en subpreguntas no solapadas.
-- [x] Planificar fuentes, consultas, presupuesto y condición de parada.
-- [ ] Integrar Reddit oficial mediante Rust cuando existan credenciales aprobadas.
-- [x] Normalizar `SourceRecord` y detectar dependencia por familia o referencia explícita, incluidos ciclos.
-- [ ] Extraer afirmaciones atómicas automáticamente (el contrato estructurado y su validación ya existen).
-- [x] Construir matriz/grafo de evidencia favorable y contraria.
-- [x] Detectar contradicciones, vigencia y cobertura insuficiente.
-- [x] Producir `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separadas.
-- [ ] Guardar replay, citas, costos y artefactos.
-
-## P1 — Herramientas analíticas
-
-- [x] Estadística descriptiva con unidades y missing data.
-- [x] Cambios absolutos/relativos y baseline.
-- [x] Intervalos Wilson y cálculo aproximado de muestra mínima por variante.
-- [ ] Wilson/Bootstrap para tasas (Wilson implementado; falta bootstrap).
-- [x] Funnel y curva de retención con mayor punto de abandono.
-- [x] Segmentación voz/tema/hook/duración/hora/audiencia sin mezclar plataformas.
-- [ ] Outliers robustos y análisis de sensibilidad (MAD implementado; falta sensibilidad).
-- [ ] Experimentos A/B y bandits acotados.
-- [ ] Visualizaciones declarativas reproducibles.
-- [x] `AnalysisTrace` con hash de entradas, unidades, supuestos y warnings.
-
-## P2 — Viralización multiplataforma
-
-- [ ] Ontología común de métricas Meta/YouTube/TikTok.
-- [ ] Adaptadores que conserven la métrica original.
-- [x] `PlatformFeatureVector` por pieza y versión.
-- [x] Score con velocidad, aceleración, saturación y decaimiento.
-- [ ] Baselines por plataforma, duración y audiencia.
-- [x] Modelo interpretable regularizado.
-- [ ] Modelo jerárquico (la separación estricta por plataforma ya impide pooling causal; falta jerarquía parcial).
-- [ ] Backtesting temporal y calibración de probabilidad (holdout y Brier implementados; falta walk-forward/calibración).
-- [x] `ViralityForecast` con intervalo y factores desconocidos.
-- [x] Bloqueo de cualquier promesa de viralidad garantizada.
-
-## P2 — Auto-mejora segura
-
-- [x] Error memory y taxonomía de fallos.
-- [x] Champion/challenger para parámetros, prompts, RAG y modelos.
-- [x] Golden set congelado y bloqueo por regresiones de seguridad.
-- [x] Promoción con muestra, lift, estabilidad y costo.
-- [ ] Rollback automático disparado por métricas (motor y recibo de rollback ya implementados).
-- [x] Vigencia y expiración de candidatos/aprendizajes.
-- [x] Hipótesis rivales en vez de sobrescritura silenciosa.
-- [x] Dataset cards y splits reproducibles.
-- [x] Fine-tuning solo `owned_original` o `licensed_adaptation` con evidencia.
-- [x] Prohibición de auto-modificar política, derechos y permisos.
-
-## P2 — Producción restante
-
-- [ ] Azure/Edge TTS productivo y catálogo de voces versionado.
-- [ ] faster-whisper para alineación, pronunciación y QC.
-- [ ] FFmpeg Rust desde timeline declarativa.
-- [ ] QC real de frames, audio, subtítulos y safe zones.
-- [ ] Meta sandbox con publicación y reconciliación remota.
-- [ ] YouTube Shorts y TikTok como adaptadores posteriores.
-- [ ] Importación periódica de métricas.
-- [ ] Primer experimento controlado de voz y hook.
-- [ ] Activación progresiva manual → supervised → full_auto.
-
-## Publicación del repositorio
-
-- [x] Repositorio Git local con historial y rama de trabajo.
-- [ ] GitHub CLI instalado y autenticado.
-- [x] Rama `main` creada e integración verificada.
-- [x] Repositorio GitHub existente enlazado como `origin` (`JFrangel/Proyecto-Redit`).
-- [ ] `main` publicada con tracking.
-- [ ] Protección de rama y plantilla de pull request.
-- [x] Revisión de secretos del árbol rastreable antes de publicación.
-
-## Evidencia del gate local — 2026-07-19
-
-- [x] Python: 130 pruebas aprobadas.
-- [x] Node/Vite: 3 pruebas aprobadas.
-- [x] Rust: 5 pruebas de integración aprobadas.
-- [x] Contratos JSON: todos parsean correctamente.
-- [x] Build Tauri debug sin bundle completado.
-- [x] Sidecar empaquetado: handshake, 20 agentes, 27 habilidades y `rag.evaluate` verificados.
-- [x] `.env` ignorado y ausente del índice Git.
-
-## Definición de terminado v0.3
-
-- [ ] Una pregunta produce informe multi-fuente citado y recuperable.
-- [ ] Ningún cálculo numérico depende exclusivamente del LLM.
-- [x] RAG v2 supera el baseline v0.2 en el corpus congelado mínimo.
-- [x] Reddit se bloquea sin acceso oficial y nunca entrena con historias no autorizadas.
-- [x] El científico interpreta métricas sin declarar causalidad injustificada.
-- [x] Una mejora champion/challenger puede promoverse y revertirse.
-- [ ] Un Reel original puede publicarse una sola vez y aprender de sus métricas.
+- [x] No shell arbitrario para agentes.
+- [x] No secretos en trazas, intents o UI.
+- [x] No bodies de Reddit persistidos por el observatorio.
+- [x] No aprendizaje o fine-tuning desde historias externas sin derechos.
+- [x] No promesa de viralidad ni causalidad con muestra insuficiente.
+- [x] No publicación automática ante derechos, presupuesto, render o estado remoto ambiguo.

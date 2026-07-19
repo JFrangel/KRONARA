@@ -1,21 +1,23 @@
-# Integraciones
+# Integraciones y estado de producción
+
+| Integración | Estado | Límite actual |
+|---|---|---|
+| Reddit Data API | Adaptador Rust implementado | Desactivado hasta OAuth oficial y referencia contractual; bodies descartados |
+| Model registry | Implementado | Registro y health routing, no inferencia remota gobernada desde el chat todavía |
+| BGE-M3, E5 y reranker BGE | Candidatos configurados | No promocionados sin evaluación local congelada |
+| Azure Speech / Edge TTS | Planificado/experimental | No hay síntesis productiva conectada al pipeline |
+| faster-whisper | Planificado | Sin alineación ni QC de audio reales |
+| FFmpeg | Planificado | Timeline declarativa sin render Rust de producción |
+| Meta/Facebook Reels | Abstracción y pruebas unitarias | Sin Page sandbox, upload ni insights remotos |
 
 ## Reddit
 
-El adaptador OAuth y los endpoints oficiales `new`, `hot` y `top` están implementados detrás de un transporte probado, con time filters válidos, ETag, cache metadata y estado de rate limit. Su estado predeterminado es `disabled_by_policy`; habilitarlo exige una referencia contractual explícita. `SourcePost` existe solo durante la extracción; se persiste `TrendSignal` con URI, título reducido, engagement, velocity y `rights_mode=reference_only`. El cuerpo no se conserva. En producción, OAuth se ejecutará como tool Rust para mantener secretos fuera de Python. Uso comercial queda bloqueado hasta documentar autorización contractual aplicable.
+El adaptador usa OAuth y endpoints oficiales con validación de subreddit, orden, ventana temporal, rate limit y recibo. `TrendSignal` conserva título reducido, engagement, velocidad, saturación y URI; el cuerpo de la historia se descarta. La política de originalidad prohíbe convertir señales o historias externas en guiones plantilla, RAG creativo o entrenamiento.
 
 ## Modelos
 
-`ModelCapabilityRegistry` selecciona aliases saludables por capability, quality, costo y presupuesto. Defaults: Qwen para planning/tools/structured, Kimi para research/critique/long context y Groq para clasificación rápida. El transporte OpenAI-compatible inyecta credenciales mediante un proveedor de secretos, solicita `json_schema` y valida nuevamente el resultado. IDs reales viven en configuración y health checks.
+Los aliases no se incrustan en prompts. El router considera capacidad, calidad medida, latencia, costo, privacidad y salud. Groq, Qwen, Kimi, Nemotron y Hy3 están registrados; la disponibilidad real se comprueba antes de uso. Un modelo retirado o sin health check se degrada o bloquea; nunca se declara saludable por nombre.
 
-## Voz y Whisper
+## Facebook Reels
 
-Azure es el proveedor estable. Edge TTS es experimental. Voces iniciales: Marcelo, Lorenzo, Sofía, Gonzalo y Salomé. `faster-whisper` será el adaptador de transcripción/alineación para comparar narración contra guion y producir timings.
-
-## Media
-
-`MediaTimeline` exige canvas vertical, duración positiva y voice track. Rust será responsable de traducir una timeline validada a argumentos FFmpeg, medir QC y registrar hashes/versiones.
-
-## Meta/Facebook Reels
-
-`PublicationIntent` incluye idempotency key. El transporte oficial implementará upload, consulta de estado, publicación y lectura de insights. Ante timeout, `MetaPublisher` consulta el estado remoto y retorna `ambiguous` si no puede demostrar resultado.
+El criterio de éxito final sigue siendo una publicación única, original y recuperable. Falta: proveer assets permitidos, generar audio, validar/reproducir un render 9:16, usar una Página sandbox, reconciliar upload ambiguo e importar métricas. Hasta entonces no se debe afirmar que Kronara publica Reels reales.

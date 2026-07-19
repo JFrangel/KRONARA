@@ -1,31 +1,22 @@
-# Kronara v0.2 — Contrato de agentes
+# Catálogo de agentes v0.4
 
-Todo agente tiene input/output versionado, tools permitidas, presupuesto, timeout, máximo de pasos, modelo preferido, fallbacks, evidencia, confidence y pruebas.
+Hay 24 manifiestos en `config/agents` y 35 habilidades versionadas en `config/skills/catalog.v1.json`. Una habilidad orienta el trabajo; no concede autoridad.
 
-| Agente | Responsabilidad | Efectos prohibidos |
-|---|---|---|
-| Opportunity Intelligence | señales, velocidad, saturación | copiar o entrenar con historias |
-| Rights and Provenance | licencia, procedencia, atribución | aprobar derechos inexistentes |
-| Editorial Executive | oportunidad, formato, duración | publicar directamente |
-| Concept Architect | conceptos originales | reproducir una fuente |
-| Narrative Planner | escenas, tensión, pistas | redactar publicación |
-| Writing Room | escritura y crítica separadas | autocertificar evidencia |
-| Hook and Retention | hook y abandono esperado | clickbait contrario al contenido |
-| Voice Director | voz, ritmo y emoción | fijar ganador sin muestra |
-| Visual/Audio Directors | storyboard y mezcla | usar assets sin rights status |
-| Video Composer | timeline declarativa | ejecutar comandos LLM |
-| Automated QC | narrativa, audio, video, políticas | corregir políticas globales |
-| Packaging | metadata y CTA por plataforma | duplicar copy sin adaptar |
-| Distribution | API oficial e idempotencia | reintentar resultado ambiguo |
-| Performance Scientist | hipótesis y experimentos | confundir correlación con causalidad |
-| Memory Curator | promover conocimiento válido | borrar contradicciones silenciosamente |
+| Equipo | Agentes |
+|---|---|
+| Dirección | `executive_orchestrator`, `editorial_executive`, `context_engineer`, `operations_chat` |
+| Oportunidad e investigación | `opportunity_intelligence`, `research_executive`, `evidence_analyst`, `rights_provenance` |
+| Narrativa | `concept_architect`, `narrative_planner`, `writer_room`, `hook_retention`, `automated_qc` |
+| Producción | `voice_director`, `visual_director`, `audio_director`, `video_composer`, `packaging`, `distribution` |
+| Aprendizaje y conocimiento | `performance_scientist`, `memory_curator`, `rag_curator`, `evaluation_scientist`, `training_data_curator` |
 
-Los críticos usan una familia de modelo distinta al generador cuando existe una alternativa sana y dentro de presupuesto. Toda salida recuperada se trata como datos no confiables para prevenir prompt injection.
+## Reglas no anulables
 
-Los manifiestos ejecutables están en `config/agents` y el catálogo versionado de habilidades en `config/skills/catalog.v1.json`. El runtime selecciona el conjunto mínimo de habilidades que cubre la tarea y bloquea una capacidad desconocida; una habilidad aporta instrucciones y criterios, nunca autoridad adicional.
+- Opportunity Intelligence guarda señales abstractas, no bodies de Reddit.
+- Rights and Provenance bloquea derechos insuficientes.
+- Writer Room no se autocertifica: la crítica debe usar otra familia cuando exista alternativa sana.
+- Distribution solo solicita una intención; Rust valida publicación, idempotencia y estado remoto.
+- Training Data Curator solo acepta historias propias o licenciadas con evidencia.
+- Memory Curator mantiene hipótesis rivales; no sobrescribe contradicciones.
 
-## Tool governance
-
-Una tool declara nombre, schema, permisos, timeout, side effects e idempotency strategy. El runtime registra input hash, resultado resumido, latencia, error, fallback y trace id. Secretos y contenido sensible se redactan.
-
-La ejecución cognitiva sigue `plan → tools → crítica independiente → revisión local → Guardian`. Exceder pasos, llamadas, costo o revisiones produce un resultado bloqueado. Se persisten el plan y un resumen de decisión para auditoría, no razonamiento privado. Véase [Runtime cognitivo](AGENT_RUNTIME.md).
+Las herramientas son default-deny. El agente no puede invocar una tool que no esté en su manifest ni importar módulos, abrir shell o leer secretos.

@@ -1,46 +1,29 @@
-# Memoria y RAG híbrido
+# Memoria y RAG v3
 
-## Memorias separadas
+## Seis memorias
 
-- Ejecución: estado temporal y checkpoints LangGraph.
-- Episódica: decisiones, artefactos y resultados por pieza.
-- Semántica: ADN narrativo, estilos, reglas y aprendizajes promovidos.
-- Rendimiento: voz, tema, hook, duración, horario y métricas.
-- Error memory: fallos observados y correcciones verificadas, sin guardar razonamiento privado.
+`MemoryRecord@2` separa memoria de ejecución, episódica, semántica, rendimiento, conversación y error. Cada registro tiene procedencia, confianza, derechos, vigencia, versión, evidencia y estado. Las hipótesis incompatibles se guardan como rivales hasta que un experimento las apoye o rechace.
 
-Cada registro conserva procedencia, versión, confianza, ámbito, vigencia, derechos y evidencia. Las hipótesis contradictorias conviven hasta que un experimento las resuelve; nunca se reemplazan silenciosamente.
+La memoria de ejecución no es memoria de largo plazo: los checkpoints recuperan workflow; los aprendizajes pasan por Curator y gates antes de ser utilizables.
 
-## RAG v2 implementado
+## Pipeline de recuperación
 
 ```text
 filtros de derechos/vigencia/idioma/ámbito
-→ expansión controlada y acotada
-→ búsqueda léxica + vectorial
-→ expansión de grafo por relación y profundidad
-→ RRF
-→ reranker opcional
-→ diversidad por documento
-→ paquete citado
+→ descomposición y clasificación
+→ FTS5 + vector local + expansión de grafo
+→ RRF → reranker opcional → deduplicación semántica → diversidad → citas
 ```
 
-`RAGV2Index` produce IDs estables por documento, sección y fragmento. Aplica los filtros antes de rankear, elimina duplicados exactos en todo el catálogo, limita resultados por documento y excluye rankings sin señal para evitar que empates arbitrarios contaminen RRF.
+`RAGV3Index` persiste documentos, chunks, tombstones, aristas e índice vectorial versionado. Los filtros se aplican antes del ranking. Resultados sin derechos permitidos o vigencia válida no entran al contexto.
 
-El grafo acepta relaciones tipadas (`supports`, `contradicts`, `derived_from`, `same_topic`, `related`) y profundidad máxima de tres saltos. SQLite conserva documentos, tombstones y aristas como fuente transaccional; chunks y vectores se reconstruyen de forma determinista al reiniciar. El adaptador `LocalHybridIndex` mantiene FTS5 y sqlite-vec para el índice nativo local.
+## Embeddings y evaluación
 
-## Evaluación y promoción
+- `BAAI/bge-m3`, `intfloat/multilingual-e5-large-instruct` y `BAAI/bge-reranker-v2-m3` están registrados como candidatos locales.
+- El endpoint de desarrollo utiliza `deterministic_dev`; se marca explícitamente `development_embedding_only`.
+- El golden `benchmarks/rag/spanish-golden.v2.json` mide Recall@k, MRR, nDCG, precisión de citas y redundancia.
+- Un embedding o reranker solo se promueve si gana sobre baseline comparable sin regresiones; instalar un nombre de modelo no es promoción.
 
-El corpus congelado `benchmarks/rag/spanish-golden.v1.json` cubre ADN narrativo, derechos, métricas, contradicciones e inyección de prompt. `RAGEvaluator` calcula Recall@k, MRR, nDCG, precisión de citas y redundancia.
+## Historias propias y aprendizaje
 
-`RAGPromotionGate` bloquea una variante si no aporta lift material de nDCG, usa conjuntos no comparables, contiene métricas no finitas, reduce recall, baja la precisión de citas o supera la redundancia permitida. El RPC autenticado `rag.evaluate` ejecuta la comparación reproducible con límites de documentos, casos, caracteres y `k`; el agente `rag_curator` puede proponerla, pero no modificar políticas ni derechos.
-
-El golden actual supera el baseline v0.2 registrado en la prueba automatizada con `k=1`. Es un corpus mínimo de ingeniería, no evidencia de calidad general; debe crecer con consultas reales juzgadas y particiones congeladas antes de producción.
-
-## Límites pendientes
-
-- Deduplicación semántica multilingüe evaluada; hoy la deduplicación exacta es global.
-- Reranker y embeddings multilingües reales comparados contra el fallback local determinista.
-- Conectar los metadatos completos de RAG v2 directamente al índice FTS5/sqlite-vec persistente, evitando el rebuild en memoria para catálogos grandes.
-- Query decomposition específica de recuperación; la descomposición de investigación ya existe en `ResearchPlanner`.
-- Monitoreo de drift del corpus y expansión del golden set.
-
-Historias externas completas no se recuperan como plantillas ni entran a entrenamiento. Solo artefactos propios o con licencia verificable pueden alimentar dataset cards.
+Una historia solo puede alimentar RAG o un dataset cuando es `owned_original` o está licenciada, tiene evidencia de calidad y rendimiento, muestra suficiente, intervalo de confianza, revisión reputacional y decisión reversible. Historias externas de Reddit no pasan esa compuerta por defecto.

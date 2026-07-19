@@ -1,73 +1,37 @@
-# Kronara v0.2 — Runtime cognitivo gobernado
+# Runtime cognitivo v0.4
 
-## Resultado
+Kronara aumenta capacidad mediante contexto útil, herramientas gobernadas, evaluación y memoria verificable; no mediante un prompt ilimitado ni razonamiento privado persistido.
 
-Kronara no intenta ser “más inteligente” mediante un prompt monolítico. Su capacidad proviene de combinar modelos especializados con planificación explícita, habilidades versionadas, contexto citado, herramientas mínimas, crítica independiente, verificación y aprendizaje medido. El sistema conserva decisiones auditables, no razonamiento privado paso a paso.
+## Prompt y contexto
 
-## Ciclo de una tarea
+`PromptStackCompiler` fija este orden: política base, personalidad, rol, objetivo, autoridad/presupuesto, contexto delimitado como datos, habilidades, contrato de tools, esquema de salida y verificación. La personalidad `kronara@1` es divertida, independiente, investigativa, perfeccionista, creativa y analítica; no puede cambiar permisos.
 
-```mermaid
-flowchart LR
-    A["AgentTask@1"] --> B["Seleccionar habilidades mínimas"]
-    B --> C["Crear ExecutionPlan@1"]
-    C --> D["Validar pasos, costo y permisos"]
-    D --> E["Ejecutar herramientas gobernadas"]
-    E --> F["Crítico de otra familia"]
-    F -->|"revisión local"| E
-    F -->|"aprobado"| G["Guardian: afirmaciones vs. evidencia"]
-    G --> H["Resultado, artefactos y replay"]
-    G -->|"sin evidencia"| I["Bloqueo seguro"]
+El Context Compiler usa evidencia, estado, memorias válidas y trazas. Distingue hechos, inferencias, hipótesis y vacíos. El contenido externo nunca pasa a ser instrucción.
+
+## Ejecución gobernada
+
+```text
+plan → tools permitidas → crítica de familia distinta → revisión local → Guardian → checkpoint/replay
 ```
 
-Antes de ejecutar se comprueba que el catálogo cubra todas las capacidades solicitadas, que el crítico sea independiente, que el plan esté dentro del máximo de pasos, llamadas y costo, y que cada herramienta pertenezca a la lista del agente. Las revisiones son locales y limitadas para evitar ciclos de reescritura.
+Cada agente tiene entrada/salida estructurada, herramientas mínimas, presupuesto, timeout, reintentos y criterios de aprobación. El registro anti-loop, circuit breaker y presupuesto se aplican antes del efecto. Se guardan decisiones resumidas, artefactos, prompts hash, costos y evidencia; no cadena de pensamiento privada.
 
-## Capacidades incorporadas
+## Modelos
 
-- Enrutamiento por capacidades: Qwen para planificación y estructura; Kimi para contexto largo y crítica; proveedores de baja latencia o modelos locales para tareas acotadas.
-- Habilidades bajo demanda: el registro encuentra el conjunto mínimo que cubre una tarea. Una habilidad tiene versión, capacidades y URI de instrucciones; no concede permisos.
-- Herramientas gobernadas: registro cerrado, allowlist por agente, argumentos estructurados, side effects declarados, anti-loop y circuit breaker.
-- Contexto resistente a inyecciones: política, memoria interna, evidencia verificada y fuentes externas ocupan zonas distintas. Las fuentes externas siempre se delimitan como datos no confiables y conservan cita.
-- Memoria explícita: checkpoints para reanudar; episodios para replay; conocimiento con procedencia; rendimiento como hipótesis con vigencia.
-- Equipo de revisión: escritor y Automated QC usan familias distintas cuando hay alternativa sana. El crítico no publica ni se autocertifica.
-- Guardian: toda afirmación operacional debe estar cubierta por `EvidenceRef` con confianza suficiente.
-- Privacidad de razonamiento: se registra `decision_summary`, plan, herramientas, costos, evidencia y artefactos; no se guarda cadena de pensamiento.
-- Evaluación continua: golden set normal y adversarial detecta regresiones de originalidad, causalidad, calidad, inyección y finales inválidos.
+`ModelCapabilityRegistry@1` resuelve aliases configurables y health checks:
 
-## Catálogo de agentes
+- Qwen: planificación, estructura y tareas multilingües.
+- Kimi: contexto largo, investigación y crítica.
+- Groq/OpenRouter: baja latencia y fallback.
+- `nvidia/nemotron-3-super-120b-a12b:free`: razonamiento profundo experimental.
+- `tencent/hy3:free`: fallback creativo experimental y de disponibilidad limitada.
 
-Los manifiestos viven en `config/agents`. Cada uno fija rol, habilidades, herramientas, familia preferida, fallbacks, pasos, llamadas y timeout. El catálogo cubre orquestación, oportunidades, derechos, decisión editorial, concepto, planificación, escritura, hook, voz, visual, audio, composición, QC, packaging, distribución, ciencia de rendimiento y curación de memoria.
+El registro no convierte automáticamente una API configurada en una ejecución de producción. El chat operativo actual usa un resumen local determinista y citado; el adaptador de inferencia remoto gobernado por Rust es una fase pendiente. Esto evita que Python lea claves de `.env`.
 
-El catálogo incluye además `Research Executive`, que clasifica y divide preguntas dentro de presupuesto, y `Evidence Analyst`, que usa una familia de modelo distinta para desafiar fuentes, independencia y contradicciones. El orquestador puede elegir ejecución directa, workflow o deliberación profunda, pero no puede ampliar permisos. Distribution es el único agente cognitivo que puede solicitar `publication.publish`; Rust todavía revalida esa solicitud antes del efecto externo.
+## Calidad narrativa
 
-## Conocimiento narrativo
+El motor de historias propias exige tres conceptos, blueprint causal, escenas, continuidad, similitud léxica/semántica/estructural/secuencial, crítico independiente y a lo sumo una revisión localizada. Detecta inyección antes de las tools, admite cancelación cooperativa y persiste las trazas del run.
 
-`knowledge/narrative` contiene el ADN del canal convertido en módulos recuperables:
+## Chat operativo
 
-- fórmula editorial y estructura de diez etapas;
-- hooks, ritmo y mapa de retención;
-- giros y finales permitidos o bloqueados;
-- libro de continuidad;
-- rúbrica de 11 dimensiones.
-
-La aprobación exige al menos 80/110 y ninguna dimensión por debajo de 7. Calidad total alta no compensa una falla de originalidad, credibilidad, agencia o coherencia.
-
-## Límites honestos
-
-Este runtime no copia capacidades privadas de otro asistente ni se declara superinteligente. Ofrece una arquitectura más especializada para Kronara y permite demostrar mejoras con pruebas. Los modelos siguen pudiendo equivocarse; por eso los derechos, la publicación, la identidad editorial y los presupuestos máximos permanecen bajo controles no anulables.
-
-## Interfaces seguras
-
-El sidecar expone por RPC autenticado:
-
-- `agent.capabilities`: agentes, habilidades y herramientas registradas.
-- `agent.evaluate_narrative`: rúbrica y anti-patrones deterministas.
-- `analytics.execute`: estadística descriptiva, tasas con Wilson, funnels, curvas de retención, outliers y muestra mínima mediante operaciones cerradas y trazables.
-- `research.plan`: clasificación, subpreguntas, consultas, presupuesto y reglas de parada.
-- `research.evaluate`: matriz de evidencia y `AnalyticalBrief` con hechos, cálculos, inferencias, hipótesis y recomendaciones separados.
-- `performance.diagnose`: segmentación por plataforma, voz, tema, hook, duración, horario y audiencia; solo genera hipótesis acotadas para experimentar.
-- `virality.evaluate`: entrenamiento y forecast efímero, separado por plataforma, con holdout temporal y prohibición contractual de garantías.
-- `improvement.status`: scopes y umbrales no secretos de promoción.
-- `improvement.evaluate`: decisión champion/challenger reproducible; prompts y derechos regresan `requires_approval`.
-- `trend.extract`: señal abstracta sin devolver el cuerpo fuente.
-
-No expone shell, importación arbitraria de módulos, lectura de secretos ni publicación directa.
+El chat consulta `operations.status` y `tools.timeline`, compila contexto, cita evidencia y devuelve `partial` cuando no puede cubrir lo necesario. Una solicitud de presupuesto produce `ActionIntent@1` con `requires_approval`; no cambia el límite.

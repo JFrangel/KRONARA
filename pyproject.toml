@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kronara-agent-runtime"
-version = "0.2.0"
+version = "0.4.0"
 description = "Local-first cognitive sidecar for Kronara"
 requires-python = ">=3.11"
 dependencies = [

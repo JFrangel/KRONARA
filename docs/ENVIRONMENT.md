@@ -1,24 +1,22 @@
-# Configuración de entorno
+# Entorno y secretos
 
-## Desarrollo
+1. Copie `.env.example` como `.env` en la raíz del proyecto.
+2. Complete solo las claves de proveedores que va a usar.
+3. Mantenga `*_ENABLED=false` hasta tener autorización, sandbox y pruebas de fallo.
+4. Nunca versiona `.env`; Git lo ignora.
 
-1. Copie `.env.example` como `.env`.
-2. Complete únicamente los proveedores que utilizará.
-3. Mantenga `*_ENABLED=false` hasta disponer de aprobación, credenciales y pruebas sandbox.
-4. Inicie Kronara desde el directorio raíz para que Rust encuentre `.env`.
+## Variables relevantes
 
-`.env` está ignorado por Git. No debe adjuntarse a reportes, commits ni capturas. El token JSON-RPC se genera por sesión y no pertenece a este archivo.
+| Grupo | Variables |
+|---|---|
+| Límites | `KRONARA_MAX_DAILY_COST_USD`, `KRONARA_MAX_RESEARCH_COST_USD` |
+| Modelos | `KRONARA_QWEN_*`, `KRONARA_KIMI_*`, `KRONARA_OPENROUTER_*`, `KRONARA_GROQ_*` |
+| Registro | `KRONARA_MODEL_REGISTRY`, `KRONARA_NEMOTRON_MODEL`, `KRONARA_HY3_MODEL` |
+| RAG | `KRONARA_EMBEDDING_*`, `KRONARA_RERANKER_*` |
+| Reddit | `KRONARA_REDDIT_ENABLED`, `KRONARA_REDDIT_CLIENT_ID`, `KRONARA_REDDIT_CLIENT_SECRET`, `KRONARA_REDDIT_CONTRACT_REFERENCE` |
+| Meta | `KRONARA_META_ENABLED`, `KRONARA_META_PAGE_ID`, `KRONARA_META_PAGE_TOKEN` |
+| Azure Speech | `KRONARA_AZURE_SPEECH_ENABLED`, `KRONARA_AZURE_SPEECH_KEY`, `KRONARA_AZURE_SPEECH_REGION` |
 
-## Proveedores de IA
+Rust carga y redacta las credenciales. El sidecar recibe solamente el token efímero de RPC y un entorno limpio; no recibe las claves de proveedores. En producción, reemplace `.env` por el almacén de credenciales de Windows o un servicio equivalente controlado por Rust.
 
-Qwen y Kimi pueden usar endpoints OpenAI-compatible diferentes o compartir OpenRouter. Configure para cada alias `BASE_URL`, `API_KEY` y `MODEL`. Rust carga las claves y su representación de depuración siempre muestra `[REDACTED]`. Python recibe solicitudes autorizadas o callbacks; no debe leer el archivo.
-
-Un proveedor sin clave queda `disabled_missing_credential`. Una clave presente solo significa “configurado”; un health check autenticado posterior determinará si está `ready`, `degraded` o `unavailable`.
-
-## Reddit
-
-`KRONARA_REDDIT_ENABLED` permanece `false` hasta que el uso tenga acceso oficial y base contractual aplicable. No use scraping ni endpoints alternativos para evitar restricciones. Aunque una historia se adapte, solo podrá entrenar si existe `TrainingRightsDecision` permitido con evidencia de licencia para entrenamiento y, cuando corresponda, uso comercial.
-
-## Producción
-
-`.env` es una facilidad local. Antes de producción, migre secretos al almacén de credenciales de Windows y entregue handles efímeros a los adaptadores Rust. Mantenga límites diarios, presupuesto de investigación, pausa global y bloqueos de derechos activos.
+Reddit solo puede activarse cuando existen credenciales oficiales y una referencia contractual verificable. Configurar una variable no habilita scraping ni uso comercial de historias de usuarios.

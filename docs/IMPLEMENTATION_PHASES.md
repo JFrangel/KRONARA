@@ -1,104 +1,29 @@
-# Fases de implementación
+# Fases de implementación v0.4
 
-## Completado en la foundation v0.2
+## Completado y probado localmente
 
-- Repositorio y documentación objetivo.
-- UI Svelte/Vite y pausa global.
-- Autoridad Rust probada.
-- Sidecar Python empaquetable y RPC autenticado.
-- LangGraph con checkpoints SQLite.
-- Guardian, replay, artifacts, RRF y model registry.
-- Abstracciones Reddit, voz, media, Meta y aprendizaje.
+1. Contratos versionados, SQLite, checkpoints, trazas y memorias.
+2. Prompt stack, personalidad, 24 agentes y 35 habilidades.
+3. Registro de modelos con aliases Qwen/Kimi/Groq/Nemotron/Hy3.
+4. Herramientas observables, anti-loop y circuit breaker.
+5. Chat operativo, contexto citado, intents administrativos y timeline UI.
+6. Reddit Observatory, filtros, receipts y bloqueo por derechos.
+7. RAG v3, índice persistente, GraphRAG, evaluación y candidatos de embeddings.
+8. Reutilización segura de historias propias y motor narrativo completo.
+9. Bridge Tauri–Python autenticado, pausa global Rust y cancelación cooperativa.
 
-## Siguientes verticales
+## Siguiente fase: primer Reel real
 
-1. Configurar credenciales Reddit de desarrollo en la autoridad Rust y ejecutar una prueba autorizada.
-2. Ampliar el golden set narrativo y conectar aliases Qwen/Kimi reales.
-3. Evaluar embeddings y reranker multilingües con corpus español.
-4. Integrar Azure/Edge TTS y faster-whisper con QC real.
-5. Construir FFmpeg builder Rust, assets y Reel 9:16.
-6. Configurar una Página de prueba Meta, upload privado y reconciliación.
-7. Importar métricas y ejecutar el primer experimento de voz.
-8. Activar `full_auto` primero en sandbox y después en producción con límites.
+1. Implementar adaptador Rust de inferencia remota que use claves sin exponerlas al sidecar.
+2. Integrar Azure/Edge TTS, Whisper y QC de pronunciación.
+3. Implementar FFmpeg Rust sobre `MediaTimeline` y QC de video/subtítulos.
+4. Configurar Página Meta sandbox, publicación idempotente e insights.
+5. Ejecutar manual → supervised_auto → full_auto con límites diarios y rollback.
 
-Ninguna fase externa se considera terminada sin credenciales de prueba, evidencia remota y pruebas de fallo.
+## Criterios de salida
 
-## Segundo vertical implementado
-
-- Cliente OAuth Reddit y manejo explícito de rate limit.
-- `TrendSignal` sin cuerpo de historia y RPC seguro de extracción.
-- Índice FTS5 + sqlite-vec + grafo + RRF.
-- Transporte OpenAI-compatible con JSON Schema.
-- LangGraph señal → contexto citado → concepto → blueprint.
-- Bloqueo determinista por similitud con la señal fuente.
-
-## Tercer vertical implementado
-
-- Runtime plan–act–critic–Guardian con presupuestos y revisiones locales.
-- Selección mínima de habilidades versionadas.
-- Allowlist de herramientas, anti-loop y circuit breaker.
-- Contexto citado con límites de confianza e identificación de prompt injection.
-- 20 manifiestos de agente y 27 habilidades con modelos, fallbacks, tools y límites.
-- ADN narrativo modular, continuidad y rúbrica 80/110 con piso por dimensión.
-- Golden set adversarial para copia, inyección, giro no sembrado, protagonista pasivo y final inválido.
-- RPC seguro de capacidades y evaluación narrativa.
-
-## Cuarto vertical implementado — investigación y evidencia
-
-- `ResearchQuestion@1`, `ResearchPlan@1`, `SourceRecord@1`, `EvidenceMatrix@1` y `AnalyticalBrief@1` cerrados y versionados.
-- Clasificación determinista de intención y riesgo, descomposición por focos, presupuesto de fuentes y condición de parada.
-- Evidencia favorable y contraria, dependencia por familia o cita explícita, contradicciones, derechos, vigencia y cobertura.
-- Separación estricta entre hechos soportados, cálculos, inferencias, hipótesis y recomendaciones.
-- RPC autenticado `research.plan` y `research.evaluate`.
-- Reddit oficial con `new`, `hot`, `top`, time filter, cache metadata y bloqueo `disabled_by_policy` predeterminado.
-
-Pendiente para completar la fase 6: ejecutar conectores externos exclusivamente desde Rust, automatizar extracción estructurada de afirmaciones con evaluación golden y persistir replay/costo/artefactos de cada investigación.
-
-## Quinto vertical implementado — ciencia de rendimiento
-
-- `MetricSnapshot@1` conserva métricas originales, ventana de observación y variables editoriales.
-- Segmentación independiente por plataforma, voz, tema, hook, duración, franja horaria y audiencia.
-- Tasas de finalización con intervalos Wilson y abstención por muestra o número de piezas insuficientes.
-- Curva de retención y detección determinista del mayor abandono sin atribución causal.
-- Cálculo aproximado de muestra mínima para comparar dos variantes.
-- Hipótesis observacionales que incluyen baseline, lift, muestra y experimento controlado recomendado.
-- RPC autenticado `performance.diagnose`.
-
-Pendiente para completar la fase 7: bootstrap, sensibilidad, importación real de métricas y ejecución de experimentos asignados.
-
-## Sexto vertical implementado — forecast de viralidad
-
-- `PlatformFeatureVector@1` con finalización, compartidos, repeticiones, velocidad, aceleración, saturación, frescura y duración.
-- Baseline logístico regularizado, interpretable y entrenado de forma independiente por plataforma.
-- Split temporal obligatorio y Brier score en holdout posterior.
-- Abstención cuando faltan observaciones o clases suficientes.
-- `ViralityForecast@1` con probabilidad, intervalo, factores desconocidos y `guaranteed=false` no anulable.
-- RPC sin estado oculto `virality.evaluate`.
-
-Pendiente: definir thresholds de outcome desde percentiles reales, calibración por plataforma, backtesting walk-forward y monitoreo de drift.
-
-## Séptimo vertical implementado — mejora continua reversible
-
-- Champion/challenger con evaluation set congelado y hash verificable.
-- Gates por muestra, lift, costo, estabilidad y regresiones de seguridad.
-- Scopes automáticos, supervisados y administrativos calculados por parámetro, no declarados por el modelo.
-- Persistencia SQLite de decisiones, error memories e hipótesis rivales.
-- Rollback de versiones promovidas con recibo y versión restaurada.
-- Expiración de candidatos y estados de aprendizaje sin sobrescritura silenciosa.
-- Dataset cards que aceptan únicamente `owned_original` o `licensed_adaptation` autorizada.
-- RPC `improvement.status` e `improvement.evaluate`.
-
-Pendiente: asignación real de tráfico, integración con model/prompt registry, monitoreo post-release y rollback automático disparado por métricas.
-
-## Octavo vertical implementado — RAG v2 evaluado
-
-- Chunking jerárquico con IDs estables y metadatos de derechos, idioma, ámbito, vigencia y versión.
-- Expansión de consulta controlada, deduplicación exacta global y diversidad por documento.
-- Recuperación léxica/vectorial, RRF, reranker inyectable y grafo tipado de hasta tres saltos.
-- Persistencia SQLite de documentos, tombstones y relaciones; índices reconstruibles tras reinicio.
-- Golden set español congelado con cinco dominios adversariales.
-- Recall@k, MRR, nDCG, precisión de citas y redundancia.
-- Gate champion/challenger que exige superar el baseline v0.2 sin regresiones.
-- Agente `rag_curator`, habilidad versionada `rag_curation` y RPC autenticado `rag.evaluate`.
-
-Pendiente: deduplicación semántica, reranker/embeddings multilingües evaluados, query decomposition de recuperación y conexión directa del contrato v2 al índice persistente FTS5/sqlite-vec para escala.
+- Las suites Python, Node, Rust y el empaquetado del sidecar pasan desde el tip de release.
+- La UI muestra herramientas, evidencia y fallos sin secretos.
+- Una historia propia completa se puede cancelar, reanudar o auditar.
+- Reddit real continúa bloqueado sin autorización contractual.
+- No se declara producción audiovisual o publicación real hasta demostrar evidencia remota en sandbox.

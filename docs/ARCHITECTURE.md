@@ -1,57 +1,46 @@
-# Kronara v0.2 — Arquitectura
+# Arquitectura v0.4
+
+## Decisión central
+
+Rust es el plano de autoridad. Python es el plano cognitivo aislado. La interfaz Svelte visualiza, configura y solicita operaciones; no conserva secretos ni aplica efectos externos.
+
+```mermaid
+flowchart LR
+  UI["Svelte / Tauri UI"] --> R["Rust authority plane"]
+  R -->|"JSON-RPC local autenticado"| P["Python cognitive sidecar"]
+  R --> S["Secrets, files, network, jobs"]
+  P --> M["Agents, RAG, memory, Guardian"]
+  P -->|"typed intent only"| R
+```
+
+El puente Rust genera un token efímero, permite una lista cerrada de métodos y inicia el sidecar con un entorno reducido. No hereda las credenciales de `.env`. El token no se escribe en trazas.
 
 ## Límites de autoridad
 
-```text
-Svelte/Tauri UI
-    │ comandos y eventos
-Rust Authority Plane
-    ├── policy, jobs, secrets, filesystem, FFmpeg, publication
-    └── authenticated JSON-RPC
-            │
-Python Cognitive Sidecar
-    ├── LangGraph + SQLite checkpoints
-    ├── agents + model router + Guardian
-    ├── hybrid retrieval + memories
-    └── plans and effect requests (never raw effects)
-```
+| Capa | Puede | No puede |
+|---|---|---|
+| UI | Preguntar, mostrar progreso, pedir pausa | Leer secretos, publicar, aprobarse a sí misma |
+| Rust | Guardar secretos, red, archivos, pausa, validar intents | Delegar autoridad sin validación |
+| Python | Planificar, recuperar contexto, evaluar, proponer | Shell libre, leer `.env`, publicar directamente |
 
-Rust es la única capa autorizada para efectos irreversibles. Python produce solicitudes declarativas; Rust vuelve a validar política, idempotencia, presupuesto y estado remoto. El token RPC es efímero, se entrega al proceso hijo y nunca se registra.
+La pausa global vive en Rust. Antes de cada RPC, Rust sincroniza su estado con el sidecar y bloquea nuevas acciones cognitivas locales, como una prueba narrativa. Las consultas y una cancelación siguen disponibles.
 
-## Grafo cognitivo
+## Persistencia y recuperación
 
-El workflow objetivo conserva nodos explícitos:
+- SQLite es la fuente transaccional: checkpoints, eventos, conversaciones, memorias, trazas y decisiones de reutilización.
+- FTS5, `sqlite-vec` y el grafo editorial son índices locales reconstruibles.
+- Cada tool genera eventos `started` y finales con argumentos redactados, evidencia, costo y resultado resumido.
+- Los workfows LangGraph existentes y el motor narrativo conservan checkpoints para replay o reanudación.
 
-1. Opportunity Intelligence.
-2. Editorial Decision.
-3. Research and Rights.
-4. Story Architecture.
-5. Writing Room.
-6. Production Direction.
-7. Automated QC.
-8. Packaging and Distribution.
-9. Performance Learning.
+## RPC operativo
 
-Cada transición crea evento y checkpoint. Un reinicio reanuda desde el último estado confirmado. El máximo de pasos y las herramientas se definen por tarea; ningún agente invoca shell.
+El bridge solo publica `operations.chat`, `operations.context`, `tools.timeline`, `memory.search`, `rag.retrieve_v3`, `story.test`, `run.progress`, `run.cancel` y `agent.capabilities`. El handshake exige versión y token. Errores inesperados se devuelven como error interno saneado.
 
-## Persistencia
+`ActionIntent@1` describe propuestas administrativas. Rust rechaza intents con secretos, estado falsamente autorizado o identidad inválida; un intent no es un efecto.
 
-- SQLite: fuente transaccional, eventos, checkpoints, publicaciones y métricas.
-- FTS5: recuperación léxica.
-- `sqlite-vec`: índice vectorial local reconstruible.
-- Relaciones editoriales: grafo derivado con nodos y aristas versionadas.
-- Artifact store: blobs direccionados por SHA-256.
+## Estados de entrega
 
-Los índices son derivados y pueden reconstruirse desde SQLite y los artefactos. Una futura implementación PostgreSQL/pgvector respetará los mismos repositorios.
-
-## Recuperación y efectos
-
-- Toda publicación usa clave `episode:variant:platform:version`.
-- Tras timeout de upload se consulta el estado remoto antes de reintentar.
-- Un resultado ambiguo se bloquea; nunca se declara éxito ni se duplica.
-- Las herramientas inestables pueden entrar en circuit breaker y rehabilitarse tras cooldown.
-- Guardian exige evidencia para afirmaciones operativas.
-
-## Runtime cognitivo
-
-El sidecar separa cinco responsabilidades internas: registro de habilidades, constructor de contexto con niveles de confianza, registro cerrado de herramientas, ciclo cognitivo acotado y evaluadores deterministas. El generador y el crítico usan familias distintas; el Guardian contrasta el resultado final con evidencia real. Los detalles, contratos y límites están en [AGENT_RUNTIME.md](AGENT_RUNTIME.md).
+- Implementado: contratos, persistencia, chat, timeline, historia propia, RAG v3, filtros Reddit y bridge autenticado.
+- Degradado: el endpoint local de RAG usa embeddings deterministas solo para desarrollo cuando no hay un modelo local evaluado.
+- Experimental: modelos remotos del registro y `tencent/hy3:free` como fallback de disponibilidad limitada.
+- Planificado: TTS/Whisper/FFmpeg reales, publicación Meta y worker remoto.
