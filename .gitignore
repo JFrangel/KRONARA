@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+dist/
+target/
+.kronara/
+.env
+*.db
+.test-tmp/
+.pyinstaller-build/
+.pyinstaller-spec/
+src-tauri/binaries/*.exe

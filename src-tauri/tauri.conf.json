@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kronara OS",
+  "version": "0.2.0",
+  "identifier": "com.kronara.os",
+  "build": {
+    "beforeDevCommand": "npm.cmd run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm.cmd run build:all",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Kronara OS",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 920,
+        "minHeight": 640
+      }
+    ],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset:" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "externalBin": ["binaries/kronara-sidecar"]
+  }
+}

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kronara-agent-runtime"
+version = "0.2.0"
+description = "Local-first cognitive sidecar for Kronara"
+requires-python = ">=3.11"
+dependencies = [
+  "langgraph>=1.2,<2",
+  "langgraph-checkpoint-sqlite>=3.1,<4"
+]
+
+[project.optional-dependencies]
+media = ["edge-tts>=7,<8", "faster-whisper>=1.2,<2"]
+dev = ["pytest>=9,<10", "pyinstaller>=6,<7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["python"]

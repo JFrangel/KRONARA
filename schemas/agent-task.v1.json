@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kronara://schemas/agent-task.v1.json",
+  "title": "AgentTask@1",
+  "type": "object",
+  "required": ["task_id", "agent", "input", "tools", "budget"],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "agent": { "type": "string", "minLength": 1 },
+    "input": { "type": "object" },
+    "tools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "budget": {
+      "type": "object",
+      "required": ["max_steps", "timeout_seconds", "max_cost_usd"],
+      "properties": {
+        "max_steps": { "type": "integer", "minimum": 1 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 },
+        "max_cost_usd": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,51 @@
+# Kronara OS v0.2
+
+Fábrica editorial autónoma, local-first y auditable para Windows. Tauri/Rust controla los efectos externos; el sidecar Python ejecuta LangGraph, memoria, RAG, agentes y aprendizaje.
+
+## Estado implementado
+
+- Shell Svelte/Vite con modo `full_auto` y pausa global.
+- Autoridad Rust con bloqueos no anulables y pruebas.
+- Sidecar Python empaquetable, protocolo JSON-RPC autenticado y heartbeat.
+- LangGraph persistente sobre SQLite.
+- Checkpoints, replay, Guardian de evidencia y artefactos por hash.
+- Señales abstractas de Reddit sin conservar el cuerpo de historias.
+- Fusión RRF, router por capacidades Qwen/Kimi/Groq y health status.
+- Timeline de Reel, publicación Meta idempotente y reconciliación tras timeout.
+- Catálogo inicial Marcelo, Lorenzo, Sofía, Gonzalo y Salomé.
+- Aprendizaje experimental que impide promover muestras insuficientes.
+
+Los conectores de red permanecen sin credenciales y no publican contenido real hasta configurarse. Los adaptadores implementados fijan sus contratos y semántica segura.
+
+## Desarrollo
+
+```powershell
+npm.cmd install
+npm.cmd test
+npm.cmd run build
+python -m pip install -e ".[dev]"
+python -m pytest -q --basetemp .test-tmp
+```
+
+Para Rust, ejecute desde un Developer Command Prompt de Visual Studio:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+Empaquetado del sidecar y de la app:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-sidecar.ps1
+npm.cmd run tauri build
+```
+
+## Documentación
+
+- [Arquitectura](docs/ARCHITECTURE.md)
+- [Agentes](docs/AGENTS.md)
+- [Autonomía y seguridad](docs/AUTONOMY_AND_SECURITY.md)
+- [Memoria y RAG](docs/MEMORY_AND_RAG.md)
+- [Integraciones](docs/INTEGRATIONS.md)
+- [Fases](docs/IMPLEMENTATION_PHASES.md)
+

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kronara://schemas/autonomy-policy.v1.json",
+  "title": "AutonomyPolicy@1",
+  "type": "object",
+  "required": ["mode", "paused", "daily_publication_limit", "max_daily_cost_usd"],
+  "properties": {
+    "mode": { "enum": ["manual", "supervised_auto", "full_auto"] },
+    "paused": { "type": "boolean" },
+    "daily_publication_limit": { "type": "integer", "minimum": 0 },
+    "max_daily_cost_usd": { "type": "number", "minimum": 0 },
+    "prohibited_topics": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
+
