@@ -310,6 +310,35 @@ class KronaraStore:
             for role, content, created_at in rows
         ]
 
+    def save_story_reuse_decision(
+        self, story_id: str, status: str, payload: dict[str, Any]
+    ) -> None:
+        self._db().execute(
+            """
+            INSERT INTO owned_story_reuse_decisions(story_id, status, payload_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(story_id) DO UPDATE SET
+                status=excluded.status,
+                payload_json=excluded.payload_json
+            """,
+            (story_id, status, json.dumps(payload, sort_keys=True)),
+        )
+        self._db().commit()
+
+    def load_story_reuse_decision(self, story_id: str) -> dict[str, Any]:
+        row = self._db().execute(
+            """
+            SELECT status, payload_json FROM owned_story_reuse_decisions
+            WHERE story_id = ?
+            """,
+            (story_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(story_id)
+        payload = json.loads(row[1])
+        payload["status"] = row[0]
+        return payload
+
     @staticmethod
     def _json_default(value: Any) -> str:
         if isinstance(value, datetime):
