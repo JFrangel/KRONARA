@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kronara.local/schemas/analysis-trace.v1.json",
+  "title": "AnalysisTrace@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "input_hash", "result", "unit", "assumptions", "warnings"],
+  "properties": {
+    "operation": {"enum": ["describe", "compare_rates", "funnel", "robust_outliers"]},
+    "input_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "result": {"type": "object"},
+    "unit": {"type": ["string", "null"]},
+    "assumptions": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}

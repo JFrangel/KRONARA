@@ -57,16 +57,16 @@ Fecha de auditoría: 2026-07-19
 
 ## P1 — Herramientas analíticas
 
-- [ ] Estadística descriptiva con unidades y missing data.
-- [ ] Cambios absolutos/relativos y baseline.
-- [ ] Intervalos de confianza y muestra mínima.
-- [ ] Wilson/Bootstrap para tasas.
-- [ ] Funnel y curva de retención.
+- [x] Estadística descriptiva con unidades y missing data.
+- [x] Cambios absolutos/relativos y baseline.
+- [ ] Intervalos de confianza y muestra mínima (Wilson implementado; falta cálculo de muestra).
+- [ ] Wilson/Bootstrap para tasas (Wilson implementado; falta bootstrap).
+- [ ] Funnel y curva de retención (funnel implementado; falta curva temporal).
 - [ ] Segmentación voz/tema/hook/duración/hora/audiencia.
-- [ ] Outliers robustos y análisis de sensibilidad.
+- [ ] Outliers robustos y análisis de sensibilidad (MAD implementado; falta sensibilidad).
 - [ ] Experimentos A/B y bandits acotados.
 - [ ] Visualizaciones declarativas reproducibles.
-- [ ] `AnalysisTrace` con hash de entradas y supuestos.
+- [x] `AnalysisTrace` con hash de entradas, unidades, supuestos y warnings.
 
 ## P2 — Viralización multiplataforma
 
