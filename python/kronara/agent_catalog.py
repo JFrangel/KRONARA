@@ -30,6 +30,13 @@ KNOWN_TOOLS = {
     "improvement.evaluate",
     "improvement.status",
     "rag.evaluate",
+    "operations.status",
+    "tools.timeline",
+    "evidence.read",
+    "memory.search",
+    "model.evaluate",
+    "embedding.evaluate",
+    "training.dataset_card",
 }
 
 

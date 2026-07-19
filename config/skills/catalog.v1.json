@@ -27,6 +27,14 @@
     {"skill_id":"performance_analysis","version":1,"capabilities":["analyze_metrics","estimate_uncertainty"],"instruction_uri":"kronara://skills/performance-analysis"},
     {"skill_id":"research_planning","version":1,"capabilities":["classify_question","decompose_question","allocate_source_budget","evaluate_coverage"],"instruction_uri":"kronara://skills/research-planning"},
     {"skill_id":"evidence_analysis","version":1,"capabilities":["normalize_claims","detect_source_dependence","detect_contradictions","calibrate_confidence"],"instruction_uri":"kronara://skills/evidence-analysis"},
-    {"skill_id":"rag_curation","version":1,"capabilities":["evaluate_retrieval","curate_graph_relations","compare_retrieval_baseline","request_rag_promotion"],"instruction_uri":"kronara://skills/rag-curation"}
+    {"skill_id":"rag_curation","version":1,"capabilities":["evaluate_retrieval","curate_graph_relations","compare_retrieval_baseline","request_rag_promotion"],"instruction_uri":"kronara://skills/rag-curation"},
+    {"skill_id":"operations_chat","version":1,"capabilities":["classify_operation_question","answer_operation_question","propose_action_intent"],"instruction_uri":"kronara://skills/operations-chat"},
+    {"skill_id":"context_engineering","version":1,"capabilities":["compile_operations_context","detect_context_gaps","summarize_conversation"],"instruction_uri":"kronara://skills/context-engineering"},
+    {"skill_id":"tool_trace_explanation","version":1,"capabilities":["explain_tool_trace","summarize_tool_failure"],"instruction_uri":"kronara://skills/tool-trace-explanation"},
+    {"skill_id":"reddit_observation","version":1,"capabilities":["query_reddit_signals","filter_reddit_signals","explain_trend_velocity"],"instruction_uri":"kronara://skills/reddit-observation"},
+    {"skill_id":"semantic_deduplication","version":1,"capabilities":["deduplicate_semantic_results","diversify_context"],"instruction_uri":"kronara://skills/semantic-deduplication"},
+    {"skill_id":"retrieval_evaluation","version":1,"capabilities":["evaluate_retrieval_v3","compare_frozen_baseline"],"instruction_uri":"kronara://skills/retrieval-evaluation"},
+    {"skill_id":"embedding_evaluation","version":1,"capabilities":["evaluate_embedding","verify_vector_compatibility"],"instruction_uri":"kronara://skills/embedding-evaluation"},
+    {"skill_id":"training_data_curation","version":1,"capabilities":["curate_owned_examples","build_dataset_card","reject_unauthorized_training"],"instruction_uri":"kronara://skills/training-data-curation"}
   ]
 }

@@ -35,3 +35,15 @@ def test_registry_fails_closed_when_capability_is_missing():
 
     with pytest.raises(LookupError, match="unsupported capabilities"):
         registry.select(("publish",))
+
+
+def test_operations_skills_do_not_grant_tools_or_authority():
+    skill = SkillSpec(
+        "operations_chat",
+        1,
+        ("answer_operation_question",),
+        instruction_uri="kronara://skills/operations-chat",
+    )
+
+    assert not hasattr(skill, "allowed_tools")
+    assert not hasattr(skill, "permissions")

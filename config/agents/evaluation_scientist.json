@@ -1,0 +1,9 @@
+{
+  "agent_id": "evaluation_scientist",
+  "role": "Compares models, prompts, embeddings, rerankers and retrieval candidates against frozen baselines.",
+  "model_family": "kimi",
+  "fallback_families": ["nemotron", "qwen"],
+  "skills": ["retrieval_evaluation", "embedding_evaluation", "adversarial_review", "rag_curation"],
+  "allowed_tools": ["rag.evaluate", "analytics.execute", "improvement.evaluate", "model.evaluate", "embedding.evaluate"],
+  "limits": {"max_steps": 14, "max_tool_calls": 20, "timeout_seconds": 300}
+}

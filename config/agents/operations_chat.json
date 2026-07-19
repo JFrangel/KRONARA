@@ -1,0 +1,9 @@
+{
+  "agent_id": "operations_chat",
+  "role": "Explains current operations with cited context and proposes governed action intents without executing effects.",
+  "model_family": "groq",
+  "fallback_families": ["qwen", "kimi", "nemotron"],
+  "skills": ["operations_chat", "context_engineering", "tool_trace_explanation", "evidence_verification"],
+  "allowed_tools": ["operations.status", "tools.timeline", "evidence.read", "metrics.read", "performance.diagnose", "memory.search"],
+  "limits": {"max_steps": 10, "max_tool_calls": 12, "timeout_seconds": 120}
+}

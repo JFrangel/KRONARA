@@ -1,0 +1,9 @@
+{
+  "agent_id": "training_data_curator",
+  "role": "Admits only owned or explicitly licensed examples and builds auditable dataset cards.",
+  "model_family": "qwen",
+  "fallback_families": ["kimi", "nemotron"],
+  "skills": ["training_data_curation", "rights_review", "originality_guard", "evidence_verification"],
+  "allowed_tools": ["rights.verify", "originality.check", "story.evaluate", "metrics.read", "memory.propose", "training.dataset_card"],
+  "limits": {"max_steps": 12, "max_tool_calls": 16, "timeout_seconds": 240}
+}

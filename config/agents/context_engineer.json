@@ -1,0 +1,9 @@
+{
+  "agent_id": "context_engineer",
+  "role": "Compiles bounded, cited and freshness-aware context while isolating untrusted instructions.",
+  "model_family": "qwen",
+  "fallback_families": ["kimi", "nemotron"],
+  "skills": ["context_engineering", "semantic_deduplication", "source_hygiene", "evidence_verification"],
+  "allowed_tools": ["knowledge.retrieve", "memory.search", "tools.timeline", "evidence.read"],
+  "limits": {"max_steps": 10, "max_tool_calls": 14, "timeout_seconds": 180}
+}
