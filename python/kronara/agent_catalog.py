@@ -37,6 +37,8 @@ KNOWN_TOOLS = {
     "model.evaluate",
     "embedding.evaluate",
     "training.dataset_card",
+    "hook.plan",
+    "story.package",
 }
 
 

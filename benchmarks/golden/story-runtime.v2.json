@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "brief": {
+    "story_id": "golden_owned_story_1",
+    "title": "La llamada que nadie quería contestar",
+    "premise": "Una restauradora descubre que el último audio de su hermana desaparecida contiene una decisión capaz de dividir a su familia.",
+    "theme": "lealtad frente a verdad",
+    "target_duration_seconds": 90,
+    "rights_mode": "owned_original",
+    "source_uri": "kronara://artifacts/golden_owned_story_1",
+    "evidence_refs": ["ev_golden_owned_1"],
+    "reference_texts": [],
+    "forbidden_event_sequence": []
+  },
+  "expected": {
+    "status": "completed",
+    "concept_count": 3,
+    "minimum_scenes": 6,
+    "minimum_words": 150,
+    "originality_passed": true,
+    "continuity_unresolved": 0,
+    "minimum_tool_types": 6
+  }
+}
