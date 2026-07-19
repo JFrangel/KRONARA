@@ -2,6 +2,13 @@
 
 Fecha de auditoría: 2026-07-19.
 
+## Evidencia de release
+
+- [x] Gate final: 194 pruebas Python, 6 pruebas Node, pruebas/build Rust y build Vite aprobados.
+- [x] Sidecar empaquetado: handshake y `operations.context` verificados.
+- [x] Secret scan: `.env` no rastreado y sin coincidencias de claves reales.
+- [x] `main` publicado y verificado contra `origin/main` en `265e8aa`.
+
 ## Cerrado en esta entrega
 
 - [x] Contratos de operación, memoria, tools y aprendizaje con tests.
