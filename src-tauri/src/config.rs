@@ -39,12 +39,29 @@ pub struct ProviderStatus {
 }
 
 #[derive(Debug, Clone)]
+pub struct RedditConfig {
+    pub enabled: bool,
+    pub client_id: Option<SecretString>,
+    pub client_secret: Option<SecretString>,
+    pub user_agent: String,
+    pub contract_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RedditState {
+    Ready,
+    DisabledByPolicy,
+    DisabledMissingCredential,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub environment: String,
     pub data_dir: PathBuf,
     pub max_daily_cost_usd: f64,
     pub max_research_cost_usd: f64,
     pub providers: Vec<ProviderConfig>,
+    pub reddit: RedditConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +78,11 @@ impl ConfigError {
 
 impl fmt::Display for ConfigError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "invalid configuration for {}: {}", self.variable, self.message)
+        write!(
+            formatter,
+            "invalid configuration for {}: {}",
+            self.variable, self.message
+        )
     }
 }
 
@@ -82,12 +103,45 @@ impl AppConfig {
             .into_iter()
             .map(|name| provider(values, name))
             .collect();
+        let reddit_enabled = parse_bool(values, "KRONARA_REDDIT_ENABLED", false)?;
+        let reddit = RedditConfig {
+            enabled: reddit_enabled,
+            client_id: non_empty(values, "KRONARA_REDDIT_CLIENT_ID").map(SecretString),
+            client_secret: non_empty(values, "KRONARA_REDDIT_CLIENT_SECRET").map(SecretString),
+            user_agent: value_or(
+                values,
+                "KRONARA_REDDIT_USER_AGENT",
+                "windows:kronara:v0.4 (contact: configure-me)",
+            ),
+            contract_reference: non_empty(values, "KRONARA_REDDIT_CONTRACT_REFERENCE"),
+        };
+        if reddit.enabled {
+            for (variable, present) in [
+                ("KRONARA_REDDIT_CLIENT_ID", reddit.client_id.is_some()),
+                (
+                    "KRONARA_REDDIT_CLIENT_SECRET",
+                    reddit.client_secret.is_some(),
+                ),
+                (
+                    "KRONARA_REDDIT_CONTRACT_REFERENCE",
+                    reddit.contract_reference.is_some(),
+                ),
+            ] {
+                if !present {
+                    return Err(ConfigError {
+                        variable: variable.to_owned(),
+                        message: "required when Reddit is enabled".to_owned(),
+                    });
+                }
+            }
+        }
         Ok(Self {
             environment: value_or(values, "KRONARA_ENV", "development"),
             data_dir: PathBuf::from(value_or(values, "KRONARA_DATA_DIR", ".kronara")),
             max_daily_cost_usd,
             max_research_cost_usd,
             providers,
+            reddit,
         })
     }
 
@@ -104,6 +158,19 @@ impl AppConfig {
             })
             .collect()
     }
+
+    pub fn reddit_status(&self) -> RedditState {
+        if !self.reddit.enabled {
+            RedditState::DisabledByPolicy
+        } else if self.reddit.client_id.is_none()
+            || self.reddit.client_secret.is_none()
+            || self.reddit.contract_reference.is_none()
+        {
+            RedditState::DisabledMissingCredential
+        } else {
+            RedditState::Ready
+        }
+    }
 }
 
 fn provider(values: &BTreeMap<String, String>, name: &str) -> ProviderConfig {
@@ -117,7 +184,11 @@ fn provider(values: &BTreeMap<String, String>, name: &str) -> ProviderConfig {
 }
 
 fn non_empty(values: &BTreeMap<String, String>, key: &str) -> Option<String> {
-    values.get(key).map(|value| value.trim()).filter(|value| !value.is_empty()).map(str::to_owned)
+    values
+        .get(key)
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 fn value_or(values: &BTreeMap<String, String>, key: &str, default: &str) -> String {
@@ -143,4 +214,22 @@ fn parse_non_negative(
         });
     }
     Ok(value)
+}
+
+fn parse_bool(
+    values: &BTreeMap<String, String>,
+    key: &str,
+    default: bool,
+) -> Result<bool, ConfigError> {
+    let Some(raw) = non_empty(values, key) else {
+        return Ok(default);
+    };
+    match raw.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" => Ok(true),
+        "false" | "0" | "no" => Ok(false),
+        _ => Err(ConfigError {
+            variable: key.to_owned(),
+            message: "expected a boolean".to_owned(),
+        }),
+    }
 }

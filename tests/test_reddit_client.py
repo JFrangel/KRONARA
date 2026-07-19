@@ -167,3 +167,27 @@ def test_reddit_rejects_time_filter_for_non_top_listing():
 
     with pytest.raises(ValueError, match="time_filter"):
         client.list_signals("stories", sort="new", time_filter="week")
+
+
+def test_reddit_listing_passes_cursor_and_returns_next_cursor():
+    http = FakeHttp(
+        [
+            {"status": 200, "json": {"access_token": "token", "expires_in": 3600}},
+            {
+                "status": 200,
+                "json": {"data": {"children": [], "after": "t3_next"}},
+                "headers": {},
+            },
+        ]
+    )
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+
+    listing = client.list_signals("stories", sort="new", after="t3_previous")
+
+    assert http.calls[1][2]["params"]["after"] == "t3_previous"
+    assert listing.after == "t3_next"

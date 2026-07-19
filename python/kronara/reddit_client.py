@@ -53,6 +53,7 @@ class RedditListing:
     signals: tuple[TrendSignal, ...]
     cache: CacheMetadata
     rate_limit: RateLimitMetadata
+    after: str | None = None
 
 
 class RateLimitError(RuntimeError):
@@ -125,6 +126,7 @@ class RedditClient:
         time_filter: str | None = None,
         limit: int = 25,
         etag: str | None = None,
+        after: str | None = None,
     ) -> RedditListing:
         if self.policy.status != "approved":
             raise RedditPolicyDisabledError()
@@ -137,6 +139,8 @@ class RedditClient:
                 raise ValueError("time_filter is only supported for top listings")
             if time_filter not in {"hour", "day", "week", "month", "year", "all"}:
                 raise ValueError("unsupported time_filter")
+        if after is not None and not re.fullmatch(r"[A-Za-z0-9_]{1,128}", after):
+            raise ValueError("invalid Reddit cursor")
         token = self._access_token()
         headers = {
             "Authorization": f"Bearer {token}",
@@ -147,6 +151,8 @@ class RedditClient:
         params: dict[str, Any] = {"limit": min(max(limit, 1), 100), "raw_json": 1}
         if time_filter is not None:
             params["t"] = time_filter
+        if after is not None:
+            params["after"] = after
         response = self.http.request(
             "GET",
             f"{self.API_ROOT}/r/{subreddit}/{sort}",
@@ -167,13 +173,14 @@ class RedditClient:
             reset_seconds=self._optional_int(self._header(response_headers, "X-Ratelimit-Reset")),
         )
         if response["status"] == 304:
-            return RedditListing(sort, time_filter, (), cache, rate_limit)
+            return RedditListing(sort, time_filter, (), cache, rate_limit, after)
         if response["status"] != 200:
             raise RuntimeError(f"Reddit API failed with status {response['status']}")
         extractor = RedditSignalExtractor()
         now = int(self.clock())
         signals: list[TrendSignal] = []
-        for child in response["json"].get("data", {}).get("children", []):
+        listing_data = response["json"].get("data", {})
+        for child in listing_data.get("children", []):
             data = child.get("data", {})
             post = SourcePost(
                 source_id=str(data.get("id", "")),
@@ -186,7 +193,15 @@ class RedditClient:
             )
             if post.source_id:
                 signals.append(extractor.extract(post, now=now))
-        return RedditListing(sort, time_filter, tuple(signals), cache, rate_limit)
+        next_after = listing_data.get("after")
+        return RedditListing(
+            sort,
+            time_filter,
+            tuple(signals),
+            cache,
+            rate_limit,
+            str(next_after) if next_after is not None else None,
+        )
 
     @staticmethod
     def _header(headers: dict[str, Any], name: str) -> str | None:

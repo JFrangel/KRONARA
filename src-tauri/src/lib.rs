@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod config;
+pub mod reddit;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Effect {
