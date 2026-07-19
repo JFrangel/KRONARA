@@ -12,7 +12,15 @@ def test_sidecar_cli_serves_authenticated_json_rpc():
         "params": {"token": "secret", "protocol_version": 1},
     }
     completed = subprocess.run(
-        [sys.executable, "-m", "kronara.sidecar", "--token", "secret"],
+        [
+            sys.executable,
+            "-m",
+            "kronara.sidecar",
+            "--token",
+            "secret",
+            "--data-dir",
+            ".test-tmp/sidecar-cli",
+        ],
         input=json.dumps(request) + "\n",
         text=True,
         capture_output=True,
@@ -49,7 +57,15 @@ def test_sidecar_extracts_safe_trend_signal_without_returning_body():
         },
     ]
     completed = subprocess.run(
-        [sys.executable, "-m", "kronara.sidecar", "--token", "secret"],
+        [
+            sys.executable,
+            "-m",
+            "kronara.sidecar",
+            "--token",
+            "secret",
+            "--data-dir",
+            ".test-tmp/sidecar-cli",
+        ],
         input="\n".join(json.dumps(request) for request in requests) + "\n",
         text=True,
         capture_output=True,
@@ -95,7 +111,15 @@ def test_sidecar_exposes_agent_capabilities_without_arbitrary_execution():
         },
     ]
     completed = subprocess.run(
-        [sys.executable, "-m", "kronara.sidecar", "--token", "secret"],
+        [
+            sys.executable,
+            "-m",
+            "kronara.sidecar",
+            "--token",
+            "secret",
+            "--data-dir",
+            ".test-tmp/sidecar-cli",
+        ],
         input="\n".join(json.dumps(request) for request in requests) + "\n",
         text=True,
         capture_output=True,
@@ -109,3 +133,36 @@ def test_sidecar_exposes_agent_capabilities_without_arbitrary_execution():
     assert "shell.execute" not in capabilities["tools"]
     assert evaluation["passed"] is False
     assert "dream_reset" in evaluation["antipatterns"]
+
+
+def test_sidecar_exposes_operations_context_without_credentials():
+    requests = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "handshake",
+            "params": {"token": "secret", "protocol_version": 1},
+        },
+        {"jsonrpc": "2.0", "id": 2, "method": "operations.context", "params": {}},
+    ]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kronara.sidecar",
+            "--token",
+            "secret",
+            "--data-dir",
+            ".test-tmp/sidecar-cli",
+        ],
+        input="\n".join(json.dumps(request) for request in requests) + "\n",
+        text=True,
+        capture_output=True,
+        check=True,
+        env={**os.environ, "PYTHONPATH": "python"},
+    )
+
+    context = json.loads(completed.stdout.splitlines()[1])["result"]
+    assert context["coverage"] == 1.0
+    assert context["workflow_snapshot"]["publication_authority"] == "rust_only"
+    assert "secret" not in json.dumps(context).casefold()

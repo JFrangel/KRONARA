@@ -20,6 +20,10 @@ class JsonRpcServer:
         request_id = request.get("id")
         method = request.get("method")
         params = request.get("params") or {}
+        if request.get("jsonrpc") != "2.0" or not isinstance(method, str):
+            return self._error(request_id, -32600, "invalid request")
+        if not isinstance(params, dict):
+            return self._error(request_id, -32602, "params must be an object")
         if method == "handshake":
             if params.get("token") != self.token:
                 return self._error(request_id, -32001, "authentication failed")
@@ -37,6 +41,8 @@ class JsonRpcServer:
                 return self._result(request_id, handler(params))
             except (KeyError, TypeError, ValueError) as error:
                 return self._error(request_id, -32602, f"invalid params: {error}")
+            except Exception:
+                return self._error(request_id, -32603, "internal error")
         return self._error(request_id, -32601, "method not found")
 
     @staticmethod

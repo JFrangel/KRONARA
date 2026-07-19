@@ -38,3 +38,25 @@ def test_rpc_dispatches_only_explicitly_registered_methods():
 
     assert accepted["result"] == 8
     assert denied["error"]["code"] == -32601
+
+
+def test_rpc_converts_unexpected_handler_failures_to_sanitized_internal_errors():
+    def fail(_):
+        raise RuntimeError("provider leaked secret-value")
+
+    server = JsonRpcServer(token="secret", methods={"safe.method": fail})
+    server.handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "handshake",
+            "params": {"token": "secret", "protocol_version": 1},
+        }
+    )
+
+    response = server.handle(
+        {"jsonrpc": "2.0", "id": 2, "method": "safe.method", "params": {}}
+    )
+
+    assert response["error"]["code"] == -32603
+    assert "secret-value" not in response["error"]["message"]

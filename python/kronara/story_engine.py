@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from kronara.context import ContextBuilder
 from kronara.narrative_quality import NarrativeQualityEvaluator, NarrativeQualityReport
@@ -390,21 +390,27 @@ class StoryEngine:
         store: KronaraStore,
         generator: StoryGenerator,
         critic: StoryCritic,
+        cancellation_requested: Callable[[], bool] = lambda: False,
     ):
         if generator.family == critic.family:
             raise ValueError("story critic must use an independent model family")
         self.store = store
         self.generator = generator
         self.critic = critic
+        self.cancellation_requested = cancellation_requested
 
     def run(self, brief: StoryBrief) -> StoryRunResult:
         run_id = f"story:{brief.story_id}"
+        if self.cancellation_requested():
+            self._checkpoint(run_id, "guardian_input", "cancelled", "CANCELLED")
+            return StoryRunResult(run_id, "cancelled", "CANCELLED")
         if self._detect_injection(brief):
             self._checkpoint(run_id, "guardian_input", "blocked", "PROMPT_INJECTION")
             return StoryRunResult(run_id, "blocked", "PROMPT_INJECTION")
         runtime: dict[str, Any] = {"brief": brief}
         tools = self._tools(runtime)
         try:
+            self._ensure_active()
             concepts = self._invoke(tools, run_id, "story.concept", {"count": 3})
             if len(concepts) != 3:
                 raise StoryEngineFailure("CONCEPT_COUNT_INVALID")
@@ -412,12 +418,14 @@ class StoryEngine:
             runtime.update({"concepts": concepts, "selected": selected})
             self._checkpoint(run_id, "concept_selection", "running", selected.concept_id)
 
+            self._ensure_active()
             blueprint = self._invoke(
                 tools, run_id, "story.blueprint", {"concept_id": selected.concept_id}
             )
             runtime["blueprint"] = blueprint
             self._checkpoint(run_id, "causal_blueprint", "running", len(blueprint))
 
+            self._ensure_active()
             scenes = self._invoke(
                 tools, run_id, "story.draft", {"phase": "initial_scenes"}
             )
@@ -427,6 +435,7 @@ class StoryEngine:
             runtime.update({"script": script, "continuity": continuity})
             self._checkpoint(run_id, "script_assembly", "running", script.word_count)
 
+            self._ensure_active()
             originality = self._invoke(
                 tools, run_id, "originality.check", {"phase": "full_story"}
             )
@@ -437,6 +446,7 @@ class StoryEngine:
                 raise StoryEngineFailure("ORIGINALITY_FAILED")
             self._checkpoint(run_id, "originality", "running", "passed")
 
+            self._ensure_active()
             critique = self._invoke(
                 tools, run_id, "story.evaluate", {"phase": "independent_critique"}
             )
@@ -458,6 +468,7 @@ class StoryEngine:
                 raise StoryEngineFailure("QUALITY_FAILED")
             self._checkpoint(run_id, "independent_critique", "running", "passed")
 
+            self._ensure_active()
             retention = self._invoke(tools, run_id, "hook.plan", {"duration": brief.target_duration_seconds})
             packaging = self._invoke(tools, run_id, "story.package", {"platform": "facebook_reels"})
             memory = self._invoke(tools, run_id, "memory.propose", {"scope": "story_run"})
@@ -492,7 +503,8 @@ class StoryEngine:
                 tool_trace_ids=trace_ids,
             )
         except StoryEngineFailure as error:
-            self._checkpoint(run_id, "guardian", "blocked", error.code)
+            status = "cancelled" if error.code == "CANCELLED" else "blocked"
+            self._checkpoint(run_id, "guardian", status, error.code)
             final_events = [
                 event
                 for event in self.store.list_tool_traces(run_id)
@@ -500,12 +512,16 @@ class StoryEngine:
             ]
             return StoryRunResult(
                 run_id=run_id,
-                status="blocked",
+                status=status,
                 error_code=error.code,
                 generator_family=self.generator.family,
                 critic_family=self.critic.family,
                 tool_trace_ids=tuple(dict.fromkeys(event.event_id for event in final_events)),
             )
+
+    def _ensure_active(self) -> None:
+        if self.cancellation_requested():
+            raise StoryEngineFailure("CANCELLED")
 
     def resume(self, run_id: str) -> StoryResumeStatus:
         checkpoint = self.store.load_checkpoint(run_id)
@@ -728,4 +744,3 @@ class StoryEngine:
         safe_payload = {"node": node, "status": status, "detail": detail}
         self.store.append_event(run_id, "story.node", safe_payload)
         self.store.save_checkpoint(run_id, node, {"status": status, "detail": detail})
-

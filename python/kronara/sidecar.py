@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 from datetime import datetime
@@ -20,6 +21,7 @@ from kronara.improvement import (
     ImprovementEngine,
 )
 from kronara.narrative_quality import NarrativeQualityEvaluator
+from kronara.operations_service import OperationsService
 from kronara.performance import MetricSnapshot, PerformanceScientist
 from kronara.rag_v2 import (
     DeterministicHashEmbedder,
@@ -350,45 +352,58 @@ def _rag_evaluate(params: dict) -> dict:
     return {"evaluation": asdict(evaluation), "promotion": promotion}
 
 
-def serve(token: str) -> int:
+def serve(token: str, data_dir: Path | None = None) -> int:
+    services = OperationsService(
+        data_dir or Path(".kronara") / "runtime",
+        resource_root=_resource_root(),
+    )
+    methods = {
+        "trend.extract": _extract_trend,
+        "agent.capabilities": _agent_capabilities,
+        "agent.evaluate_narrative": _evaluate_narrative,
+        "analytics.execute": _analytics_execute,
+        "research.plan": _research_plan,
+        "research.evaluate": _research_evaluate,
+        "performance.diagnose": _performance_diagnose,
+        "virality.evaluate": _virality_evaluate,
+        "improvement.status": _improvement_status,
+        "improvement.evaluate": _improvement_evaluate,
+        "rag.evaluate": _rag_evaluate,
+        **services.methods(),
+    }
     server = JsonRpcServer(
         token=token,
-        methods={
-            "trend.extract": _extract_trend,
-            "agent.capabilities": _agent_capabilities,
-            "agent.evaluate_narrative": _evaluate_narrative,
-            "analytics.execute": _analytics_execute,
-            "research.plan": _research_plan,
-            "research.evaluate": _research_evaluate,
-            "performance.diagnose": _performance_diagnose,
-            "virality.evaluate": _virality_evaluate,
-            "improvement.status": _improvement_status,
-            "improvement.evaluate": _improvement_evaluate,
-            "rag.evaluate": _rag_evaluate,
-        },
+        methods=methods,
     )
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-            response = server.handle(request)
-        except (json.JSONDecodeError, TypeError, ValueError) as error:
-            response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32700, "message": f"parse error: {error}"},
-            }
-        print(json.dumps(response, separators=(",", ":")), flush=True)
+    try:
+        for raw_line in sys.stdin:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                response = server.handle(request)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32700, "message": "parse error"},
+                }
+            print(json.dumps(response, separators=(",", ":")), flush=True)
+    finally:
+        services.close()
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Kronara cognitive sidecar")
-    parser.add_argument("--token", required=True)
+    parser.add_argument("--token")
+    parser.add_argument("--data-dir", type=Path)
     args = parser.parse_args()
-    return serve(args.token)
+    token = args.token or os.environ.get("KRONARA_RPC_SESSION_TOKEN")
+    if not token:
+        parser.error("an RPC session token is required")
+    return serve(token, args.data_dir)
 
 
 if __name__ == "__main__":

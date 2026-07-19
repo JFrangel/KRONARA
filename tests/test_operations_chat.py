@@ -27,10 +27,12 @@ def persona() -> PersonaProfile:
     return PersonaProfile.from_dict(payload)
 
 
-def request(message: str, coverage: float = 0.7) -> OperationsChatRequest:
+def request(
+    message: str, coverage: float = 0.7, request_id: str = "req_1"
+) -> OperationsChatRequest:
     return OperationsChatRequest(
         schema_version=1,
-        request_id="req_1",
+        request_id=request_id,
         conversation_id="conv_1",
         message=message,
         minimum_context_coverage=coverage,
@@ -120,3 +122,15 @@ def test_chat_returns_partial_answer_when_evidence_coverage_is_insufficient(tmp_
     assert responder.prompts == []
     store.close()
 
+
+def test_repeated_conversation_turns_do_not_trigger_a_false_tool_loop(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path)
+
+    responses = [
+        agent.answer(request("¿Qué está pasando?", request_id=f"req_{index}"))
+        for index in range(5)
+    ]
+
+    assert all(response.status == "completed" for response in responses)
+    assert all(response.tool_trace_ids for response in responses)
+    store.close()

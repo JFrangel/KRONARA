@@ -122,7 +122,10 @@ class OperationsChatAgent:
                     cost_budget_usd=0.05,
                 ),
                 tool_id,
-                {"conversation_id": request.conversation_id},
+                {
+                    "conversation_id": request.conversation_id,
+                    "request_id": request.request_id,
+                },
             )
             if outcome.ok and isinstance(outcome.value, dict):
                 tool_values[tool_id] = dict(outcome.value)
@@ -282,4 +285,3 @@ class OperationsChatAgent:
             ),
             max_input_tokens=8000,
         )
-

@@ -93,6 +93,24 @@ def test_injected_source_is_blocked_before_model_or_tools(tmp_path):
     store.close()
 
 
+def test_cancelled_story_stops_before_model_or_tools(tmp_path):
+    store = KronaraStore(tmp_path / "cancelled-story.db")
+    store.initialize()
+    story_engine = StoryEngine(
+        store=store,
+        generator=DeterministicStoryProvider(),
+        critic=DeterministicIndependentCritic(),
+        cancellation_requested=lambda: True,
+    )
+
+    result = story_engine.run(brief(story_id="cancelled_owned_story"))
+
+    assert result.status == "cancelled"
+    assert result.error_code == "CANCELLED"
+    assert store.list_tool_traces(result.run_id) == []
+    store.close()
+
+
 def test_similar_event_sequence_is_blocked_and_source_text_is_not_persisted(tmp_path):
     story_engine, store = engine(tmp_path)
     forbidden = DeterministicStoryProvider.EVENT_SEQUENCE
@@ -127,4 +145,3 @@ def test_story_golden_fixture_matches_runtime_contract(tmp_path):
     assert result.script.word_count >= payload["expected"]["minimum_words"]
     assert result.originality.passed
     store.close()
-
