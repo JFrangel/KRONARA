@@ -11,7 +11,14 @@ Fecha de auditoría: 2026-07-19.
 - [x] **Scheduler** de parrilla + **AutonomyGuard** instanciado para runs desatendidos. (`schedule.py`)
 - [x] Documentación de funcionalidades por función para el frontend. (`docs/FUNCIONALIDADES.md`)
 
-Sigue pendiente para producción audiovisual/publicación (fases F1–F5): render ffmpeg real, síntesis de voz en vivo con el binario edge-tts instalado, publicación Meta Reels en vivo, red multi-cuenta y Kronara Pulse completo.
+## Integrado y verificado en vivo (ronda de integración)
+
+- [x] **edge-tts en vivo**: síntesis real con timings por palabra y duración medida (`EdgeTtsVoiceProvider`); verificado (15 palabras, ~3.6 s en una frase de muestra). Test de integración skip-if-offline.
+- [x] **Render de video real (FFmpeg)**: `render.py` produce un MP4 real (Reel 9:16 / master 16:9) con subtítulos quemados y QC por ffprobe; **verificado de punta a punta** (voz edge-tts → subtítulos → reel 1080×1920 con audio, QC aprobado).
+- [x] **Embeddings reales (ONNX)**: `FastEmbedProvider` con `multilingual_minilm_384`; verificado que rankea semántica real (par relacionado por encima del no relacionado, coseno > 0.5), sin torch.
+- [x] **Publicación gobernada**: `IdempotentReelsPublisher` (intent persistido, sin doble publicación) + herramienta Rust `publication.publish` con URL host-pinned y reconciliación por marcador.
+
+Sigue pendiente (requiere credenciales/entorno del usuario): **publicación Meta Reels EN VIVO** (necesita una Página sandbox autorizada + token, y app review de Meta), pesos **BGE-M3 1024-dim** completos (opcional; el path ONNX de 384-dim ya funciona), red multi-cuenta (F4) y Kronara Pulse completo (F5).
 
 ---
 

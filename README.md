@@ -4,6 +4,8 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 
 **Novedades v0.6 (cerebro):** motor narrativo a nivel literario (oficio: mostrar-no-contar, sensorial, subtexto, ritmo), Nemotron 3 **Ultra** (1M contexto) + alias `critic`, **memoria de grafo bitemporal** con continuidad de **series multi-parte**, **voz real (edge-tts)** que mide la **duración real** de la narración, y **scheduler + autonomía** para que los agentes trabajen solos. Contrato para el frontend en [`docs/FUNCIONALIDADES.md`](docs/FUNCIONALIDADES.md).
 
+**Integración verificada en vivo:** narración real con edge-tts, **render de video FFmpeg** (Reel 9:16 con subtítulos quemados, QC aprobado de punta a punta), **embeddings semánticos reales** (fastembed ONNX, sin torch) y **publicación gobernada e idempotente** (la publicación en vivo requiere una Página Meta autorizada). Detalle en [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md).
+
 ## Estado real
 
 | Capacidad | Estado | Evidencia principal |

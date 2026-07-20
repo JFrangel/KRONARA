@@ -51,6 +51,7 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 | `reddit.list_signals` | Señales abstractas de Reddit (sin cuerpos) | `subreddits`, `sort`, `limit` | señales + receipt |
 | `meta.metrics.read` | Métricas de una pieza remota (solo lectura) | `remote_id` | snapshot de métricas |
 | `voice.synthesize` | **(v0.6)** Sintetizar voz y medir duración real | `text`, `voice_id`, `rate`, `pitch` | `{duration_ms, word_boundaries, audio_ref}` |
+| `publication.publish` | **(v0.6)** Publicar/reconciliar con idempotencia (gobernada) | `mode`, `idempotency_key`, `video_ref`, `description` | `{status, remote_id}` (`not_configured` sin Página autorizada) |
 
 ## 4. Referencia por subsistema (funciones públicas)
 
@@ -97,8 +98,17 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 
 ### 4.9 Voz y duración — `voice.py` (ampliado v0.6)
 - **`VoiceRegistry` / `DEFAULT_VOICES`** — voces neurales es-* (Marcelo, Lorenzo, Sofía, Gonzalo, Salomé).
+- **`EdgeTtsVoiceProvider(audio_dir?)`** — **síntesis real en vivo** (edge-tts) con timings por palabra (`WordBoundary`) y duración real; degrada si edge-tts/red faltan.
 - **`AuthorityVoiceProvider(authority)`** — llama `voice.synthesize` (con caché por hash de contenido); **`EstimatingVoiceProvider`** — fallback sin red.
 - **`SceneDurationMeasurer(provider, voice_id).measure(scenes) -> MeasuredDuration`** — duración real total + por escena + timings de palabra (para subtítulos).
+
+### 4.9b Render de video — `render.py` (nuevo, integración)
+- **`FfmpegRenderer(ffmpeg?, ffprobe?)`** — `render(audio_path, output_path, preset, subtitle_path?) -> RenderResult`; produce un MP4 real (Reel 9:16 / master 16:9) y QC por ffprobe (resolución, audio, duración). Binario vía `KRONARA_FFMPEG`/PATH.
+- **`build_srt` / `cues_from_word_boundaries`** — subtítulos desde los timings de voz. Presets: `REEL_9x16`, `MASTER_16x9`.
+
+### 4.9c Publicación — `distribution.py` (ampliado, integración)
+- **`IdempotentReelsPublisher(publisher, intents)`** — persiste el intent antes del efecto y **no re-publica** un intent ya publicado (sin Reels duplicados al reanudar).
+- **`AuthorityMetaTransport(authority)`** — enruta upload/reconcile por `publication.publish`. `MetaPublisher` maneja timeout→reconciliación. *(La publicación EN VIVO requiere una Página Meta autorizada.)*
 
 ### 4.10 Scheduler y autonomía — `schedule.py` (nuevo v0.6) + `policy.py`
 - **`Scheduler(rules).due(now, last_fired) -> tuple[DueRun,...]`** — qué runs programados tocan ahora (cadencia interval/daily/weekly = parrilla). Lógica pura; Rust posee el reloj y hace el tick.
