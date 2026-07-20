@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use kronara_authority::config::{AppConfig, MetaState, ProviderState, RedditState};
+use kronara_authority::config::{AppConfig, MetaState, PexelsState, ProviderState, RedditState};
 
 #[test]
 fn missing_optional_provider_keys_disable_provider_without_failing_app() {
@@ -82,6 +82,35 @@ fn reddit_ready_state_keeps_credentials_redacted() {
 
     assert_eq!(config.reddit_status(), RedditState::Ready);
     assert!(!format!("{config:?}").contains("reddit-super-secret"));
+}
+
+#[test]
+fn pexels_enabled_requires_api_key_and_contract_reference() {
+    let values = BTreeMap::from([("KRONARA_PEXELS_ENABLED".into(), "true".into())]);
+
+    let error = AppConfig::from_values(&values).expect_err("api key and contract are mandatory");
+
+    assert_eq!(error.variable(), "KRONARA_PEXELS_API_KEY");
+}
+
+#[test]
+fn pexels_ready_state_keeps_api_key_redacted() {
+    let values = BTreeMap::from([
+        ("KRONARA_PEXELS_ENABLED".into(), "true".into()),
+        (
+            "KRONARA_PEXELS_API_KEY".into(),
+            "pexels-super-secret".into(),
+        ),
+        (
+            "KRONARA_PEXELS_CONTRACT_REFERENCE".into(),
+            "pexels-contract-1".into(),
+        ),
+    ]);
+
+    let config = AppConfig::from_values(&values).expect("Pexels config should load");
+
+    assert_eq!(config.pexels_status(), PexelsState::Ready);
+    assert!(!format!("{config:?}").contains("pexels-super-secret"));
 }
 
 #[test]

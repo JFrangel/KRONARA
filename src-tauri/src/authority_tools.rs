@@ -1,7 +1,11 @@
-use crate::config::{AppConfig, MetaState, ProviderConfig, RedditState};
+use crate::config::{AppConfig, MetaState, PexelsState, ProviderConfig, RedditState};
 use crate::meta::{MetaMetricsGateway, MetaProvider, ReqwestMetaHttpClient};
 use crate::model_gateway::{
     ModelCompletionRequest, ModelGateway, ModelProvider, ReqwestModelHttpClient,
+};
+use crate::pexels::{
+    DirectPexelsTransport, PexelsAccessPolicy, PexelsAuthority, PexelsCredentials,
+    PexelsVideoQuery, ReqwestPexelsHttpClient,
 };
 use crate::reddit::{
     OAuthRedditTransport, RedditAccessPolicy, RedditAuthority, RedditCredentials,
@@ -14,11 +18,13 @@ use std::collections::BTreeMap;
 type LiveReddit = RedditAuthority<OAuthRedditTransport<ReqwestRedditHttpClient>>;
 type LiveModels = ModelGateway<ReqwestModelHttpClient>;
 type LiveMeta = MetaMetricsGateway<ReqwestMetaHttpClient>;
+type LivePexels = PexelsAuthority<DirectPexelsTransport<ReqwestPexelsHttpClient>>;
 
 pub struct ProductionAuthorityTools {
     model: Option<LiveModels>,
     reddit: Option<LiveReddit>,
     meta: Option<LiveMeta>,
+    pexels: Option<LivePexels>,
     health: BTreeMap<String, String>,
 }
 
@@ -133,10 +139,40 @@ impl ProductionAuthorityTools {
         } else {
             None
         };
+
+        let pexels = if config.pexels_status() == PexelsState::Ready {
+            let credentials = PexelsCredentials::new(
+                config
+                    .pexels
+                    .api_key
+                    .as_ref()
+                    .map(|value| value.expose())
+                    .unwrap_or_default(),
+            )
+            .map_err(|error| error.to_string())?;
+            let policy = PexelsAccessPolicy::approved(
+                config
+                    .pexels
+                    .contract_reference
+                    .as_deref()
+                    .unwrap_or_default(),
+            )
+            .map_err(|error| error.to_string())?;
+            Some(PexelsAuthority::new(
+                policy,
+                DirectPexelsTransport::new(
+                    credentials,
+                    ReqwestPexelsHttpClient::new().map_err(|error| error.to_string())?,
+                ),
+            ))
+        } else {
+            None
+        };
         Ok(Self {
             model,
             reddit,
             meta,
+            pexels,
             health,
         })
     }
@@ -183,6 +219,19 @@ impl AuthorityToolExecutor for ProductionAuthorityTools {
                     .ok_or_else(|| "Meta remote id is required".to_string())?;
                 serde_json::to_value(gateway.read(remote_id)?)
                     .map_err(|_| "Meta metric receipt serialization failed".to_string())
+            }
+            "pexels.search_videos" => {
+                let gateway = self
+                    .pexels
+                    .as_ref()
+                    .ok_or_else(|| "pexels_disabled_by_policy".to_string())?;
+                let query = serde_json::from_value::<PexelsVideoQuery>(arguments)
+                    .map_err(|_| "invalid Pexels video query".to_string())?;
+                let page = gateway
+                    .search_videos(query)
+                    .map_err(|error| format!("pexels_{}", error.code()))?;
+                serde_json::to_value(page)
+                    .map_err(|_| "Pexels receipt serialization failed".to_string())
             }
             "voice.synthesize" => crate::voice::synthesize(arguments),
             // Publishing is gated on an authorized Meta Page. Until the sandbox

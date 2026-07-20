@@ -28,6 +28,7 @@ const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[
     "model.complete",
     "reddit.list_signals",
     "meta.metrics.read",
+    "pexels.search_videos",
     "voice.synthesize",
     "publication.publish",
 ];

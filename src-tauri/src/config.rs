@@ -55,6 +55,13 @@ pub struct MetaConfig {
     pub graph_version: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PexelsConfig {
+    pub enabled: bool,
+    pub api_key: Option<SecretString>,
+    pub contract_reference: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RedditState {
     Ready,
@@ -69,6 +76,13 @@ pub enum MetaState {
     DisabledMissingCredential,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PexelsState {
+    Ready,
+    DisabledByPolicy,
+    DisabledMissingCredential,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub environment: String,
@@ -78,6 +92,7 @@ pub struct AppConfig {
     pub providers: Vec<ProviderConfig>,
     pub reddit: RedditConfig,
     pub meta: MetaConfig,
+    pub pexels: PexelsConfig,
     pub embedding_alias: String,
     pub reranker_alias: Option<String>,
 }
@@ -174,6 +189,28 @@ impl AppConfig {
                 }
             }
         }
+        let pexels_enabled = parse_bool(values, "KRONARA_PEXELS_ENABLED", false)?;
+        let pexels = PexelsConfig {
+            enabled: pexels_enabled,
+            api_key: non_empty(values, "KRONARA_PEXELS_API_KEY").map(SecretString),
+            contract_reference: non_empty(values, "KRONARA_PEXELS_CONTRACT_REFERENCE"),
+        };
+        if pexels.enabled {
+            for (variable, present) in [
+                ("KRONARA_PEXELS_API_KEY", pexels.api_key.is_some()),
+                (
+                    "KRONARA_PEXELS_CONTRACT_REFERENCE",
+                    pexels.contract_reference.is_some(),
+                ),
+            ] {
+                if !present {
+                    return Err(ConfigError {
+                        variable: variable.to_owned(),
+                        message: "required when Pexels is enabled".to_owned(),
+                    });
+                }
+            }
+        }
         let embedding_alias = value_or(values, "KRONARA_EMBEDDING_ALIAS", "bge_m3");
         if !matches!(
             embedding_alias.as_str(),
@@ -202,6 +239,7 @@ impl AppConfig {
             providers,
             reddit,
             meta,
+            pexels,
             embedding_alias,
             reranker_alias,
         })
@@ -244,6 +282,16 @@ impl AppConfig {
             MetaState::DisabledMissingCredential
         } else {
             MetaState::Ready
+        }
+    }
+
+    pub fn pexels_status(&self) -> PexelsState {
+        if !self.pexels.enabled {
+            PexelsState::DisabledByPolicy
+        } else if self.pexels.api_key.is_none() || self.pexels.contract_reference.is_none() {
+            PexelsState::DisabledMissingCredential
+        } else {
+            PexelsState::Ready
         }
     }
 }
