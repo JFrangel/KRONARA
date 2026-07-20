@@ -314,6 +314,6 @@ class DiffusersImageProvider:
         if device == "cuda":
             kwargs["variant"] = "fp16"
         pipe = StableDiffusionXLPipeline.from_pretrained(model_dir, **kwargs)
-        pipe.enable_vae_tiling()
-        pipe.enable_vae_slicing()
+        pipe.vae.enable_tiling()
+        pipe.vae.enable_slicing()
         return pipe.to(device)
