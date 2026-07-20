@@ -18,6 +18,7 @@ import hashlib
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 ASSET_TYPES = frozenset({"music", "sfx", "video_loop"})
 
@@ -150,3 +151,22 @@ class AssetLibraryStore:
             added_at=row["added_at"],
             use_count=row["use_count"],
         )
+
+
+def sfx_paths_from_library(library: AssetLibraryStore, tags: Iterable[str]) -> dict[str, str]:
+    """Resolve one file path per SFX tag from the library -- the adapter
+    between AssetLibraryStore and render_composition()'s `sfx_paths: dict[tag,
+    path]` argument. Marks each resolved asset used (fair rotation across
+    episodes). A tag with no library asset yet is silently omitted: render.py
+    already treats a cue with no matching sfx_paths entry as a soft skip
+    (match_sfx_cues found the cue in the narration, but there's nothing to
+    play for it yet), never an error."""
+    resolved: dict[str, str] = {}
+    for tag in tags:
+        candidates = library.by_tag("sfx", tag, limit=1)
+        if not candidates:
+            continue
+        asset = candidates[0]
+        library.mark_used(asset.asset_id)
+        resolved[tag] = asset.file_path
+    return resolved

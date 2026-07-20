@@ -1,6 +1,7 @@
 import pytest
 
-from kronara.asset_library import AssetLibraryStore, LibraryAsset
+from kronara.asset_library import AssetLibraryStore, LibraryAsset, sfx_paths_from_library
+from kronara.audio_mix import DEFAULT_KEYWORD_SFX, DuckingEnvelope, SfxCue, build_mix_filters
 
 
 def track(**overrides) -> LibraryAsset:
@@ -123,4 +124,86 @@ def test_by_tag_respects_limit(tmp_path):
     for i in range(5):
         lib.seed(track(file_path=f"/library/music/track{i}.mp3"))
     assert len(lib.by_tag("music", "paranormal-tension", limit=3)) == 3
+    lib.close()
+
+
+def sfx(**overrides) -> LibraryAsset:
+    payload = dict(
+        asset_type="sfx",
+        tags=("door_creak",),
+        file_path="/library/sfx/door_creak_01.wav",
+        duration_ms=1200,
+        rights_mode="cc0",
+        source_url="https://freesound.org/",
+        added_at=100,
+    )
+    payload.update(overrides)
+    return LibraryAsset(**payload)
+
+
+# ---- sfx_paths_from_library (V5: the AssetLibraryStore <-> render.py adapter) --
+
+
+def test_sfx_paths_from_library_resolves_seeded_tags(tmp_path):
+    lib = store(tmp_path)
+    lib.seed(sfx())
+    lib.seed(sfx(tags=("footsteps",), file_path="/library/sfx/footsteps_01.wav"))
+
+    resolved = sfx_paths_from_library(lib, ["door_creak", "footsteps"])
+
+    assert resolved == {
+        "door_creak": "/library/sfx/door_creak_01.wav",
+        "footsteps": "/library/sfx/footsteps_01.wav",
+    }
+    lib.close()
+
+
+def test_sfx_paths_from_library_omits_unseeded_tags_without_erroring(tmp_path):
+    lib = store(tmp_path)
+    lib.seed(sfx())
+    resolved = sfx_paths_from_library(lib, ["door_creak", "wind", "heartbeat"])
+    assert resolved == {"door_creak": "/library/sfx/door_creak_01.wav"}
+    lib.close()
+
+
+def test_sfx_paths_from_library_marks_resolved_assets_used(tmp_path):
+    lib = store(tmp_path)
+    lib.seed(sfx())
+    sfx_paths_from_library(lib, ["door_creak"])
+    [found] = lib.by_tag("sfx", "door_creak")
+    assert found.use_count == 1
+    lib.close()
+
+
+def test_sfx_paths_from_library_covers_every_default_keyword_tag(tmp_path):
+    """Every tag DEFAULT_KEYWORD_SFX can produce must be resolvable once
+    seeded -- this is the exact tag vocabulary V5's real Freesound curation
+    needs to cover (door_creak, footsteps, wind, heartbeat, phone_ring,
+    page_turn, static, whisper)."""
+    lib = store(tmp_path)
+    all_tags = sorted(set(DEFAULT_KEYWORD_SFX.values()))
+    for tag in all_tags:
+        lib.seed(sfx(tags=(tag,), file_path=f"/library/sfx/{tag}.wav"))
+    resolved = sfx_paths_from_library(lib, all_tags)
+    assert set(resolved.keys()) == set(all_tags)
+    lib.close()
+
+
+def test_full_chain_library_to_mix_filters(tmp_path):
+    """End-to-end proof: seeded library -> sfx_paths_from_library ->
+    build_mix_filters produces a real amix filter line referencing the
+    library-resolved SFX input, not a hand-built dict."""
+    lib = store(tmp_path)
+    lib.seed(sfx(tags=("door_creak",), file_path="/library/sfx/door_creak_01.wav"))
+
+    cues = (SfxCue(tag="door_creak", offset_ms=1050, word="puerta"),)
+    sfx_paths = sfx_paths_from_library(lib, {cue.tag for cue in cues})
+    sfx_input_labels = {tag: f"{2 + i}:a" for i, tag in enumerate(sfx_paths)}
+
+    envelope = DuckingEnvelope(narration_start_s=0.0, narration_end_s=5.0)
+    lines = build_mix_filters(
+        music_envelope=envelope, sfx_cues=cues, sfx_input_labels=sfx_input_labels,
+    )
+
+    assert any("adelay=1050|1050" in line for line in lines)
     lib.close()
