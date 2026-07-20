@@ -52,6 +52,20 @@ def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path
     service.close()
 
 
+def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("programs.list", {}))
+
+    programs = response["result"]["programs"]
+    assert len(programs) == 7
+    viernes = next(p for p in programs if p["program_id"] == "viernes-paranormal")
+    assert viernes["weekday"] == "viernes"
+    assert viernes["visual_style_id"] == "viernes-paranormal"
+    assert "youtube" in viernes["platforms"]
+    service.close()
+
+
 def test_story_test_exposes_progress_and_completed_tool_timeline(tmp_path):
     server, service = _server(tmp_path)
 

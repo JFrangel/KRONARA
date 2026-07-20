@@ -4,6 +4,7 @@
   import TopBar from './lib/components/TopBar.svelte';
   import AssistantPanel from './lib/components/AssistantPanel.svelte';
   import Panel from './lib/views/Panel.svelte';
+  import Programas from './lib/views/Programas.svelte';
   import Estudio from './lib/views/Estudio.svelte';
   import StubView from './lib/views/StubView.svelte';
   import { createControlState } from './lib/control-state.js';
@@ -60,6 +61,8 @@
     <main class="flex-1 overflow-y-auto px-6 py-5">
       {#if activeView === 'panel'}
         <Panel {operations} {control} onNavigate={(id) => (activeView = id)} />
+      {:else if activeView === 'programas'}
+        <Programas />
       {:else if activeView === 'estudio'}
         <Estudio bind:operations connection={operations.connection} />
       {:else}

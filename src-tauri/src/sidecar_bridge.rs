@@ -21,6 +21,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "run.cancel",
     "run.progress",
     "agent.capabilities",
+    "programs.list",
 ];
 
 const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[

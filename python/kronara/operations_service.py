@@ -91,6 +91,28 @@ class OperationsService:
             "run.cancel": self.cancel,
             "run.progress": self.progress,
             "operations.control_snapshot": self.control_snapshot,
+            "programs.list": self.programs_list,
+        }
+
+    def programs_list(self, _: dict[str, Any]) -> dict[str, Any]:
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        registry = ProgramRegistry.load(default_registry_path())
+        return {
+            "schema_version": 1,
+            "programs": [
+                {
+                    "program_id": program.program_id,
+                    "name": program.name,
+                    "weekday": program.weekday,
+                    "genre": program.genre,
+                    "description": program.description,
+                    "visual_style_id": program.visual_style_id,
+                    "target_duration_seconds": program.target_duration_seconds,
+                    "platforms": list(program.platforms),
+                }
+                for program in (registry.get(pid) for pid in registry.program_ids)
+            ],
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:
