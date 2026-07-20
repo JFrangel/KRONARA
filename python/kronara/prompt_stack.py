@@ -67,14 +67,20 @@ class AgentNarrativeProfile:
     tone: str
     reasoning_style: str
     communication_style: str
+    decision_style: str
+    risk_posture: str
+    response_shape: str
     constraints: tuple[str, ...]
     success_signals: tuple[str, ...]
+    closure_criteria: tuple[str, ...]
 
     def __post_init__(self) -> None:
         if not self.agent_id or self.version < 1:
             raise ValueError("agent narrative identity and version are required")
-        if not self.tone or not self.reasoning_style or not self.communication_style:
-            raise ValueError("agent narrative tone, reasoning and communication are required")
+        if not all(
+            [self.tone, self.reasoning_style, self.communication_style, self.decision_style]
+        ):
+            raise ValueError("agent narrative tone, reasoning, communication and decision style are required")
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "AgentNarrativeProfile":
@@ -86,8 +92,12 @@ class AgentNarrativeProfile:
             tone=str(payload["tone"]),
             reasoning_style=str(payload["reasoning_style"]),
             communication_style=str(payload["communication_style"]),
+            decision_style=str(payload.get("decision_style", "decide con evidencia y mínima ambigüedad")),
+            risk_posture=str(payload.get("risk_posture", "prioriza seguridad, verificación y no sobreprometer")),
+            response_shape=str(payload.get("response_shape", "responde en bloques breves, con resumen y evidencia")),
             constraints=tuple(str(item) for item in payload.get("constraints", ())),
             success_signals=tuple(str(item) for item in payload.get("success_signals", ())),
+            closure_criteria=tuple(str(item) for item in payload.get("closure_criteria", ())),
         )
 
 
@@ -107,6 +117,42 @@ class PromptStackRequest:
     verification: tuple[str, ...]
     max_input_tokens: int
     narrative_profile: AgentNarrativeProfile | None = None
+
+    @classmethod
+    def from_runtime_profiles(
+        cls,
+        *,
+        manifest_id: str,
+        version: int,
+        core_policy: str,
+        persona: PersonaProfile,
+        agent_role: str,
+        task_objective: str,
+        authority_budget: str,
+        context_packet: str,
+        selected_skills: tuple[str, ...],
+        tool_contracts: tuple[str, ...],
+        output_schema_id: str,
+        verification: tuple[str, ...],
+        max_input_tokens: int,
+        narrative_profile: AgentNarrativeProfile | None = None,
+    ) -> "PromptStackRequest":
+        return cls(
+            manifest_id=manifest_id,
+            version=version,
+            core_policy=core_policy,
+            persona=persona,
+            agent_role=agent_role,
+            task_objective=task_objective,
+            authority_budget=authority_budget,
+            context_packet=context_packet,
+            selected_skills=selected_skills,
+            tool_contracts=tool_contracts,
+            output_schema_id=output_schema_id,
+            verification=verification,
+            max_input_tokens=max_input_tokens,
+            narrative_profile=narrative_profile,
+        )
 
 
 @dataclass(frozen=True)
@@ -187,13 +233,18 @@ class PromptStackCompiler:
             return "Perfil narrativo: no especificado"
         constraints = "\n".join(f"- {item}" for item in profile.constraints) or "- Ninguna"
         signals = "\n".join(f"- {item}" for item in profile.success_signals) or "- Ninguno"
+        closure = "\n".join(f"- {item}" for item in profile.closure_criteria) or "- Ninguno"
         return (
             f"Perfil narrativo del agente {profile.agent_id}@{profile.version}\n"
             f"Tono: {profile.tone}\n"
             f"Estilo de razonamiento: {profile.reasoning_style}\n"
             f"Estilo de comunicación: {profile.communication_style}\n"
+            f"Estilo de decisión: {profile.decision_style}\n"
+            f"Postura frente al riesgo: {profile.risk_posture}\n"
+            f"Forma de respuesta: {profile.response_shape}\n"
             f"Restricciones:\n{constraints}\n"
-            f"Señales de éxito:\n{signals}"
+            f"Señales de éxito:\n{signals}\n"
+            f"Criterios de cierre:\n{closure}"
         )
 
     @staticmethod

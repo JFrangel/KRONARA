@@ -10,6 +10,10 @@ Hay 24 manifiestos en `config/agents` y 35 habilidades versionadas en `config/sk
 | Producción | `voice_director`, `visual_director`, `audio_director`, `video_composer`, `packaging`, `distribution` |
 | Aprendizaje y conocimiento | `performance_scientist`, `memory_curator`, `rag_curator`, `evaluation_scientist`, `training_data_curator` |
 
+## Perfil narrativo por agente
+
+Cada agente puede llevar un perfil narrativo versionado que define cómo comunica, cómo razona, qué evita y cuándo da por cerrada una respuesta. Este perfil se integra como una capa separada del prompt stack, por debajo del rol y por encima del contexto operativo.
+
 ## Reglas no anulables
 
 - Opportunity Intelligence guarda señales abstractas, no bodies de Reddit.

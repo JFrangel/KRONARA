@@ -267,7 +267,7 @@ class OperationsChatAgent:
             ensure_ascii=False,
             sort_keys=True,
         )
-        return PromptStackRequest(
+        return PromptStackRequest.from_runtime_profiles(
             manifest_id=f"operations:{request.request_id}",
             version=1,
             core_policy=(

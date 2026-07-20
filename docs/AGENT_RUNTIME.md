@@ -4,7 +4,7 @@ Kronara aumenta capacidad mediante contexto útil, herramientas gobernadas, eval
 
 ## Prompt y contexto
 
-`PromptStackCompiler` fija este orden: política base, personalidad, rol, objetivo, autoridad/presupuesto, contexto delimitado como datos, habilidades, contrato de tools, esquema de salida y verificación. La personalidad `kronara@1` es divertida, independiente, investigativa, perfeccionista, creativa y analítica; no puede cambiar permisos.
+`PromptStackCompiler` fija este orden: política base, personalidad, perfil narrativo del agente, rol, objetivo, autoridad/presupuesto, contexto delimitado como datos, habilidades, contrato de tools, esquema de salida y verificación. La personalidad `kronara@1` es divertida, independiente, investigativa, perfeccionista, creativa y analítica; no puede cambiar permisos. El perfil narrativo aporta tono, estilo de razonamiento, estilo de comunicación, postura frente al riesgo y criterios de cierre, sin ampliar autoridad. La ruta recomendada para el runtime es construir cada request con `PromptStackRequest.from_runtime_profiles(...)`, para que la capa de prompt reciba persona y perfil narrativo de forma uniforme.
 
 El Context Compiler usa evidencia, estado, memorias válidas y trazas. Distingue hechos, inferencias, hipótesis y vacíos. El contenido externo nunca pasa a ser instrucción.
 

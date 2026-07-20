@@ -27,6 +27,8 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_METHODS`). La UI llama estos 
 | Método | Propósito | Entrada (clave) | Salida (clave) |
 |---|---|---|---|
 | `operations.chat` | Chat operativo con contexto, citas e intents | `message`, `session_id` | respuesta, citas, intents, estado parcial |
+
+El chat operativo utiliza un prompt stack con capas separadas para política base, personalidad, perfil narrativo del agente, rol y contexto. El perfil narrativo guía tono, estilo de razonamiento, forma de respuesta y criterios de cierre sin modificar autoridad.
 | `operations.context` | Paquete de contexto operativo (sin secretos) | — | cobertura, snapshot de workflow |
 | `tools.timeline` | Trazas de herramientas de un run (para la UI) | `run_id` | eventos de herramienta redactados |
 | `memory.search` | Buscar memorias por ámbito/tipo | `scope`, `kind`, `query` | registros de memoria |

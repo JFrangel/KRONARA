@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from kronara.agent_catalog import AgentCatalog
 from kronara.authority_client import AuthorityClient, UnavailableAuthorityClient
 from kronara.content_pipeline import ProductionContentPipeline, TracingAuthorityClient
 from kronara.embedding_registry import EmbeddingRegistry, ProductionEmbeddingFactory
@@ -402,18 +403,25 @@ class OperationsService:
                 "tools.timeline": lambda value: str(value["summary"]),
             },
         )
-        narrative_payload = json.loads(
-            (self.resource_root / "config" / "personas" / "operations_chat.v1.json").read_text(
-                encoding="utf-8"
-            )
+        narrative_profile = AgentCatalog.load_narrative_profile(
+            "operations_chat",
+            self.resource_root / "config" / "agents",
+            self.resource_root / "config" / "personas",
         )
+        if narrative_profile is None:
+            narrative_payload = json.loads(
+                (self.resource_root / "config" / "personas" / "operations_chat.v1.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            narrative_profile = AgentNarrativeProfile.from_dict(narrative_payload)
         return OperationsChatAgent(
             tools=tools,
             store=self.store,
             prompt_compiler=PromptStackCompiler(),
             persona=PersonaProfile.from_dict(persona_payload),
             responder=LocalOperationsResponder(),
-            narrative_profile=AgentNarrativeProfile.from_dict(narrative_payload),
+            narrative_profile=narrative_profile,
         )
 
     def _build_rag(self) -> RAGV3Index:

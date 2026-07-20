@@ -13,7 +13,7 @@ flowchart LR
   P -->|"typed intent only"| R
 ```
 
-El puente Rust genera un token efímero, permite una lista cerrada de métodos y inicia el sidecar con un entorno reducido. No hereda las credenciales de `.env`. El token no se escribe en trazas.
+El puente Rust genera un token efímero, permite una lista cerrada de métodos y inicia el sidecar con un entorno reducido. No hereda las credenciales de `.env`. El token no se escribe en trazas. El plano cognitivo compila prompts con capas separadas para política, persona, perfil narrativo, rol, contexto y verificación, de forma que el estilo del agente no pueda alterar autoridad ni permisos.
 
 ## Límites de autoridad
 

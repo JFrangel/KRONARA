@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from kronara.prompt_stack import AgentNarrativeProfile, PersonaProfile
 
 
 KNOWN_TOOLS = {
@@ -93,3 +96,37 @@ class AgentCatalog:
     def unknown_tools(self) -> tuple[str, ...]:
         used = {tool for manifest in self._manifests.values() for tool in manifest.allowed_tools}
         return tuple(sorted(used - KNOWN_TOOLS))
+
+    @classmethod
+    def load_narrative_profile(
+        cls,
+        agent_id: str,
+        agents_dir: Path,
+        personas_dir: Path,
+    ) -> AgentNarrativeProfile | None:
+        _, narrative = cls.load_runtime_profiles(agent_id, agents_dir, personas_dir)
+        return narrative
+
+    @classmethod
+    def load_runtime_profiles(
+        cls,
+        agent_id: str,
+        agents_dir: Path,
+        personas_dir: Path,
+    ) -> tuple[PersonaProfile | None, AgentNarrativeProfile | None]:
+        catalog = cls.load(agents_dir)
+        manifest = catalog.get(agent_id)
+        persona_path = personas_dir / "kronara.v1.json"
+        narrative_path = personas_dir / f"{manifest.agent_id}.v1.json"
+
+        persona = None
+        if persona_path.exists():
+            persona_payload = json.loads(persona_path.read_text(encoding="utf-8"))
+            persona = PersonaProfile.from_dict(persona_payload)
+
+        narrative = None
+        if narrative_path.exists():
+            narrative_payload = json.loads(narrative_path.read_text(encoding="utf-8"))
+            narrative = AgentNarrativeProfile.from_dict(narrative_payload)
+
+        return persona, narrative
