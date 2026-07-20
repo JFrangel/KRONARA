@@ -66,6 +66,43 @@ def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_
     service.close()
 
 
+def test_episodes_list_returns_most_recent_first(tmp_path):
+    server, service = _server(tmp_path)
+    service.store.save_owned_story_artifact(
+        story_id="ep_old", artifact_uri="kronara://sha256/a", path="/a", sha256="a",
+        created_at=100, program_id="viernes-paranormal",
+        metadata={"title": "La casa vieja", "duration_seconds": 95.0, "generator_family": "qwen-routed"},
+    )
+    service.store.save_owned_story_artifact(
+        story_id="ep_new", artifact_uri="kronara://sha256/b", path="/b", sha256="b",
+        created_at=200, program_id="cronicas-de-justicia",
+        metadata={"title": "El expediente", "duration_seconds": 110.0},
+    )
+
+    response = server.handle(_request("episodes.list", {}))
+
+    episodes = response["result"]["episodes"]
+    assert [item["story_id"] for item in episodes] == ["ep_new", "ep_old"]
+    assert episodes[1]["title"] == "La casa vieja"
+    assert episodes[1]["program_id"] == "viernes-paranormal"
+    assert episodes[1]["generator_family"] == "qwen-routed"
+    service.close()
+
+
+def test_episodes_list_respects_limit_param(tmp_path):
+    server, service = _server(tmp_path)
+    for i in range(3):
+        service.store.save_owned_story_artifact(
+            story_id=f"ep_{i}", artifact_uri=f"kronara://sha256/{i}", path=f"/{i}", sha256=str(i),
+            created_at=i, metadata={"title": f"Episodio {i}"},
+        )
+
+    response = server.handle(_request("episodes.list", {"limit": 2}))
+
+    assert len(response["result"]["episodes"]) == 2
+    service.close()
+
+
 def test_story_test_exposes_progress_and_completed_tool_timeline(tmp_path):
     server, service = _server(tmp_path)
 

@@ -112,7 +112,9 @@ class KronaraStore:
                 artifact_uri TEXT NOT NULL,
                 path TEXT NOT NULL,
                 sha256 TEXT NOT NULL,
-                metadata_json TEXT NOT NULL
+                metadata_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                program_id TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS performance_metric_snapshots (
                 snapshot_id TEXT PRIMARY KEY,
@@ -123,6 +125,23 @@ class KronaraStore:
             CREATE INDEX IF NOT EXISTS idx_performance_metrics_platform
                 ON performance_metric_snapshots(platform, content_id);
             """
+        )
+        # Idempotent migration for a pre-existing local db created before
+        # created_at/program_id existed -- CREATE TABLE IF NOT EXISTS above
+        # is a no-op against an already-existing (old-schema) table, so the
+        # columns must be added explicitly. Safe to run every startup: a
+        # duplicate-column error means the migration already happened.
+        for column_sql in (
+            "ALTER TABLE owned_story_artifacts ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE owned_story_artifacts ADD COLUMN program_id TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                self.connection.execute(column_sql)
+            except sqlite3.OperationalError:
+                pass  # column already present
+        self.connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_owned_story_artifacts_created "
+            "ON owned_story_artifacts(created_at DESC)"
         )
         self.connection.commit()
 
@@ -362,19 +381,23 @@ class KronaraStore:
         path: str,
         sha256: str,
         metadata: dict[str, Any],
+        created_at: int = 0,
+        program_id: str = "",
     ) -> None:
         if not all((story_id, artifact_uri, path, sha256)):
             raise ValueError("owned story artifact identity is required")
         self._db().execute(
             """
             INSERT INTO owned_story_artifacts(
-                story_id, artifact_uri, path, sha256, metadata_json
-            ) VALUES (?, ?, ?, ?, ?)
+                story_id, artifact_uri, path, sha256, metadata_json, created_at, program_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(story_id) DO UPDATE SET
                 artifact_uri=excluded.artifact_uri,
                 path=excluded.path,
                 sha256=excluded.sha256,
-                metadata_json=excluded.metadata_json
+                metadata_json=excluded.metadata_json,
+                created_at=excluded.created_at,
+                program_id=excluded.program_id
             """,
             (
                 story_id,
@@ -382,6 +405,8 @@ class KronaraStore:
                 path,
                 sha256,
                 json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                created_at,
+                program_id,
             ),
         )
         self._db().commit()
@@ -389,7 +414,7 @@ class KronaraStore:
     def load_owned_story_artifact(self, story_id: str) -> dict[str, Any]:
         row = self._db().execute(
             """
-            SELECT artifact_uri, path, sha256, metadata_json
+            SELECT artifact_uri, path, sha256, metadata_json, created_at, program_id
             FROM owned_story_artifacts WHERE story_id = ?
             """,
             (story_id,),
@@ -402,7 +427,33 @@ class KronaraStore:
             "path": row[1],
             "sha256": row[2],
             "metadata": json.loads(row[3]),
+            "created_at": row[4],
+            "program_id": row[5],
         }
+
+    def list_owned_story_artifacts(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        """Most recently created first -- powers the Episodios list view."""
+        if not 1 <= limit <= 200:
+            raise ValueError("episode list limit must be between one and two hundred")
+        rows = self._db().execute(
+            """
+            SELECT story_id, artifact_uri, path, sha256, metadata_json, created_at, program_id
+            FROM owned_story_artifacts ORDER BY created_at DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [
+            {
+                "story_id": row[0],
+                "artifact_uri": row[1],
+                "path": row[2],
+                "sha256": row[3],
+                "metadata": json.loads(row[4]),
+                "created_at": row[5],
+                "program_id": row[6],
+            }
+            for row in rows
+        ]
 
     def save_metric_snapshot(self, payload: dict[str, Any]) -> None:
         snapshot_id = str(payload.get("snapshot_id", ""))

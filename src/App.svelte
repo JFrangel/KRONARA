@@ -5,6 +5,8 @@
   import AssistantPanel from './lib/components/AssistantPanel.svelte';
   import Panel from './lib/views/Panel.svelte';
   import Programas from './lib/views/Programas.svelte';
+  import Episodios from './lib/views/Episodios.svelte';
+  import Calendario from './lib/views/Calendario.svelte';
   import Estudio from './lib/views/Estudio.svelte';
   import StubView from './lib/views/StubView.svelte';
   import { createControlState } from './lib/control-state.js';
@@ -63,6 +65,10 @@
         <Panel {operations} {control} onNavigate={(id) => (activeView = id)} />
       {:else if activeView === 'programas'}
         <Programas />
+      {:else if activeView === 'episodios'}
+        <Episodios />
+      {:else if activeView === 'calendario'}
+        <Calendario />
       {:else if activeView === 'estudio'}
         <Estudio bind:operations connection={operations.connection} />
       {:else}

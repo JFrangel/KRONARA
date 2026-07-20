@@ -22,6 +22,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "run.progress",
     "agent.capabilities",
     "programs.list",
+    "episodes.list",
 ];
 
 const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[

@@ -325,7 +325,10 @@ class ProductionContentPipeline:
             artifact_uri=artifact_uri,
             path=str(artifact.path.resolve()),
             sha256=artifact.sha256,
+            created_at=observed_at,
+            program_id=brief.program_id or "",
             metadata={
+                "title": result.packaging.facebook_reels_title if result.packaging else brief.title,
                 "rights_mode": "owned_original",
                 "evidence_refs": list(evidence),
                 "duration_seconds": result.script.estimated_seconds,

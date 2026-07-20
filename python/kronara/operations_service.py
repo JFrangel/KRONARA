@@ -92,6 +92,28 @@ class OperationsService:
             "run.progress": self.progress,
             "operations.control_snapshot": self.control_snapshot,
             "programs.list": self.programs_list,
+            "episodes.list": self.episodes_list,
+        }
+
+    def episodes_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        limit = int(params.get("limit", 50))
+        episodes = self.store.list_owned_story_artifacts(limit=limit)
+        return {
+            "schema_version": 1,
+            "episodes": [
+                {
+                    "story_id": episode["story_id"],
+                    "title": episode["metadata"].get("title", episode["story_id"]),
+                    "program_id": episode["program_id"] or None,
+                    "created_at": episode["created_at"],
+                    "duration_seconds": episode["metadata"].get("duration_seconds"),
+                    "generator_family": episode["metadata"].get("generator_family"),
+                    "critic_family": episode["metadata"].get("critic_family"),
+                    "narrative_passed": episode["metadata"].get("narrative_passed"),
+                    "originality_passed": episode["metadata"].get("originality_passed"),
+                }
+                for episode in episodes
+            ],
         }
 
     def programs_list(self, _: dict[str, Any]) -> dict[str, Any]:
