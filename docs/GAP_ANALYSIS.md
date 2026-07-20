@@ -1,6 +1,20 @@
-# Brechas y checklist de release v0.5
+# Brechas y checklist de release v0.5 → v0.6
 
 Fecha de auditoría: 2026-07-19.
+
+## Cerrado en v0.6 (ronda "cerebro")
+
+- [x] Motor narrativo a nivel literario: oficio (mostrar-no-contar, sensorial, subtexto, ritmo), evaluador de prosa con gate duro, prompts creativos/crítico reescritos, corpus de craft. (`narrative_craft.py`, `tests/test_narrative_craft.py`)
+- [x] Nemotron 3 **Ultra** (1M ctx) en el registro y en los allowlists de Rust; alias `critic` explícito. (`config/models/registry.v2.json`, `src-tauri/src/model_gateway.rs`)
+- [x] **Memoria de grafo bitemporal** (valid-time + transaction-time) y **continuidad de series multi-parte**. (`graph_memory.py`, `series.py`)
+- [x] **Voz real edge-tts** como herramienta de autoridad y **duración medida** que reemplaza `palabras÷2.5` en el QC. (`voice.py`, `src-tauri/src/voice.rs`)
+- [x] **Scheduler** de parrilla + **AutonomyGuard** instanciado para runs desatendidos. (`schedule.py`)
+- [x] Documentación de funcionalidades por función para el frontend. (`docs/FUNCIONALIDADES.md`)
+
+Sigue pendiente para producción audiovisual/publicación (fases F1–F5): render ffmpeg real, síntesis de voz en vivo con el binario edge-tts instalado, publicación Meta Reels en vivo, red multi-cuenta y Kronara Pulse completo.
+
+---
+
 
 ## Evidencia de release
 

@@ -1,6 +1,8 @@
-# Kronara OS v0.5
+# Kronara OS v0.6
 
 Kronara es una fábrica editorial local-first para Windows. Su propósito es investigar oportunidades permitidas, crear historias originales, evaluar su calidad y aprender de resultados sin copiar fuentes ni ampliar sus propios permisos.
+
+**Novedades v0.6 (cerebro):** motor narrativo a nivel literario (oficio: mostrar-no-contar, sensorial, subtexto, ritmo), Nemotron 3 **Ultra** (1M contexto) + alias `critic`, **memoria de grafo bitemporal** con continuidad de **series multi-parte**, **voz real (edge-tts)** que mide la **duración real** de la narración, y **scheduler + autonomía** para que los agentes trabajen solos. Contrato para el frontend en [`docs/FUNCIONALIDADES.md`](docs/FUNCIONALIDADES.md).
 
 ## Estado real
 
@@ -12,7 +14,11 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 | Historia propia con crítica, originalidad, duración y recuperación | Implementado | `tests/test_story_duration_qc.py` |
 | RAG v3: FTS5, vectores, grafo, filtros y promoción reversible | Implementado | `tests/test_story_learning_pipeline.py` |
 | Reddit OAuth oficial y filtros | Implementado; activación sujeta a credenciales y términos | `src-tauri/tests/reddit.rs` |
-| Qwen, Kimi, Groq, Nemotron y Hy3 | Inferencia gobernada por Rust con fallback | `src-tauri/tests/model_gateway.rs` |
+| Qwen, Kimi, Groq, Nemotron Super/**Ultra** y Hy3 | Inferencia gobernada por Rust con fallback; alias `critic` | `src-tauri/tests/model_gateway.rs` |
+| Motor narrativo literario (oficio + rúbrica) | Implementado | `tests/test_narrative_craft.py` |
+| Memoria de grafo bitemporal + series multi-parte | Implementado | `tests/test_graph_memory.py`, `tests/test_series.py` |
+| Voz real (edge-tts) y **duración medida** | Herramienta de autoridad + medición; síntesis en vivo requiere binario edge-tts | `tests/test_voice_duration.py`, `src-tauri/src/voice.rs` |
+| Scheduler + autonomía (agentes desatendidos) | Implementado | `tests/test_schedule.py` |
 | BGE-M3 y reranker BGE | Carga local productiva; degradación explícita si faltan pesos | `tests/test_production_embeddings.py` |
 | Métricas Meta y aprendizaje | Lectura versionada y promoción prudente implementadas | `tests/test_performance_learning.py` |
 | Voz, Whisper, FFmpeg y publicación Meta Reels | Pendiente | `docs/INTEGRATIONS.md` |
@@ -56,6 +62,8 @@ Rust crea un token de sesión, limpia el entorno heredado del sidecar y solo per
 
 ## Documentación
 
+- [Funcionalidades por función (para el frontend)](docs/FUNCIONALIDADES.md)
+- [Fases futuras](docs/roadmap/FASES-FUTURAS.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Runtime y modelos](docs/AGENT_RUNTIME.md)
 - [Catálogo de agentes](docs/AGENTS.md)
