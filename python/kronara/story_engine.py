@@ -34,6 +34,10 @@ class StoryBrief:
     # sources from real-experience support communities get an extra creative
     # directive requiring deliberate identity-scrambling (names/places/details).
     source_sensitivity: str = "entertainment"
+    # Which weekly program this story airs under (see
+    # config/programs/visual_style.v1.json) -- None for standalone/ad-hoc
+    # stories with no program-specific visual identity.
+    program_id: str | None = None
 
     def __post_init__(self) -> None:
         if not all((self.story_id, self.title, self.premise, self.theme, self.source_uri)):
@@ -66,6 +70,7 @@ class StoryBrief:
             part_number=(int(payload["part_number"]) if payload.get("part_number") else None),
             series_context=str(payload.get("series_context", "")),
             source_sensitivity=str(payload.get("source_sensitivity", "entertainment")),
+            program_id=(str(payload["program_id"]) if payload.get("program_id") else None),
         )
 
 

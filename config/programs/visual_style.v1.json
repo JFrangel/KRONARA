@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "programs": [
+    {
+      "program_id": "decisiones-dificiles",
+      "display_name": "Decisiones Dificiles",
+      "weekday": "lunes",
+      "style_prompt": "intimate domestic realism, warm naturalistic lighting, muted earth tones, soft window light, everyday interiors like kitchen hallway or car, contemplative mood, subtle film grain",
+      "negative_prompt": "supernatural elements, horror atmosphere, neon colors, fantasy, exaggerated expressions, cartoonish",
+      "motion_bias": "standard",
+      "music_moods": ["dramatico-emocional", "confesion-intimo"],
+      "asset_tags": ["home-interior", "conversation", "window-light", "family"]
+    },
+    {
+      "program_id": "confesiones-anonimas",
+      "display_name": "Confesiones Anonimas",
+      "weekday": "martes",
+      "style_prompt": "confessional intimacy, silhouettes and close-up framing, low-key lighting with a single soft source, shallow depth of field, private nighttime spaces like bedroom or car interior, soft grain, muted desaturated palette",
+      "negative_prompt": "wide establishing shots, bright daylight, crowds, action, supernatural",
+      "motion_bias": "subtle",
+      "music_moods": ["confesion-intimo", "dramatico-emocional"],
+      "asset_tags": ["silhouette", "close-up", "night-interior", "journal"]
+    },
+    {
+      "program_id": "cronicas-de-justicia",
+      "display_name": "Cronicas de Justicia",
+      "weekday": "miercoles",
+      "style_prompt": "documentary realism, offices and legal settings, desks with documents and files, cool neutral lighting, procedural atmosphere, courtroom and hallway textures, restrained color grading, journalistic clarity",
+      "negative_prompt": "supernatural elements, horror, fantasy creatures, oversaturated colors, glamorous fashion photography",
+      "motion_bias": "dynamic",
+      "music_moods": ["venganza-triunfal", "misterio-investigativo"],
+      "asset_tags": ["office", "documents", "courtroom", "evidence"]
+    },
+    {
+      "program_id": "mentes-ocultas",
+      "display_name": "Mentes Ocultas",
+      "weekday": "jueves",
+      "style_prompt": "psychological unease, high contrast shadows, negative space, subject partially obscured or turned away, cool color grading, distorted reflections, quiet suburban interiors at dusk, creeping tension",
+      "negative_prompt": "bright cheerful colors, comedic tone, crowds, action violence, supernatural creatures",
+      "motion_bias": "subtle",
+      "music_moods": ["misterio-investigativo", "dramatico-emocional"],
+      "asset_tags": ["shadow", "reflection", "empty-room", "dusk"]
+    },
+    {
+      "program_id": "viernes-paranormal",
+      "display_name": "Viernes Paranormal",
+      "weekday": "viernes",
+      "style_prompt": "dark blue and sickly green color palette, thick fog, heavy film grain, flickering practical light sources, decaying interiors, unsettling atmosphere, slow creeping dread, deep shadows swallowing detail",
+      "negative_prompt": "bright colors, cheerful, cartoon, clean modern interiors, daylight, comedic tone",
+      "motion_bias": "subtle",
+      "music_moods": ["paranormal-tension"],
+      "asset_tags": ["fog", "abandoned", "night", "flicker"]
+    },
+    {
+      "program_id": "historias-medianoche",
+      "display_name": "Historias de Medianoche",
+      "weekday": "sabado",
+      "style_prompt": "cinematic widescreen composition, deep blacks, moody backlight and rim lighting, strong silhouette shapes, atmospheric haze, deliberate stillness, film-grain texture, epic quiet",
+      "negative_prompt": "flat lighting, cluttered composition, cartoon, bright primary colors, comedic tone",
+      "motion_bias": "standard",
+      "music_moods": ["dramatico-emocional", "misterio-investigativo"],
+      "asset_tags": ["wide-shot", "silhouette", "haze", "night-sky"]
+    },
+    {
+      "program_id": "caso-de-la-semana",
+      "display_name": "El Caso de la Semana",
+      "weekday": "domingo",
+      "style_prompt": "cool blue-grey investigative documentary tone, evidence boards and case files, procedural clarity, muted desaturated palette, newsroom and archive textures, serious restrained composition",
+      "negative_prompt": "supernatural elements, bright saturated colors, comedic tone, fantasy",
+      "motion_bias": "dynamic",
+      "music_moods": ["misterio-investigativo", "documental-serio"],
+      "asset_tags": ["case-file", "archive", "investigation-board", "newsroom"]
+    }
+  ]
+}

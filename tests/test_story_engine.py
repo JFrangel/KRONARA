@@ -43,6 +43,42 @@ def engine(tmp_path):
     )
 
 
+# ---- StoryBrief.program_id (V3: per-program visual identity) ---------------
+
+
+def test_brief_program_id_defaults_to_none():
+    assert brief().program_id is None
+
+
+def test_brief_program_id_round_trips_through_from_dict():
+    payload = {
+        "story_id": "owned_story_test_1",
+        "title": "t",
+        "premise": "p",
+        "theme": "th",
+        "target_duration_seconds": 90,
+        "rights_mode": "owned_original",
+        "source_uri": "kronara://artifacts/owned_story_test_1",
+        "evidence_refs": ["ev_owned_1"],
+        "program_id": "viernes-paranormal",
+    }
+    assert StoryBrief.from_dict(payload).program_id == "viernes-paranormal"
+
+
+def test_brief_from_dict_without_program_id_defaults_to_none():
+    payload = {
+        "story_id": "owned_story_test_1",
+        "title": "t",
+        "premise": "p",
+        "theme": "th",
+        "target_duration_seconds": 90,
+        "rights_mode": "owned_original",
+        "source_uri": "kronara://artifacts/owned_story_test_1",
+        "evidence_refs": ["ev_owned_1"],
+    }
+    assert StoryBrief.from_dict(payload).program_id is None
+
+
 def test_owned_fixture_produces_complete_cited_recoverable_story(tmp_path):
     story_engine, store = engine(tmp_path)
 

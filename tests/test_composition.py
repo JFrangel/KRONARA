@@ -119,6 +119,37 @@ def test_rejects_zero_duration_and_empty_assets():
         plan_shots_for_scene("scn1", 5000, "fast", [])
 
 
+# ---- motion_bias (V3: per-program visual identity) --------------------------
+
+
+def test_default_motion_bias_matches_original_standard_calibration():
+    shots = plan_shots_for_scene("scn1", 5000, "premium", [asset()])
+    assert shots[0].zoom_end == pytest.approx(1.22)
+    assert shots[0].pan == "diagonal"
+
+
+def test_subtle_motion_bias_reduces_zoom_delta_versus_standard():
+    subtle = plan_shots_for_scene("scn1", 5000, "premium", [asset()], motion_bias="subtle")
+    standard = plan_shots_for_scene("scn1", 5000, "premium", [asset()], motion_bias="standard")
+    assert (subtle[0].zoom_end - 1.0) < (standard[0].zoom_end - 1.0)
+
+
+def test_dynamic_motion_bias_increases_zoom_delta_versus_standard():
+    dynamic = plan_shots_for_scene("scn1", 5000, "premium", [asset()], motion_bias="dynamic")
+    standard = plan_shots_for_scene("scn1", 5000, "premium", [asset()], motion_bias="standard")
+    assert (dynamic[0].zoom_end - 1.0) > (standard[0].zoom_end - 1.0)
+
+
+def test_subtle_motion_bias_prefers_slower_reading_pans():
+    shots = plan_shots_for_scene("scn1", 5000, "fast", [asset()], motion_bias="subtle")
+    assert shots[0].pan in {"center_in", "top_bottom"}
+
+
+def test_unknown_motion_bias_raises():
+    with pytest.raises(ValueError):
+        plan_shots_for_scene("scn1", 5000, "fast", [asset()], motion_bias="chaotic")
+
+
 # ---- Shot / VisualTrackPlan validation -------------------------------------
 
 

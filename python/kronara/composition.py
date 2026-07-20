@@ -112,11 +112,17 @@ def plan_shots_for_scene(
     *,
     min_shot_ms: int = MIN_SHOT_MS,
     max_shot_ms: int = MAX_SHOT_MS,
+    motion_bias: str = "standard",
 ) -> tuple[Shot, ...]:
     """Split a scene's duration into 3-7s shots, cycling through the given
     assets. A scene shorter than max_shot_ms becomes exactly one shot (short
     scenes are allowed below the floor; the 3-7s rule governs how a *longer*
-    scene is subdivided, not a hard per-shot minimum)."""
+    scene is subdivided, not a hard per-shot minimum).
+
+    ``motion_bias`` ("subtle" | "standard" | "dynamic", from a program's
+    ``VisualStyleDescriptor``) scales how much each shot pans/zooms — e.g.
+    Viernes Paranormal's creeping dread reads as "subtle", Cronicas de
+    Justicia's tense escalation reads as "dynamic"."""
     if duration_ms <= 0:
         raise ValueError("scene duration must be positive")
     if not assets:
@@ -131,7 +137,7 @@ def plan_shots_for_scene(
     for index in range(shot_count):
         shot_duration = base + (remainder if index == shot_count - 1 else 0)
         asset = assets[index % len(assets)]
-        zoom_start, zoom_end, pan = _motion_for_tier(tier, index)
+        zoom_start, zoom_end, pan = _motion_for_tier(tier, index, motion_bias)
         shots.append(
             Shot(
                 shot_id=f"{scene_id}_shot_{index + 1}",
@@ -147,13 +153,33 @@ def plan_shots_for_scene(
     return tuple(shots)
 
 
-def _motion_for_tier(tier: str, index: int) -> tuple[float, float, str]:
-    if tier == "premium":
-        zoom_end = 1.22
-        pans = ("diagonal", "left_right", "right_left", "top_bottom")
-    else:
-        zoom_end = 1.14
-        pans = ("center_in", "left_right", "right_left")
+# Zoom delta multipliers per bias -- "subtle" reads as creeping/heavy,
+# "dynamic" reads as energetic; "standard" keeps the original calibration.
+_MOTION_BIAS_ZOOM_SCALE = {"subtle": 0.6, "standard": 1.0, "dynamic": 1.4}
+# Pan rotations per bias -- subtle favors slower-reading axes (center/vertical),
+# dynamic favors the more kinetic diagonal/lateral pans.
+_MOTION_BIAS_PANS = {
+    "subtle": {
+        "premium": ("top_bottom", "center_in", "diagonal"),
+        "fast": ("center_in", "top_bottom"),
+    },
+    "standard": {
+        "premium": ("diagonal", "left_right", "right_left", "top_bottom"),
+        "fast": ("center_in", "left_right", "right_left"),
+    },
+    "dynamic": {
+        "premium": ("diagonal", "left_right", "right_left", "diagonal"),
+        "fast": ("left_right", "right_left", "diagonal"),
+    },
+}
+
+
+def _motion_for_tier(tier: str, index: int, motion_bias: str = "standard") -> tuple[float, float, str]:
+    if motion_bias not in _MOTION_BIAS_ZOOM_SCALE:
+        raise ValueError(f"unknown motion_bias: {motion_bias}")
+    base_delta = 0.22 if tier == "premium" else 0.14
+    zoom_end = 1.0 + base_delta * _MOTION_BIAS_ZOOM_SCALE[motion_bias]
+    pans = _MOTION_BIAS_PANS[motion_bias]["premium" if tier == "premium" else "fast"]
     return 1.0, zoom_end, pans[index % len(pans)]
 
 
