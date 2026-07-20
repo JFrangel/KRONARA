@@ -4,9 +4,17 @@ import json
 import pytest
 
 from kronara.authority_client import (
+    ALLOWED_AUTHORITY_TOOLS,
     AuthorityInvocationError,
     StdioAuthorityClient,
 )
+
+
+def test_pexels_search_videos_is_an_allowed_authority_tool():
+    # Mirrors sidecar_bridge.rs's ALLOWED_AUTHORITY_TOOLS on the Rust side --
+    # both allowlists must agree or a live Pexels call is silently blocked
+    # by the Python client before it ever reaches Rust.
+    assert "pexels.search_videos" in ALLOWED_AUTHORITY_TOOLS
 
 
 def test_stdio_authority_client_uses_nested_json_rpc_without_persisting_secrets():
