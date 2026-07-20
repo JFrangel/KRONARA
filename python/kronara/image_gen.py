@@ -279,7 +279,11 @@ class DiffusersImageProvider:
 
         if tier == "fast":
             if not self._lora_loaded:
-                pipe.load_lora_weights(self.lightning_lora_repo, weight_name=self.lightning_lora_weight)
+                pipe.load_lora_weights(
+                    self.lightning_lora_repo,
+                    weight_name=self.lightning_lora_weight,
+                    local_files_only=True,
+                )
                 self._lora_loaded = True
             pipe.scheduler = EulerDiscreteScheduler.from_config(
                 pipe.scheduler.config, timestep_spacing="trailing"
@@ -295,7 +299,10 @@ class DiffusersImageProvider:
     def _ensure_ip_adapter(self, pipe: Any) -> None:
         if not self._ip_adapter_loaded:
             pipe.load_ip_adapter(
-                self.ip_adapter_repo, subfolder=IP_ADAPTER_SUBFOLDER, weight_name=IP_ADAPTER_WEIGHT
+                self.ip_adapter_repo,
+                subfolder=IP_ADAPTER_SUBFOLDER,
+                weight_name=IP_ADAPTER_WEIGHT,
+                local_files_only=True,
             )
             self._ip_adapter_loaded = True
 

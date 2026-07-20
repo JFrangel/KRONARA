@@ -99,14 +99,14 @@ class FakeSDXLPipeline:
         self.raise_oom_once = False
         self._oom_raised = False
 
-    def load_lora_weights(self, repo, weight_name):
-        self.lora_calls.append((repo, weight_name))
+    def load_lora_weights(self, repo, weight_name, local_files_only=False):
+        self.lora_calls.append((repo, weight_name, local_files_only))
 
     def unload_lora_weights(self):
         self.unload_calls += 1
 
-    def load_ip_adapter(self, repo, subfolder, weight_name):
-        self.ip_adapter_calls.append((repo, subfolder, weight_name))
+    def load_ip_adapter(self, repo, subfolder, weight_name, local_files_only=False):
+        self.ip_adapter_calls.append((repo, subfolder, weight_name, local_files_only))
 
     def set_ip_adapter_scale(self, scale):
         self.ip_adapter_scale = scale
