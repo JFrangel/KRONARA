@@ -7,6 +7,7 @@ pub mod authority_tools;
 pub mod config;
 pub mod meta;
 pub mod model_gateway;
+pub mod publishing;
 pub mod reddit;
 pub mod sidecar_bridge;
 pub mod voice;

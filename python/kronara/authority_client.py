@@ -13,6 +13,7 @@ ALLOWED_AUTHORITY_TOOLS = frozenset(
         "reddit.list_signals",
         "meta.metrics.read",
         "voice.synthesize",
+        "publication.publish",
     }
 )
 

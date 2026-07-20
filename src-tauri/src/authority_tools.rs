@@ -185,6 +185,10 @@ impl AuthorityToolExecutor for ProductionAuthorityTools {
                     .map_err(|_| "Meta metric receipt serialization failed".to_string())
             }
             "voice.synthesize" => crate::voice::synthesize(arguments),
+            // Publishing is gated on an authorized Meta Page. Until the sandbox
+            // Page + token are wired, this reports `not_configured` and posts
+            // nothing; the reconciliation/URL helpers are ready for that step.
+            "publication.publish" => crate::publishing::publish(None, arguments),
             _ => Err("authority tool is not allowed".into()),
         }
     }

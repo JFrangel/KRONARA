@@ -29,6 +29,7 @@ const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[
     "reddit.list_signals",
     "meta.metrics.read",
     "voice.synthesize",
+    "publication.publish",
 ];
 
 pub trait AuthorityToolExecutor: Send {
