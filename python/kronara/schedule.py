@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from typing import TYPE_CHECKING, Iterable
+
 from kronara.contracts import (
     AutonomyPolicy,
     RiskDecision,
@@ -23,7 +25,16 @@ from kronara.contracts import (
 )
 from kronara.policy import AutonomyGuard
 
+if TYPE_CHECKING:
+    from kronara.programs import ProgramDescriptor
+
 SECONDS_PER_DAY = 86_400
+DEFAULT_RELEASE_SECOND_OF_DAY = 64_800  # 18:00 UTC -- evening release for a nightly program
+
+_WEEKDAY_INDEX = {
+    "lunes": 0, "martes": 1, "miercoles": 2, "jueves": 3,
+    "viernes": 4, "sabado": 5, "domingo": 6,
+}
 
 
 class Cadence(StrEnum):
@@ -145,3 +156,33 @@ class AutonomousRunAuthorizer:
             requires_human=decision.requires_human,
             reason=decision.reason,
         )
+
+
+def derive_schedule_rules(
+    programs: Iterable["ProgramDescriptor"],
+    *,
+    at_second_of_day: int = DEFAULT_RELEASE_SECOND_OF_DAY,
+) -> tuple[ScheduleRule, ...]:
+    """One weekly ScheduleRule per program, straight from programs.v1.json --
+    B1's missing link between "the grid is documented" and "the grid runs
+    itself." rule_id is deterministic (`weekly_<program_id>`) so re-deriving
+    from an unchanged registry always yields the same id and last_fired
+    (persisted by rule_id) stays valid across restarts. A program whose
+    weekday spelling isn't recognized is skipped rather than raising -- one
+    bad entry in the registry shouldn't take down the whole autonomous grid.
+    """
+    rules = []
+    for program in programs:
+        weekday = _WEEKDAY_INDEX.get(program.weekday)
+        if weekday is None:
+            continue
+        rules.append(
+            ScheduleRule(
+                rule_id=f"weekly_{program.program_id}",
+                program_id=program.program_id,
+                cadence=Cadence.WEEKLY,
+                weekday=weekday,
+                at_second_of_day=at_second_of_day,
+            )
+        )
+    return tuple(rules)

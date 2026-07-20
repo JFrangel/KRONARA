@@ -1,12 +1,14 @@
 import pytest
 
 from kronara.contracts import AutonomyMode, AutonomyPolicy
+from kronara.programs import ProgramDescriptor
 from kronara.schedule import (
     AutonomousRunAuthorizer,
     Cadence,
     DueRun,
     Scheduler,
     ScheduleRule,
+    derive_schedule_rules,
     weekday_of,
 )
 
@@ -90,3 +92,42 @@ def test_autonomy_authorizer_allows_clean_full_auto_run():
 def test_invalid_rule_rejected():
     with pytest.raises(ValueError):
         ScheduleRule("r", "p", Cadence.WEEKLY, at_second_of_day=100)  # missing weekday
+
+
+def _program(program_id: str, weekday: str) -> ProgramDescriptor:
+    return ProgramDescriptor(
+        program_id=program_id, name=program_id, weekday=weekday, genre="drama",
+        description="", visual_style_id=program_id, target_duration_seconds=90,
+        platforms=(),
+    )
+
+
+def test_derive_schedule_rules_one_weekly_rule_per_program():
+    programs = (_program("viernes-paranormal", "viernes"), _program("caso-de-la-semana", "domingo"))
+
+    rules = derive_schedule_rules(programs)
+
+    assert [rule.rule_id for rule in rules] == ["weekly_viernes-paranormal", "weekly_caso-de-la-semana"]
+    assert rules[0].cadence is Cadence.WEEKLY
+    assert rules[0].weekday == 4  # Mon=0 .. Fri=4
+    assert rules[1].weekday == 6  # Sun=6
+    assert rules[0].at_second_of_day == rules[1].at_second_of_day
+
+
+def test_derive_schedule_rules_is_deterministic_and_feeds_a_real_scheduler():
+    programs = (_program("mentes-ocultas", "jueves"),)
+    rules_a = derive_schedule_rules(programs)
+    rules_b = derive_schedule_rules(programs)
+
+    assert rules_a == rules_b
+    scheduler = Scheduler(rules_a)
+    fire = scheduler.next_fire(rules_a[0], after=0)
+    assert fire is not None and weekday_of(fire) == 3  # Thu=3
+
+
+def test_derive_schedule_rules_skips_unrecognized_weekday_spelling():
+    programs = (_program("ok", "viernes"), _program("bad", "not-a-weekday"))
+
+    rules = derive_schedule_rules(programs)
+
+    assert [rule.program_id for rule in rules] == ["ok"]

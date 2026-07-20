@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 pub mod authority_tools;
@@ -208,12 +209,44 @@ fn set_global_pause(
     Ok(snapshot)
 }
 
+// "hit run and it starts everything on its own": Rust owns the wall clock and
+// the timer (see schedule.py's own docstring), so a plain background thread
+// -- not an async runtime, not a Python-side timer -- periodically drives
+// the sidecar's "schedule.tick" method with the real current time. Every
+// call goes through SidecarBridge::call, the exact same mutex-guarded path
+// operations_rpc already uses, so a tick racing a real UI-triggered
+// content.run just serializes safely through the existing lock; no new
+// concurrency primitive needed. 30 minutes keeps a persistent failure's
+// retry rate bounded (see autonomous_loop.py) without making a transient
+// one wait anywhere near a full day, let alone the weekly grid itself.
+const SCHEDULE_TICK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+const SCHEDULE_TICK_STARTUP_DELAY: Duration = Duration::from_secs(30);
+
+fn spawn_schedule_ticker(handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        std::thread::sleep(SCHEDULE_TICK_STARTUP_DELAY);
+        loop {
+            if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
+                let bridge = handle.state::<SidecarBridge>();
+                // Best-effort: a failed tick (paused, sidecar still starting,
+                // transient error) just waits for the next interval. It must
+                // never crash this background thread -- that would silently
+                // end the whole autonomous grid for the rest of the process
+                // lifetime with no user-visible signal.
+                let _ = bridge.call("schedule.tick", json!({"now": now.as_secs()}));
+            }
+            std::thread::sleep(SCHEDULE_TICK_INTERVAL);
+        }
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(OperationalControl::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?.join("runtime");
             app.manage(SidecarBridge::new(data_dir)?);
+            spawn_schedule_ticker(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

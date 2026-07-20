@@ -109,6 +109,47 @@ class OperationsService:
             "operations.control_snapshot": self.control_snapshot,
             "programs.list": self.programs_list,
             "episodes.list": self.episodes_list,
+            "schedule.tick": self.schedule_tick,
+        }
+
+    def schedule_tick(self, params: dict[str, Any]) -> dict[str, Any]:
+        """B1: the autonomous weekly grid's real trigger. Rust's background
+        timer calls this with the current wall-clock time (see spawn_
+        schedule_ticker in lib.rs) exactly like any other RPC method --
+        AutonomousProductionLoop.tick() does the rest, reusing content_run()
+        (the same method the UI's "Crear historia gobernada" button calls)
+        as run_program so a scheduled episode and a manually-triggered one
+        go through the identical, already-proven pipeline."""
+        from kronara.autonomous_loop import AutonomousProductionLoop
+        from kronara.contracts import AutonomyMode, AutonomyPolicy
+        from kronara.programs import ProgramRegistry, default_registry_path
+        from kronara.schedule import AutonomousRunAuthorizer, Scheduler, derive_schedule_rules
+
+        now = int(params["now"])
+        registry = ProgramRegistry.load(default_registry_path())
+        rules = derive_schedule_rules(registry.get(pid) for pid in registry.program_ids)
+        loop = AutonomousProductionLoop(
+            scheduler=Scheduler(rules),
+            authorizer=AutonomousRunAuthorizer(AutonomyPolicy(mode=AutonomyMode.FULL_AUTO)),
+            registry=registry,
+            store=self.store,
+            run_program=lambda _program_id, run_params: self.content_run(run_params),
+            is_paused=lambda: self._paused,
+        )
+        report = loop.tick(now)
+        return {
+            "schema_version": 1,
+            "checked_at": report.checked_at,
+            "ran": list(report.ran),
+            "outcomes": [
+                {
+                    "program_id": outcome.program_id,
+                    "rule_id": outcome.rule_id,
+                    "status": outcome.status,
+                    "detail": outcome.detail,
+                }
+                for outcome in report.outcomes
+            ],
         }
 
     def episodes_list(self, params: dict[str, Any]) -> dict[str, Any]:

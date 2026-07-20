@@ -192,3 +192,43 @@ def test_paused_control_blocks_new_story_runs_and_cancels_active_runs(tmp_path):
     assert blocked["status"] == "blocked"
     assert blocked["error_code"] == "GLOBAL_PAUSE"
     service.close()
+
+
+def test_schedule_tick_with_no_prior_history_finds_every_program_due(tmp_path):
+    """A fresh install has no schedule_last_fired rows, so every program's
+    "next occurrence since epoch 0" is deep in the past relative to any real
+    `now` -- B1's grid should immediately try all 7 on its very first tick
+    rather than silently waiting a full week for each. With no real
+    authority configured (OperationsService(tmp_path) defaults to
+    UnavailableAuthorityClient), every attempt fails fast and safely --
+    proving the RPC really reaches content_run() for each due program
+    without crashing the request."""
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("schedule.tick", {"now": 1_784_930_400}))
+
+    result = response["result"]
+    assert result["checked_at"] == 1_784_930_400
+    assert len(result["outcomes"]) == 7
+    assert all(outcome["status"] == "failed" for outcome in result["outcomes"])
+    assert result["ran"] == []
+    service.close()
+
+
+def test_schedule_tick_at_the_very_start_of_time_has_nothing_due_yet(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("schedule.tick", {"now": 0}))
+
+    assert response["result"]["outcomes"] == []
+    service.close()
+
+
+def test_schedule_tick_respects_global_pause(tmp_path):
+    server, service = _server(tmp_path)
+    server.handle(_request("operations.control_snapshot", {"paused": True}, 3))
+
+    response = server.handle(_request("schedule.tick", {"now": 1_784_930_400}, 4))
+
+    assert response["result"]["outcomes"] == []
+    service.close()

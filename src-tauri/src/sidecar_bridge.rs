@@ -23,6 +23,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "agent.capabilities",
     "programs.list",
     "episodes.list",
+    "schedule.tick",
 ];
 
 const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[
@@ -319,7 +320,10 @@ pub fn is_allowed_method(method: &str) -> bool {
 }
 
 pub fn is_effectful_method(method: &str) -> bool {
-    matches!(method, "story.test" | "content.run" | "performance.learn")
+    matches!(
+        method,
+        "story.test" | "content.run" | "performance.learn" | "schedule.tick"
+    )
 }
 
 pub fn sidecar_runtime_args(embedding_alias: &str, reranker_alias: Option<&str>) -> Vec<String> {
@@ -360,6 +364,7 @@ mod tests {
         assert!(is_allowed_method("story.test"));
         assert!(is_allowed_method("content.run"));
         assert!(is_allowed_method("performance.learn"));
+        assert!(is_allowed_method("schedule.tick"));
         assert!(!is_allowed_method("shell.execute"));
         assert!(!is_allowed_method("publication.publish"));
     }
@@ -369,6 +374,11 @@ mod tests {
         assert!(is_effectful_method("story.test"));
         assert!(is_effectful_method("content.run"));
         assert!(is_effectful_method("performance.learn"));
+        // The autonomous scheduler tick can trigger a real production run
+        // (spends model/image budget, writes artifacts) exactly like a
+        // user-triggered content.run -- global pause must block it too,
+        // not just the interactively-triggered actions.
+        assert!(is_effectful_method("schedule.tick"));
         assert!(!is_effectful_method("operations.chat"));
         assert!(!is_effectful_method("run.cancel"));
     }

@@ -124,6 +124,10 @@ class KronaraStore:
             );
             CREATE INDEX IF NOT EXISTS idx_performance_metrics_platform
                 ON performance_metric_snapshots(platform, content_id);
+            CREATE TABLE IF NOT EXISTS schedule_last_fired (
+                rule_id TEXT PRIMARY KEY,
+                fired_at INTEGER NOT NULL
+            );
             """
         )
         # Idempotent migration for a pre-existing local db created before
@@ -489,6 +493,24 @@ class KronaraStore:
             (platform,),
         )
         return [json.loads(row[0]) for row in rows]
+
+    def record_schedule_fired(self, rule_id: str, fired_at: int) -> None:
+        """Persists when a ScheduleRule last fired so a restarted autonomous
+        loop doesn't re-fire every rule that was already due before it went
+        down -- Scheduler.due() needs this across process restarts, not just
+        within one run."""
+        self._db().execute(
+            """
+            INSERT INTO schedule_last_fired(rule_id, fired_at) VALUES (?, ?)
+            ON CONFLICT(rule_id) DO UPDATE SET fired_at=excluded.fired_at
+            """,
+            (rule_id, fired_at),
+        )
+        self._db().commit()
+
+    def load_schedule_last_fired(self) -> dict[str, int]:
+        rows = self._db().execute("SELECT rule_id, fired_at FROM schedule_last_fired")
+        return {row[0]: int(row[1]) for row in rows}
 
     @staticmethod
     def _json_default(value: Any) -> str:
