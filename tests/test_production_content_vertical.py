@@ -250,6 +250,60 @@ def test_reddit_to_owned_story_vertical_is_cited_recoverable_and_body_free(tmp_p
     rag.close()
 
 
+def test_content_run_program_id_flows_into_the_saved_artifact(tmp_path):
+    """params["program_id"] must reach StoryBrief and the persisted artifact --
+    both V3's per-program visual style lookup and the Programas UI's nested
+    Episodios tab (episodes.list filtered by program_id) depend on this, and
+    neither was ever exercised by a test before this."""
+    authority = FakeProductionAuthority()
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    rag = RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64))
+    rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-1",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas, evidencia y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+    pipeline = ProductionContentPipeline(
+        authority=authority,
+        store=store,
+        rag=rag,
+        model_registry=ModelCapabilityRegistryV2.load(
+            ROOT / "config" / "models" / "registry.v2.json"
+        ),
+        artifact_root=tmp_path / "artifacts",
+    )
+
+    result = pipeline.run(
+        {
+            "story_id": "owned-program-tagged-1",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "target_duration_seconds": 90,
+            "program_id": "viernes-paranormal",
+        }
+    )
+
+    assert result["status"] == "completed"
+    artifact = store.load_owned_story_artifact("owned-program-tagged-1")
+    assert artifact["program_id"] == "viernes-paranormal"
+    listed = store.list_owned_story_artifacts(limit=10)
+    assert any(
+        item["story_id"] == "owned-program-tagged-1" and item["program_id"] == "viernes-paranormal"
+        for item in listed
+    )
+    store.close()
+    rag.close()
+
+
 FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None
 
 

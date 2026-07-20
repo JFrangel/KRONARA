@@ -299,6 +299,7 @@ class ProductionContentPipeline:
             part_number=part_number,
             series_context=series_context,
             source_sensitivity=source_sensitivity,
+            program_id=str(params["program_id"]) if params.get("program_id") else None,
         )
         generator = RoutedStoryProvider(router)
         result = StoryEngine(
