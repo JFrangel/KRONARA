@@ -142,6 +142,10 @@ class ProductionContentPipeline:
         graph: "KronaraGraph | None" = None,
         voice_provider: "object | None" = None,
         voice_id: str = "es-BO-SofiaNeural",
+        image_provider: "object | None" = None,
+        renderer: "object | None" = None,
+        visual_style_registry: "object | None" = None,
+        asset_library: "object | None" = None,
     ):
         self.authority = authority
         self.store = store
@@ -157,6 +161,15 @@ class ProductionContentPipeline:
             from kronara.voice import SceneDurationMeasurer
 
             self._duration_measurer = SceneDurationMeasurer(voice_provider, voice_id=voice_id)
+        # V8: the visual production stage (V0-V6) runs only when all three of
+        # these are supplied -- image_provider + renderer are required to
+        # produce anything at all; visual_style_registry/asset_library are
+        # each independently optional (produce_episode_video degrades to
+        # ai_image-only, no music, when the library is absent).
+        self._image_provider = image_provider
+        self._renderer = renderer
+        self._visual_style_registry = visual_style_registry
+        self._asset_library = asset_library
         # Loaded once: knowledge/reddit-sources/*.md classify each subreddit as
         # entertainment vs. real_experience_serious (see reddit_source_map.py).
         self._source_map = load_source_map()
@@ -324,6 +337,7 @@ class ProductionContentPipeline:
                 "golden_no_regression": True,
             },
         )
+        video = self._produce_video(story_id=story_id, brief=brief, result=result, run_id=run_id)
         self.store.append_event(
             run_id,
             "content.completed",
@@ -332,6 +346,7 @@ class ProductionContentPipeline:
                 "artifact_uri": artifact_uri,
                 "reddit_receipt_id": receipt.get("receipt_id"),
                 "rag_citation_count": len(citations),
+                "video_status": video["status"] if video else "not_configured",
             },
         )
         if canon_builder is not None and series_id:
@@ -353,6 +368,7 @@ class ProductionContentPipeline:
             "reddit_receipt_id": receipt.get("receipt_id"),
             "rag_citations": list(citations),
             "artifact_uri": artifact_uri,
+            "video": video,
             "story": {
                 "story_id": story_id,
                 "title": result.packaging.facebook_reels_title,
@@ -368,6 +384,56 @@ class ProductionContentPipeline:
                 "revision_count": result.revision_count,
                 "tool_trace_ids": list(result.tool_trace_ids),
             },
+        }
+
+    def _produce_video(
+        self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str
+    ) -> dict[str, Any] | None:
+        """V8: render the full visual episode (V0-V6) when the pipeline is
+        configured for it and real per-scene narration audio was measured.
+        Additive and best-effort: a failure here never fails content.run --
+        the text artifact already saved above is a complete, valid result on
+        its own; video is a bonus stage layered on top of it."""
+        if self._image_provider is None or self._renderer is None:
+            return None
+        voice_duration = result.voice_duration
+        if voice_duration is None or voice_duration.degraded:
+            return None
+        if not voice_duration.audio_refs or any(not ref for ref in voice_duration.audio_refs):
+            return None
+        visual_style = None
+        if self._visual_style_registry is not None and brief.program_id:
+            try:
+                visual_style = self._visual_style_registry.get(brief.program_id)
+            except KeyError:
+                visual_style = None
+        try:
+            from kronara.visual_production import produce_episode_video
+
+            production = produce_episode_video(
+                scenes=result.scenes,
+                voice_duration=voice_duration,
+                output_dir=str(self.artifacts.root / "video" / story_id),
+                episode_id=story_id,
+                renderer=self._renderer,
+                image_provider=self._image_provider,
+                visual_style=visual_style,
+                library=self._asset_library,
+            )
+        except Exception as error:
+            self.store.append_event(
+                run_id, "content.video_failed", {"story_id": story_id, "error": type(error).__name__}
+            )
+            return {"status": "failed", "error": type(error).__name__}
+        return {
+            "status": "completed" if production.qc.passed else "qc_failed",
+            "output_path": production.output_path,
+            "qc_passed": production.qc.passed,
+            "qc_issues": list(production.qc.issues),
+            "integrated_lufs": production.loudness.integrated_lufs,
+            "scene_count": production.scene_count,
+            "shot_count": production.shot_count,
+            "source_kind_counts": production.source_kind_counts,
         }
 
     def _trace_retrieval(self, run_id: str, query: str, packet: Any) -> None:

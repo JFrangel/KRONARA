@@ -1,12 +1,18 @@
 import json
+import subprocess
 from pathlib import Path
 
+import pytest
+
 from kronara.embedding_registry import EmbeddingModelDescriptor
+from kronara.image_gen import PlaceholderImageProvider
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2
 from kronara.rag_v2 import DeterministicHashEmbedder, IngestDocument
 from kronara.rag_v3 import RAGV3Index
+from kronara.render import FfmpegRenderer, find_ffmpeg
 from kronara.store import KronaraStore
 from kronara.content_pipeline import ProductionContentPipeline
+from kronara.voice import VoiceSynthesisRequest, VoiceSynthesisResult, WordBoundary
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -240,5 +246,93 @@ def test_reddit_to_owned_story_vertical_is_cited_recoverable_and_body_free(tmp_p
         if event.status == "completed"
     }
     assert {"reddit.list_signals", "model.complete", "knowledge.retrieve"} <= completed_tools
+    store.close()
+    rag.close()
+
+
+FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None
+
+
+class FakeRealAudioVoiceProvider:
+    """Writes a real short WAV per scene via ffmpeg (standing in for
+    edge-tts) so the pipeline's real voice_duration.audio_refs are genuine,
+    playable files -- exactly what produce_episode_video() requires."""
+
+    def __init__(self, ffmpeg: str, audio_dir: Path):
+        self.ffmpeg = ffmpeg
+        self.audio_dir = audio_dir
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self._count = 0
+
+    def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
+        self._count += 1
+        path = self.audio_dir / f"scene_{self._count}.wav"
+        duration_s = max(1.0, len(request.text.split()) / 2.5)
+        subprocess.run(
+            [self.ffmpeg, "-y", "-f", "lavfi", "-i",
+             f"sine=frequency={200 + self._count * 10}:duration={duration_s:.2f}", str(path)],
+            capture_output=True, check=True,
+        )
+        return VoiceSynthesisResult(
+            voice_id=request.voice_id,
+            duration_ms=int(duration_s * 1000),
+            audio_ref=str(path),
+            word_boundaries=(WordBoundary(request.text.split()[0] if request.text.split() else "x", 0, 300),),
+        )
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_content_run_produces_a_real_video_when_visual_stage_is_configured(tmp_path):
+    """V8's wiring proof: the same reddit-to-script vertical, but with
+    image_provider/renderer configured, actually produces a real MP4 as
+    part of one content.run() call -- not a separate manual step."""
+    ffmpeg = find_ffmpeg("ffmpeg")
+    authority = FakeProductionAuthority()
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    rag = RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64))
+    rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-1",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas, evidencia y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+    pipeline = ProductionContentPipeline(
+        authority=authority,
+        store=store,
+        rag=rag,
+        model_registry=ModelCapabilityRegistryV2.load(
+            ROOT / "config" / "models" / "registry.v2.json"
+        ),
+        artifact_root=tmp_path / "artifacts",
+        voice_provider=FakeRealAudioVoiceProvider(ffmpeg, tmp_path / "voice"),
+        image_provider=PlaceholderImageProvider(output_dir=str(tmp_path / "images")),
+        renderer=FfmpegRenderer(ffmpeg=ffmpeg),
+    )
+
+    result = pipeline.run(
+        {
+            "story_id": "owned-production-video-1",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "target_duration_seconds": 90,
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["video"] is not None
+    assert result["video"]["status"] == "completed", result["video"]
+    assert Path(result["video"]["output_path"]).exists()
+    assert result["video"]["scene_count"] == 6
+    assert sum(result["video"]["source_kind_counts"].values()) == 6
+    events = {event.kind for event in store.replay("content:owned-production-video-1")}
+    assert "content.completed" in events
     store.close()
     rag.close()
