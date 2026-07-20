@@ -56,6 +56,7 @@ def test_prompt_stack_has_fixed_authority_preserving_order():
     assert compiled.layer_ids == (
         "core_policy",
         "persona",
+        "narrative_profile",
         "agent_role",
         "task_objective",
         "authority_budget",

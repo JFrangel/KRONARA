@@ -9,6 +9,7 @@ from typing import Any
 LAYER_ORDER = (
     "core_policy",
     "persona",
+    "narrative_profile",
     "agent_role",
     "task_objective",
     "authority_budget",
@@ -60,6 +61,37 @@ class PersonaProfile:
 
 
 @dataclass(frozen=True)
+class AgentNarrativeProfile:
+    agent_id: str
+    version: int
+    tone: str
+    reasoning_style: str
+    communication_style: str
+    constraints: tuple[str, ...]
+    success_signals: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.agent_id or self.version < 1:
+            raise ValueError("agent narrative identity and version are required")
+        if not self.tone or not self.reasoning_style or not self.communication_style:
+            raise ValueError("agent narrative tone, reasoning and communication are required")
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "AgentNarrativeProfile":
+        if int(payload.get("schema_version", 0)) != 1:
+            raise ValueError("unsupported agent narrative schema")
+        return cls(
+            agent_id=str(payload["agent_id"]),
+            version=int(payload["version"]),
+            tone=str(payload["tone"]),
+            reasoning_style=str(payload["reasoning_style"]),
+            communication_style=str(payload["communication_style"]),
+            constraints=tuple(str(item) for item in payload.get("constraints", ())),
+            success_signals=tuple(str(item) for item in payload.get("success_signals", ())),
+        )
+
+
+@dataclass(frozen=True)
 class PromptStackRequest:
     manifest_id: str
     version: int
@@ -74,6 +106,7 @@ class PromptStackRequest:
     output_schema_id: str
     verification: tuple[str, ...]
     max_input_tokens: int
+    narrative_profile: AgentNarrativeProfile | None = None
 
 
 @dataclass(frozen=True)
@@ -102,9 +135,11 @@ class PromptStackCompiler:
         normalized_persona = persona_text.casefold()
         if any(item in normalized_persona for item in _RESERVED_PERSONA_INSTRUCTIONS):
             raise PromptPolicyError("reserved authority instruction in persona")
+        narrative_text = self._narrative_text(request.narrative_profile)
         layers = {
             "core_policy": request.core_policy,
             "persona": persona_text,
+            "narrative_profile": narrative_text,
             "agent_role": request.agent_role,
             "task_objective": request.task_objective,
             "authority_budget": request.authority_budget,
@@ -145,6 +180,21 @@ class PromptStackCompiler:
         traits = ", ".join(persona.traits)
         rules = "\n".join(f"- {item}" for item in persona.rules)
         return f"Persona {persona.persona_id}@{persona.version}\nRasgos: {traits}\nReglas:\n{rules}"
+
+    @staticmethod
+    def _narrative_text(profile: AgentNarrativeProfile | None) -> str:
+        if profile is None:
+            return "Perfil narrativo: no especificado"
+        constraints = "\n".join(f"- {item}" for item in profile.constraints) or "- Ninguna"
+        signals = "\n".join(f"- {item}" for item in profile.success_signals) or "- Ninguno"
+        return (
+            f"Perfil narrativo del agente {profile.agent_id}@{profile.version}\n"
+            f"Tono: {profile.tone}\n"
+            f"Estilo de razonamiento: {profile.reasoning_style}\n"
+            f"Estilo de comunicación: {profile.communication_style}\n"
+            f"Restricciones:\n{constraints}\n"
+            f"Señales de éxito:\n{signals}"
+        )
 
     @staticmethod
     def _untrusted_context(context: str) -> str:

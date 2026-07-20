@@ -15,7 +15,7 @@ from kronara.model_registry_v2 import ModelCapabilityRegistryV2
 from kronara.observable_tools import ObservableToolRegistry
 from kronara.operations_chat import OperationsChatAgent
 from kronara.operations_contracts import OperationsChatRequest
-from kronara.prompt_stack import PersonaProfile, PromptStackCompiler
+from kronara.prompt_stack import AgentNarrativeProfile, PersonaProfile, PromptStackCompiler
 from kronara.rag_v2 import IngestDocument
 from kronara.rag_v3 import RAGV3Index, RetrievalQueryV3
 from kronara.store import KronaraStore
@@ -402,12 +402,18 @@ class OperationsService:
                 "tools.timeline": lambda value: str(value["summary"]),
             },
         )
+        narrative_payload = json.loads(
+            (self.resource_root / "config" / "personas" / "operations_chat.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
         return OperationsChatAgent(
             tools=tools,
             store=self.store,
             prompt_compiler=PromptStackCompiler(),
             persona=PersonaProfile.from_dict(persona_payload),
             responder=LocalOperationsResponder(),
+            narrative_profile=AgentNarrativeProfile.from_dict(narrative_payload),
         )
 
     def _build_rag(self) -> RAGV3Index:

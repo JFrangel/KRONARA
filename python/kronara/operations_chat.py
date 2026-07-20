@@ -15,6 +15,7 @@ from kronara.operations_contracts import (
     OperationsContextPacket,
 )
 from kronara.prompt_stack import (
+    AgentNarrativeProfile,
     PersonaProfile,
     PromptStackCompiler,
     PromptStackRequest,
@@ -98,6 +99,7 @@ class OperationsChatAgent:
         prompt_compiler: PromptStackCompiler,
         persona: PersonaProfile,
         responder: OperationsResponder,
+        narrative_profile: AgentNarrativeProfile | None = None,
         context_builder: OperationsContextBuilder | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
@@ -106,6 +108,7 @@ class OperationsChatAgent:
         self.prompt_compiler = prompt_compiler
         self.persona = persona
         self.responder = responder
+        self.narrative_profile = narrative_profile
         self.context_builder = context_builder or OperationsContextBuilder()
         self.clock = clock
 
@@ -289,4 +292,5 @@ class OperationsChatAgent:
                 "No afirmes que una propuesta ya fue autorizada.",
             ),
             max_input_tokens=8000,
+            narrative_profile=self.narrative_profile,
         )
