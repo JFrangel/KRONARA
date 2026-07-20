@@ -172,3 +172,49 @@ def test_v0_loudness_normalization_two_pass(tmp_path):
     renderer = FfmpegRenderer(ffmpeg=ffmpeg)
     report = renderer.normalize_loudness(str(video_src), str(tmp_path / "normalized.mp4"))
     assert -30.0 < report.integrated_lufs < 0.0
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v4_duck_gain_default_lands_music_18_to_22_lu_below_narration(tmp_path):
+    """V4's calibration acceptance criterion, measured for real (not assumed
+    from the dB arithmetic alone): narration and music start at comparable
+    standalone loudness (the realistic case -- both mastered on their own),
+    then DuckingEnvelope's default duck_gain is applied to the music and the
+    FLAT ducked region (away from the fade edges) is measured on its own and
+    compared against narration's own natural loudness."""
+    from kronara.audio_mix import DuckingEnvelope
+
+    ffmpeg = find_ffmpeg("ffmpeg")
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+
+    narration_path = tmp_path / "narration.wav"
+    music_path = tmp_path / "music.wav"
+    _sine_wav(ffmpeg, narration_path, frequency=220, duration_s=10.0)
+    _sine_wav(ffmpeg, music_path, frequency=440, duration_s=10.0)  # same default amplitude
+
+    envelope = DuckingEnvelope(narration_start_s=1.0, narration_end_s=9.0, fade_s=0.5)
+    ducked_full = tmp_path / "music_ducked_full.wav"
+    subprocess.run(
+        [
+            ffmpeg, "-y", "-i", str(music_path),
+            "-af", f"volume=eval=frame:volume='{envelope.as_ffmpeg_expression()}'",
+            str(ducked_full),
+        ],
+        capture_output=True, check=True,
+    )
+    # Trim to well inside the flat-ducked region (envelope is flat 1.5s-8.5s;
+    # 2s-8s leaves margin on both sides) so fade ramps don't skew the reading.
+    ducked_flat = tmp_path / "music_ducked_flat.wav"
+    subprocess.run(
+        [ffmpeg, "-y", "-i", str(ducked_full), "-ss", "2", "-to", "8", str(ducked_flat)],
+        capture_output=True, check=True,
+    )
+
+    narration_report = renderer.measure_loudness(str(narration_path))
+    ducked_report = renderer.measure_loudness(str(ducked_flat))
+    lu_below_narration = narration_report.integrated_lufs - ducked_report.integrated_lufs
+
+    assert 18.0 <= lu_below_narration <= 22.0, (
+        f"narration={narration_report.integrated_lufs} ducked_music={ducked_report.integrated_lufs} "
+        f"delta={lu_below_narration} -- expected 18-22 LU"
+    )

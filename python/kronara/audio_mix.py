@@ -48,7 +48,11 @@ class DuckingEnvelope:
 
     narration_start_s: float
     narration_end_s: float
-    duck_gain: float = 0.1  # ~-20dB; calibrated against real loudnorm in V4
+    # ~-20dB. Verified against real ffmpeg loudnorm measurement (V4): with
+    # narration and music at comparable standalone mastering loudness, this
+    # lands the ducked music 18-22 LU below narration -- see
+    # test_v4_duck_gain_default_lands_music_18_to_22_lu_below_narration.
+    duck_gain: float = 0.1
     fade_s: float = 0.2
 
     def __post_init__(self) -> None:

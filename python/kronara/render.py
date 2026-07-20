@@ -346,6 +346,37 @@ class FfmpegRenderer:
         qc = self.qc(output_path, preset)
         return RenderResult(output_path=output_path, preset=preset.name, qc=qc)
 
+    def measure_loudness(
+        self,
+        input_path: str,
+        *,
+        target_i: float = -16.0,
+        target_tp: float = -1.5,
+        target_lra: float = 11.0,
+        timeout: int = 300,
+    ) -> LoudnessReport:
+        """Measure-only pass (no correction applied) -- the natural loudness
+        of a clip as-is. Distinct from `normalize_loudness`: two clips each
+        normalized toward the same target would converge to ~target_i
+        regardless of their original relative loudness, which is useless for
+        comparing them (e.g. V4's duck_gain calibration: how many LU below
+        the narration does the ducked music actually sit)."""
+        if not self.ffprobe:
+            raise RuntimeError("ffprobe not found")
+        measure_filter = (
+            f"loudnorm=I={target_i}:TP={target_tp}:LRA={target_lra}:print_format=json"
+        )
+        measure = subprocess.run(
+            [self.ffmpeg, "-i", input_path, "-af", measure_filter, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        measured = _parse_loudnorm_json(measure.stderr)
+        return LoudnessReport(
+            integrated_lufs=float(measured["input_i"]),
+            true_peak_dbtp=float(measured["input_tp"]),
+            loudness_range=float(measured["input_lra"]),
+        )
+
     def normalize_loudness(
         self,
         input_path: str,
