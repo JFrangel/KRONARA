@@ -47,6 +47,21 @@
       "health": "healthy"
     },
     {
+      "alias": "multilingual_minilm_384",
+      "provider": "fastembed",
+      "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "kind": "embedding",
+      "dimensions": 384,
+      "max_tokens": 512,
+      "languages": ["es", "en", "multilingual"],
+      "normalized": true,
+      "query_instruction": "",
+      "license": "apache-2.0",
+      "version_hash": "minilm-multilingual-l12-v2",
+      "privacy": "local",
+      "health": "healthy"
+    },
+    {
       "alias": "deterministic_dev",
       "provider": "kronara",
       "model_id": "kronara/deterministic-hash",

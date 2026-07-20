@@ -204,6 +204,71 @@ class SentenceTransformerEmbeddingProvider:
         return SentenceTransformer(model_id, local_files_only=True)
 
 
+class FastEmbedProvider:
+    """Real ONNX embeddings via fastembed — no torch, lightweight, multilingual.
+
+    A practical production backend for Spanish RAG when the full
+    sentence-transformers/torch stack is too heavy. fastembed fetches the ONNX
+    model once and caches it locally; there is no per-call network.
+    """
+
+    def __init__(
+        self,
+        descriptor: EmbeddingModelDescriptor,
+        *,
+        model_loader: Callable[[str], Any] | None = None,
+    ):
+        if descriptor.kind != "embedding":
+            raise ValueError("embedding provider requires an embedding descriptor")
+        self.descriptor = descriptor
+        self.dimensions = descriptor.dimensions
+        self._model_loader = model_loader or self._default_loader
+        self._model: Any | None = None
+
+    def embed(self, text: str) -> list[float]:
+        if not text.strip():
+            return [0.0] * self.dimensions
+        model = self._load()
+        vectors = list(model.embed([text]))
+        first = vectors[0]
+        vector = first.tolist() if hasattr(first, "tolist") else list(first)
+        if len(vector) != self.dimensions:
+            raise ValueError("embedding model returned incompatible dimensions")
+        return [float(value) for value in vector]
+
+    def _load(self) -> Any:
+        if self._model is None:
+            self._model = self._model_loader(self.descriptor.model_id)
+        return self._model
+
+    @staticmethod
+    def _default_loader(model_id: str) -> Any:
+        try:
+            from fastembed import TextEmbedding
+        except ImportError as error:
+            raise RuntimeError(
+                "fastembed extra is required for ONNX embeddings"
+            ) from error
+        return TextEmbedding(model_name=model_id)
+
+
+MULTILINGUAL_MINILM_384 = EmbeddingModelDescriptor(
+    alias="multilingual_minilm_384",
+    provider="fastembed",
+    model_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    kind="embedding",
+    dimensions=384,
+    max_tokens=512,
+    languages=("es", "en", "multi"),
+    normalized=True,
+    query_instruction="",
+    license="apache-2.0",
+    version_hash="minilm-multilingual-l12-v2",
+    privacy="local",
+    health="healthy",
+)
+
+
 class CrossEncoderReranker:
     def __init__(
         self,
