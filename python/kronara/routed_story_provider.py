@@ -68,6 +68,44 @@ Devuelve únicamente JSON válido con puntuaciones de 0 a 10, problemas concreto
 revisión localizada cuando falle.
 """.strip()
 
+# Appended when brief.source_sensitivity == "real_experience_serious" — the
+# opportunity came from a real-experience support community (see
+# knowledge/reddit-sources/INDICE.md), not an entertainment-oriented one.
+# The base rule (never copy phrasing/characters/event sequences) already
+# applies to every source; this adds a stronger, explicit identity-scrambling
+# requirement appropriate for dramatizing someone's real, serious experience.
+_SENSITIVE_SOURCE_DIRECTIVE = """
+
+FUENTE DE EXPERIENCIA REAL SERIA: el patrón abstracto de esta historia proviene de
+una comunidad de apoyo real (personas describiendo su propia experiencia de abuso,
+trauma o crisis familiar), no de una comunidad de entretenimiento. Trátalo con la
+seriedad de una dramatización honesta, no de un espectáculo:
+- Cuenta el patrón general de lo que ocurrió con honestidad emocional, sin
+  sensacionalismo ni humor.
+- Cambia deliberadamente TODO detalle identificable: nombres, edades exactas,
+  ubicaciones, profesiones, fechas y cualquier rasgo que pudiera señalar a una
+  persona real. Esto no es opcional — es más estricto que la regla general de
+  no copiar.
+- No inventes que la historia "es real" ni la presentes como testimonio; es una
+  ficción inspirada en un patrón humano real.
+""".strip()
+
+
+def _creative_system(sensitivity: str) -> str:
+    if sensitivity == "real_experience_serious":
+        return f"{KRONARA_CREATIVE_SYSTEM}\n{_SENSITIVE_SOURCE_DIRECTIVE}"
+    return KRONARA_CREATIVE_SYSTEM
+
+
+def _critic_system(sensitivity: str) -> str:
+    if sensitivity == "real_experience_serious":
+        return (
+            f"{KRONARA_CRITIC_SYSTEM}\n\nVerifica también que la historia haya cambiado "
+            "todo detalle identificable de la fuente real seria (nombres, lugares, "
+            "profesiones, edades) y que no la presente como testimonio literal."
+        )
+    return KRONARA_CRITIC_SYSTEM
+
 
 class AuthorityModelRouter:
     def __init__(
@@ -151,6 +189,10 @@ class RoutedStoryProvider:
         self._inspiration: tuple[str, ...] = ()
         self._models_used: set[str] = set()
         self._family = "qwen-routed"
+        # Cached from the brief seen in concepts() so revise() (a fixed
+        # StoryGenerator Protocol method with no brief parameter) can still
+        # apply the sensitive-source directive.
+        self._sensitivity: str = "entertainment"
 
     @property
     def family(self) -> str:
@@ -167,11 +209,12 @@ class RoutedStoryProvider:
             self._family = _model_family(model_id)
 
     def concepts(self, brief: StoryBrief) -> tuple[StoryConcept, ...]:
+        self._sensitivity = brief.source_sensitivity
         inspiration = self.router.complete(
             alias="experimental_hy3",
             requirements=ModelRequirements(frozenset({"creative"})),
             task="story.inspiration",
-            system=KRONARA_CREATIVE_SYSTEM,
+            system=_creative_system(brief.source_sensitivity),
             input_payload={
                 "title": brief.title,
                 "premise": brief.premise,
@@ -189,7 +232,7 @@ class RoutedStoryProvider:
                 frozenset({"creative"}), structured_output=True
             ),
             task="story.concepts",
-            system=KRONARA_CREATIVE_SYSTEM,
+            system=_creative_system(brief.source_sensitivity),
             input_payload={
                 "brief": asdict(brief),
                 "abstract_angles": list(self._inspiration),
@@ -221,7 +264,7 @@ class RoutedStoryProvider:
                 frozenset({"planning"}), structured_output=True
             ),
             task="story.blueprint",
-            system=KRONARA_CREATIVE_SYSTEM,
+            system=_creative_system(brief.source_sensitivity),
             input_payload={"brief": asdict(brief), "concept": asdict(concept)},
             response_schema=_object_schema(("beats",)),
         )
@@ -253,7 +296,7 @@ class RoutedStoryProvider:
                 frozenset({"creative"}), structured_output=True
             ),
             task="story.scenes",
-            system=KRONARA_CREATIVE_SYSTEM,
+            system=_creative_system(brief.source_sensitivity),
             input_payload={
                 "brief": asdict(brief),
                 "concept": asdict(concept),
@@ -282,7 +325,7 @@ class RoutedStoryProvider:
                 frozenset({"creative"}), structured_output=True
             ),
             task="story.revise",
-            system=KRONARA_CREATIVE_SYSTEM,
+            system=_creative_system(self._sensitivity),
             input_payload={
                 "scenes": [asdict(item) for item in scenes],
                 "revision": revision,
@@ -339,7 +382,7 @@ class RoutedIndependentCritic:
                 frozenset({"critique"}), structured_output=True
             ),
             task="story.critique",
-            system=KRONARA_CRITIC_SYSTEM,
+            system=_critic_system(brief.source_sensitivity),
             input_payload={
                 "brief": asdict(brief),
                 "concept": asdict(concept),

@@ -174,3 +174,99 @@ def test_critic_excludes_the_actual_generator_fallback_family():
     assert critique_call["candidates"][0]["model_id"] == (
         "nvidia/nemotron-3-super-120b-a12b:free"
     )
+
+
+def test_entertainment_source_gets_no_sensitive_directive():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(brief())  # default source_sensitivity="entertainment"
+
+    concepts_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert "FUENTE DE EXPERIENCIA REAL SERIA" not in concepts_call["system"]
+
+
+def test_sensitive_source_injects_serious_transformation_directive():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    sensitive_brief = StoryBrief(
+        story_id="owned-sensitive-1",
+        title="El silencio en casa",
+        premise="Un patrón familiar difícil, inspirado en experiencias reales.",
+        theme="sanar y reconstruir",
+        target_duration_seconds=90,
+        rights_mode="owned_original",
+        source_uri="kronara://artifacts/owned-sensitive-1",
+        evidence_refs=("ev-owned",),
+        source_sensitivity="real_experience_serious",
+    )
+
+    provider.concepts(sensitive_brief)
+
+    concepts_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert "FUENTE DE EXPERIENCIA REAL SERIA" in concepts_call["system"]
+    assert "cambia deliberadamente todo detalle identificable".casefold() in concepts_call["system"].casefold()
+
+
+def test_sensitive_directive_persists_through_revise_without_a_brief_param():
+    """revise() is a fixed StoryGenerator Protocol method (scenes, revision only) —
+    it must still apply the directive via the sensitivity cached from concepts()."""
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    sensitive_brief = StoryBrief(
+        story_id="owned-sensitive-2",
+        title="La carta que no envié",
+        premise="Un patrón familiar difícil, inspirado en experiencias reales.",
+        theme="sanar y reconstruir",
+        target_duration_seconds=90,
+        rights_mode="owned_original",
+        source_uri="kronara://artifacts/owned-sensitive-2",
+        evidence_refs=("ev-owned",),
+        source_sensitivity="real_experience_serious",
+    )
+    provider.concepts(sensitive_brief)
+    blueprint = provider.blueprint(sensitive_brief, StoryConcept("c1", "logline", "promise", "hook", 0.9))
+    scenes = provider.scenes(sensitive_brief, StoryConcept("c1", "logline", "promise", "hook", 0.9), blueprint)
+
+    provider.revise(scenes, {"scene_index": 0})
+
+    revise_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.revise"
+    ][0]
+    assert "FUENTE DE EXPERIENCIA REAL SERIA" in revise_call["system"]
+
+
+def test_critic_gets_sensitive_verification_instruction():
+    authority = FakeAuthority()
+    critic = RoutedIndependentCritic(router(authority))
+    sensitive_brief = StoryBrief(
+        story_id="owned-sensitive-3",
+        title="El eco de una decisión",
+        premise="Un patrón familiar difícil, inspirado en experiencias reales.",
+        theme="sanar y reconstruir",
+        target_duration_seconds=90,
+        rights_mode="owned_original",
+        source_uri="kronara://artifacts/owned-sensitive-3",
+        evidence_refs=("ev-owned",),
+        source_sensitivity="real_experience_serious",
+    )
+
+    critic.review(
+        sensitive_brief,
+        StoryConcept("concept_1", "Una logline suficientemente original.", "promesa", "hook", 0.9),
+        (),
+        StoryScript("Guion propio verificable.", 3, 1.2),
+    )
+
+    critique_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.critique"
+    ][0]
+    assert "detalle identificable" in critique_call["system"].casefold()

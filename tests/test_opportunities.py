@@ -18,6 +18,40 @@ def test_harvest_saves_and_dedupes():
     store.close()
 
 
+def test_harvest_preserves_sensitivity_per_post():
+    store = OpportunityStore(":memory:").initialize()
+    sensitive_posts = [
+        RssPost("CPTSD", "How I finally understood my childhood", "l3", "t", sensitivity="real_experience_serious"),
+        RssPost("ProRevenge", "I got my money back", "l4", "t", sensitivity="entertainment"),
+    ]
+    store.harvest(sensitive_posts, now=100)
+
+    dispensed = {store.take_next(now=101).subreddit: None for _ in range(2)}
+    pending_all = list(dispensed.keys())
+    assert set(pending_all) == {"CPTSD", "ProRevenge"}
+    store.close()
+
+
+def test_take_next_returns_correct_sensitivity_per_opportunity():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest(
+        [RssPost("domesticviolence", "unique title xyz", "l5", "t", sensitivity="real_experience_serious")],
+        now=100,
+    )
+    opportunity = store.take_next(now=101)
+    assert opportunity is not None
+    assert opportunity.sensitivity == "real_experience_serious"
+    store.close()
+
+
+def test_default_sensitivity_is_entertainment_when_not_specified():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest([RssPost("stories", "a plain story title", "l6", "t")], now=100)
+    opportunity = store.take_next(now=101)
+    assert opportunity.sensitivity == "entertainment"
+    store.close()
+
+
 def test_take_next_dispenses_each_once():
     store = OpportunityStore(":memory:").initialize()
     store.harvest(posts(), now=100)

@@ -30,6 +30,10 @@ class StoryBrief:
     series_id: str | None = None
     part_number: int | None = None
     series_context: str = ""
+    # "entertainment" | "real_experience_serious" (see knowledge/reddit-sources/):
+    # sources from real-experience support communities get an extra creative
+    # directive requiring deliberate identity-scrambling (names/places/details).
+    source_sensitivity: str = "entertainment"
 
     def __post_init__(self) -> None:
         if not all((self.story_id, self.title, self.premise, self.theme, self.source_uri)):
@@ -61,6 +65,7 @@ class StoryBrief:
             series_id=(str(payload["series_id"]) if payload.get("series_id") else None),
             part_number=(int(payload["part_number"]) if payload.get("part_number") else None),
             series_context=str(payload.get("series_context", "")),
+            source_sensitivity=str(payload.get("source_sensitivity", "entertainment")),
         )
 
 

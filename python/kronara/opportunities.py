@@ -50,6 +50,8 @@ class Opportunity:
     link: str
     harvested_at: int
     status: str
+    # "entertainment" | "real_experience_serious" — see knowledge/reddit-sources/.
+    sensitivity: str = "entertainment"
 
 
 def _opportunity_id(subreddit: str, title: str) -> str:
@@ -72,11 +74,18 @@ class OpportunityStore:
                 theme_hint TEXT NOT NULL,
                 link TEXT NOT NULL,
                 harvested_at INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'new'
+                status TEXT NOT NULL DEFAULT 'new',
+                sensitivity TEXT NOT NULL DEFAULT 'entertainment'
             );
             CREATE INDEX IF NOT EXISTS idx_oppo_status ON opportunities(status);
             """
         )
+        try:  # migration for a pre-existing local db created before this column
+            self._conn().execute(
+                "ALTER TABLE opportunities ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'entertainment'"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already present
         self._conn().commit()
         return self
 
@@ -88,16 +97,17 @@ class OpportunityStore:
             subreddit = getattr(post, "subreddit", "")
             title = getattr(post, "title", "")
             link = getattr(post, "link", "")
+            sensitivity = getattr(post, "sensitivity", "entertainment") or "entertainment"
             if not title:
                 continue
             oid = _opportunity_id(subreddit, title)
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO opportunities
-                    (opportunity_id, subreddit, theme_hint, link, harvested_at, status)
-                VALUES (?, ?, ?, ?, ?, 'new')
+                    (opportunity_id, subreddit, theme_hint, link, harvested_at, status, sensitivity)
+                VALUES (?, ?, ?, ?, ?, 'new', ?)
                 """,
-                (oid, subreddit, title, link, now),
+                (oid, subreddit, title, link, now, sensitivity),
             )
             added += cursor.rowcount
         connection.commit()
@@ -149,6 +159,7 @@ class OpportunityStore:
 
     @staticmethod
     def _row(row) -> Opportunity:
+        keys = row.keys() if hasattr(row, "keys") else row
         return Opportunity(
             opportunity_id=row["opportunity_id"],
             subreddit=row["subreddit"],
@@ -156,6 +167,7 @@ class OpportunityStore:
             link=row["link"],
             harvested_at=row["harvested_at"],
             status=row["status"],
+            sensitivity=row["sensitivity"] if "sensitivity" in keys else "entertainment",
         )
 
 

@@ -17,6 +17,7 @@ from kronara.reddit_observatory import (
     RedditObservatory,
     RedditSignalFilters,
 )
+from kronara.reddit_source_map import load_source_map, sensitivity_for
 from kronara.routed_story_provider import (
     AuthorityModelRouter,
     KRONARA_CREATIVE_SYSTEM,
@@ -156,6 +157,9 @@ class ProductionContentPipeline:
             from kronara.voice import SceneDurationMeasurer
 
             self._duration_measurer = SceneDurationMeasurer(voice_provider, voice_id=voice_id)
+        # Loaded once: knowledge/reddit-sources/*.md classify each subreddit as
+        # entertainment vs. real_experience_serious (see reddit_source_map.py).
+        self._source_map = load_source_map()
 
     def run(self, params: dict[str, Any]) -> dict[str, Any]:
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
@@ -267,6 +271,7 @@ class ProductionContentPipeline:
             series_context = canon_builder.context_for_part(
                 str(series_id), part_number, now=observed_at
             ).context_block
+        source_sensitivity = sensitivity_for(self._subreddit_of(selected), self._source_map)
         brief = StoryBrief(
             story_id=story_id,
             title=str(editorial["title"]),
@@ -280,6 +285,7 @@ class ProductionContentPipeline:
             series_id=str(series_id) if series_id else None,
             part_number=part_number,
             series_context=series_context,
+            source_sensitivity=source_sensitivity,
         )
         generator = RoutedStoryProvider(router)
         result = StoryEngine(
@@ -417,6 +423,13 @@ class ProductionContentPipeline:
             lifetime_hours=min(168.0, age_hours * (1 + comments / max(score, 1))),
             rights_mode="reference_only",
         )
+
+    @staticmethod
+    def _subreddit_of(signal: ObservableRedditSignal) -> str:
+        """Extract the subreddit name from a permalink-style source_uri
+        (https://www.reddit.com/r/<subreddit>/...); empty string if absent."""
+        match = re.search(r"/r/([A-Za-z0-9_]+)/", signal.source_uri)
+        return match.group(1) if match else ""
 
     @staticmethod
     def _signal_json(signal: ObservableRedditSignal) -> dict[str, Any]:

@@ -45,6 +45,8 @@ class RssPost:
     title: str
     link: str
     published: str
+    # "entertainment" | "real_experience_serious" — see knowledge/reddit-sources/.
+    sensitivity: str = "entertainment"
 
 
 def _is_story(title: str) -> bool:
