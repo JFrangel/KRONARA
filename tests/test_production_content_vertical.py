@@ -336,3 +336,54 @@ def test_content_run_produces_a_real_video_when_visual_stage_is_configured(tmp_p
     assert "content.completed" in events
     store.close()
     rag.close()
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_operations_service_threads_the_visual_stack_through_to_content_run(tmp_path):
+    """The gap this closes: OperationsService (what sidecar.py's serve()
+    actually constructs for the real running app) previously had no way to
+    receive image_provider/renderer/voice_provider at all, so content.run
+    from the real app could only ever produce text -- even though
+    ProductionContentPipeline itself has supported these params since V8.
+    Proves the fix at the layer the real app actually uses, not just at
+    ProductionContentPipeline directly."""
+    from kronara.operations_service import OperationsService
+
+    ffmpeg = find_ffmpeg("ffmpeg")
+    authority = FakeProductionAuthority()
+    service = OperationsService(
+        tmp_path / "runtime",
+        resource_root=ROOT,
+        authority=authority,
+        voice_provider=FakeRealAudioVoiceProvider(ffmpeg, tmp_path / "voice"),
+        image_provider=PlaceholderImageProvider(output_dir=str(tmp_path / "images")),
+        renderer=FfmpegRenderer(ffmpeg=ffmpeg),
+    )
+    service._rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-2",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas, evidencia y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+
+    result = service.content_run(
+        {
+            "story_id": "owned-production-video-2",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "target_duration_seconds": 90,
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["video"] is not None
+    assert result["video"]["status"] == "completed", result["video"]
+    assert Path(result["video"]["output_path"]).exists()
+    service.close()

@@ -57,6 +57,12 @@ class OperationsService:
         authority: AuthorityClient | None = None,
         embedding_alias: str = "bge_m3",
         reranker_alias: str | None = "bge_reranker_v2_m3",
+        voice_provider: "object | None" = None,
+        voice_id: str = "es-BO-SofiaNeural",
+        image_provider: "object | None" = None,
+        renderer: "object | None" = None,
+        visual_style_registry: "object | None" = None,
+        asset_library: "object | None" = None,
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +83,16 @@ class OperationsService:
         )
         self._rag = self._build_rag()
         self._chat = self._build_chat()
+        # V8 visual production stack -- all optional; content_run() degrades
+        # to text-only when any of these are unavailable on this machine
+        # (no ffmpeg, no local SDXL weights). See ProductionContentPipeline
+        # for the actual degrade-gracefully logic.
+        self._voice_provider = voice_provider
+        self._voice_id = voice_id
+        self._image_provider = image_provider
+        self._renderer = renderer
+        self._visual_style_registry = visual_style_registry
+        self._asset_library = asset_library
 
     def methods(self) -> dict[str, Callable[[dict[str, Any]], dict[str, Any]]]:
         return {
@@ -227,6 +243,12 @@ class OperationsService:
             rag=self._rag,
             model_registry=self._model_registry,
             artifact_root=self.data_dir / "artifacts",
+            voice_provider=self._voice_provider,
+            voice_id=self._voice_id,
+            image_provider=self._image_provider,
+            renderer=self._renderer,
+            visual_style_registry=self._visual_style_registry,
+            asset_library=self._asset_library,
         ).run(params)
 
     def performance_learn(self, params: dict[str, Any]) -> dict[str, Any]:

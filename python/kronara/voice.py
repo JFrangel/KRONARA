@@ -227,6 +227,25 @@ class EstimatingVoiceProvider:
         )
 
 
+class FallbackVoiceProvider:
+    """Tries `primary` (e.g. EdgeTtsVoiceProvider, which needs network) and
+    falls back to `secondary` (e.g. EstimatingVoiceProvider) on any error.
+    Required for unattended autonomous operation: a transient network/service
+    failure in the primary must never crash the whole content.run --
+    SceneDurationMeasurer.measure() does not itself catch synthesis errors,
+    so whatever provider it holds must never raise."""
+
+    def __init__(self, primary: VoiceSynthesisProvider, secondary: VoiceSynthesisProvider):
+        self.primary = primary
+        self.secondary = secondary
+
+    def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
+        try:
+            return self.primary.synthesize(request)
+        except Exception:
+            return self.secondary.synthesize(request)
+
+
 @dataclass(frozen=True)
 class MeasuredDuration:
     total_seconds: float

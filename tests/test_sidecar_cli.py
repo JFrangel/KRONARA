@@ -3,6 +3,45 @@ import os
 import subprocess
 import sys
 
+from kronara.sidecar import _build_visual_stack
+from kronara.voice import FallbackVoiceProvider
+
+
+def test_build_visual_stack_degrades_when_ffmpeg_is_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setenv("KRONARA_FFMPEG", str(tmp_path / "not-a-real-ffmpeg"))
+    monkeypatch.delenv("KRONARA_FFMPEG_DIR", raising=False)
+    monkeypatch.setattr("kronara.render.shutil.which", lambda _: None)
+
+    stack = _build_visual_stack(tmp_path)
+
+    assert isinstance(stack["voice_provider"], FallbackVoiceProvider)  # always built
+    assert stack["renderer"] is None
+    assert stack["image_provider"] is None
+    assert stack["visual_style_registry"] is None
+    assert stack["asset_library"] is None
+
+
+def test_build_visual_stack_builds_everything_when_ffmpeg_is_available(tmp_path, monkeypatch):
+    import shutil as _shutil
+
+    real_ffmpeg = _shutil.which("ffmpeg") or os.environ.get("KRONARA_FFMPEG")
+    if not real_ffmpeg:
+        import pytest
+
+        pytest.skip("ffmpeg not installed")
+
+    stack = _build_visual_stack(tmp_path)
+
+    assert stack["renderer"] is not None
+    assert stack["image_provider"] is not None
+    assert stack["visual_style_registry"] is not None
+    assert stack["asset_library"] is not None
+    assert set(stack["visual_style_registry"].program_ids) == {
+        "decisiones-dificiles", "confesiones-anonimas", "cronicas-de-justicia",
+        "mentes-ocultas", "viernes-paranormal", "historias-medianoche", "caso-de-la-semana",
+    }
+    stack["asset_library"].close()
+
 
 def _run_sidecar(tmp_path, requests):
     """Spawn the sidecar CLI with an isolated data dir and feed it JSON-RPC lines.

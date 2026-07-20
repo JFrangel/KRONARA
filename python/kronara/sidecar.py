@@ -7,6 +7,7 @@ import sys
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from kronara.agent_catalog import AgentCatalog, KNOWN_TOOLS
 from kronara.analytics import AnalysisRequest, AnalyticalToolkit
@@ -58,6 +59,60 @@ def _resource_root() -> Path:
     if getattr(sys, "_MEIPASS", None):
         return Path(sys._MEIPASS)
     return Path(__file__).resolve().parents[2]
+
+
+def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
+    """Best-effort construction of the V8 visual production stack for
+    content.run. Every piece degrades to None independently when its
+    underlying resource isn't available on this machine (no ffmpeg, no
+    local SDXL weights) -- content.run then produces text-only, exactly
+    like it always could; this never blocks sidecar startup.
+
+    voice_provider is wrapped in FallbackVoiceProvider regardless of
+    whether the rest of the stack is available: real per-word timing from
+    edge-tts is valuable for duration_qc accuracy on its own, and the
+    fallback means a transient network failure degrades gracefully to the
+    word-rate estimate instead of crashing content.run outright."""
+    from kronara.voice import EdgeTtsVoiceProvider, EstimatingVoiceProvider, FallbackVoiceProvider
+
+    voice_provider = FallbackVoiceProvider(
+        EdgeTtsVoiceProvider(audio_dir=str(data_dir / "voice")),
+        EstimatingVoiceProvider(),
+    )
+
+    renderer = None
+    try:
+        from kronara.render import FfmpegRenderer, find_ffmpeg
+
+        if find_ffmpeg("ffmpeg"):
+            renderer = FfmpegRenderer()
+    except RuntimeError:
+        renderer = None
+
+    image_provider = None
+    visual_style_registry = None
+    asset_library = None
+    if renderer is not None:
+        try:
+            from kronara.asset_library import AssetLibraryStore
+            from kronara.image_gen import DiffusersImageProvider
+            from kronara.visual_style import VisualStyleRegistry, default_registry_path
+
+            image_provider = DiffusersImageProvider(output_dir=str(data_dir / "images"))
+            visual_style_registry = VisualStyleRegistry.load(default_registry_path())
+            asset_library = AssetLibraryStore(data_dir / "asset_library.db").initialize()
+        except Exception:
+            image_provider = None
+            visual_style_registry = None
+            asset_library = None
+
+    return {
+        "voice_provider": voice_provider,
+        "renderer": renderer,
+        "image_provider": image_provider,
+        "visual_style_registry": visual_style_registry,
+        "asset_library": asset_library,
+    }
 
 
 def _agent_capabilities(_: dict) -> dict:
@@ -360,12 +415,15 @@ def serve(
     embedding_alias: str = "bge_m3",
     reranker_alias: str | None = "bge_reranker_v2_m3",
 ) -> int:
+    resolved_data_dir = data_dir or Path(".kronara") / "runtime"
+    visual_stack = _build_visual_stack(resolved_data_dir)
     services = OperationsService(
-        data_dir or Path(".kronara") / "runtime",
+        resolved_data_dir,
         resource_root=_resource_root(),
         authority=StdioAuthorityClient(reader=sys.stdin, writer=sys.stdout),
         embedding_alias=embedding_alias,
         reranker_alias=reranker_alias,
+        **visual_stack,
     )
     methods = {
         "trend.extract": _extract_trend,

@@ -7,6 +7,7 @@ from kronara.story_engine import (
 from kronara.store import KronaraStore
 from kronara.voice import (
     EstimatingVoiceProvider,
+    FallbackVoiceProvider,
     SceneDurationMeasurer,
     VoiceSynthesisRequest,
     VoiceSynthesisResult,
@@ -98,6 +99,48 @@ def test_measurer_uses_empty_string_when_provider_writes_no_file():
     result = measurer.measure([type("S", (), {"narration": "una frase"})])
 
     assert result.audio_refs == ("",)
+
+
+def test_fallback_provider_uses_primary_when_it_succeeds():
+    class WorkingProvider:
+        def synthesize(self, request):
+            return VoiceSynthesisResult(voice_id=request.voice_id, duration_ms=5000, degraded=False)
+
+    provider = FallbackVoiceProvider(WorkingProvider(), EstimatingVoiceProvider())
+    result = provider.synthesize(VoiceSynthesisRequest(text="hola", voice_id="es-BO-SofiaNeural"))
+
+    assert result.duration_ms == 5000
+    assert result.degraded is False
+
+
+def test_fallback_provider_degrades_to_secondary_when_primary_raises():
+    class BrokenProvider:
+        def synthesize(self, request):
+            raise RuntimeError("edge-tts synthesis failed: network unavailable")
+
+    provider = FallbackVoiceProvider(BrokenProvider(), EstimatingVoiceProvider())
+    result = provider.synthesize(
+        VoiceSynthesisRequest(text="una dos tres", voice_id="es-BO-SofiaNeural")
+    )
+
+    assert result.degraded is True
+    assert result.duration_ms > 0
+
+
+def test_fallback_provider_still_raises_if_the_secondary_also_fails():
+    """Only the primary's failure is swallowed. If even the local,
+    no-network estimating fallback fails, something is deeply wrong and
+    that should propagate rather than be silently swallowed twice."""
+    class AlwaysBroken:
+        def synthesize(self, request):
+            raise RuntimeError("nope")
+
+    provider = FallbackVoiceProvider(AlwaysBroken(), AlwaysBroken())
+
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        provider.synthesize(VoiceSynthesisRequest(text="x", voice_id="v"))
 
 
 def test_estimating_provider_marks_degraded_but_measures():
