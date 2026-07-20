@@ -55,7 +55,7 @@
       {:else if context}
         <div class="flex items-center justify-between text-[13px]">
           <span class="text-ink-secondary">Disponible hoy</span>
-          <span class="font-display font-semibold text-ink">${context.budget_status.remaining_usd.toFixed(2)} / ${context.budget_status.maximum_usd.toFixed(2)}</span>
+          <span class="font-mono font-semibold text-ink">${context.budget_status.remaining_usd.toFixed(2)} / ${context.budget_status.maximum_usd.toFixed(2)}</span>
         </div>
         <div class="mt-2 h-1.5 rounded-full bg-line">
           <div
@@ -74,7 +74,7 @@
           <li class="flex items-center justify-between py-2.5">
             <div>
               <p class="text-[12.5px] text-ink">{provider.label}</p>
-              <p class="mt-0.5 text-[11px] text-ink-tertiary">{provider.envVar}</p>
+              <p class="mt-0.5 font-mono text-[11px] text-ink-tertiary">{provider.envVar}</p>
             </div>
             <Badge tone="neutral">Ver .env</Badge>
           </li>

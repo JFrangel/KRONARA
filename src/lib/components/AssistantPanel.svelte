@@ -38,7 +38,7 @@
     <div class="flex items-center justify-between border-b border-line px-5 py-4">
       <div class="flex items-center gap-2">
         <Icon name="wand" size={16} class="text-purple-400" />
-        <h2 class="font-display text-sm font-semibold text-ink">Pregunta a Kronara</h2>
+        <h2 class="text-sm font-semibold text-ink">Pregunta a Kronara</h2>
       </div>
       <button class="grid h-7 w-7 place-items-center rounded-md text-ink-tertiary hover:bg-surface-hover hover:text-ink" onclick={() => (open = false)} aria-label="Cerrar asistente">
         ✕

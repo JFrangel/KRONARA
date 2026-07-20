@@ -56,8 +56,8 @@
             onclick={() => onNavigate('configuracion')}
             title={collapsed ? channel.label : undefined}
           >
-            <span class="grid h-[17px] w-[17px] shrink-0 place-items-center text-ink-tertiary">
-              <span class="h-1.5 w-1.5 rounded-full bg-success"></span>
+            <span class="grid h-[17px] w-[17px] shrink-0 place-items-center text-ink-tertiary" title="Estado de conexión no verificado">
+              <span class="h-1.5 w-1.5 rounded-full bg-ink-tertiary"></span>
             </span>
             {#if !collapsed}<span class="truncate">{channel.label}</span>{/if}
           </button>
@@ -71,7 +71,7 @@
       <div class="flex items-center justify-between">
         <span class="text-[11px] font-medium tracking-wide text-ink-tertiary">PLAN LOCAL</span>
       </div>
-      <p class="mt-2 font-display text-sm font-semibold text-ink">Herramientas gratuitas</p>
+      <p class="mt-2 text-sm font-semibold text-ink">Herramientas gratuitas</p>
       <p class="mt-1 text-[11.5px] leading-snug text-ink-secondary">SDXL local, Nemotron/Qwen/Kimi gratis, sin costos por episodio.</p>
     </div>
   {/if}
