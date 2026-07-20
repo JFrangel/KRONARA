@@ -218,3 +218,100 @@ def test_v4_duck_gain_default_lands_music_18_to_22_lu_below_narration(tmp_path):
         f"narration={narration_report.integrated_lufs} ducked_music={ducked_report.integrated_lufs} "
         f"delta={lu_below_narration} -- expected 18-22 LU"
     )
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v8_qc_black_frame_detection_is_opt_in_and_catches_a_real_black_clip(tmp_path):
+    ffmpeg = find_ffmpeg("ffmpeg")
+    black_video = tmp_path / "black.mp4"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=black:s=1080x1920:r=10:d=2",
+         "-f", "lavfi", "-i", "sine=frequency=220:duration=2",
+         "-c:v", "libx264", "-c:a", "aac", "-shortest", str(black_video)],
+        capture_output=True, check=True,
+    )
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+
+    default_report = renderer.qc(str(black_video), REEL_9x16)
+    assert default_report.passed  # opt-in: not requested, not checked
+    assert default_report.black_seconds == 0.0
+
+    strict_report = renderer.qc(str(black_video), REEL_9x16, max_black_seconds=0.5)
+    assert strict_report.passed is False
+    assert "black_frames_detected" in strict_report.issues
+    assert strict_report.black_seconds > 1.0
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v8_qc_loudness_range_is_opt_in_and_catches_an_out_of_range_file(tmp_path):
+    ffmpeg = find_ffmpeg("ffmpeg")
+    src = tmp_path / "quiet_tone.wav"
+    video_src = tmp_path / "quiet.mp4"
+    # A very quiet tone (low volume factor) lands far outside a -19/-13 LUFS band.
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "sine=frequency=1000:duration=2",
+         "-af", "volume=0.01", str(src)],
+        capture_output=True, check=True,
+    )
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=black:s=1080x1920:r=10:d=2",
+         "-i", str(src), "-c:v", "libx264", "-c:a", "aac", "-shortest", str(video_src)],
+        capture_output=True, check=True,
+    )
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+
+    default_report = renderer.qc(str(video_src), REEL_9x16)
+    assert default_report.passed  # opt-in: not requested, not checked
+    assert default_report.integrated_lufs is None
+
+    strict_report = renderer.qc(str(video_src), REEL_9x16, loudness_range_lufs=(-19.0, -13.0))
+    assert strict_report.passed is False
+    assert "loudness_out_of_range" in strict_report.issues
+    assert strict_report.integrated_lufs is not None
+    assert strict_report.integrated_lufs < -19.0
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v8_video_loop_shot_composites_alongside_image_shots(tmp_path):
+    """A real moving clip (not a static image) mixed into the same episode
+    as ordinary Ken-Burns image shots: proves build_composition_args()
+    actually branches on asset.kind (-stream_loop + trim/scale/crop for
+    video, -loop 1 + zoompan for images), not just that V6 assigns the
+    label. A 1s source clip deliberately shorter than its 4s shot duration
+    checks the -stream_loop input keeps it looping to fill the gap."""
+    ffmpeg = find_ffmpeg("ffmpeg")
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+
+    image_path = assets_dir / "img.png"
+    _placeholder_png(image_path, width=768, height=1344, color=(40, 40, 80))
+    image_asset = VisualAsset("scn0_a1", "ai_image", str(image_path), 768, 1344)
+
+    clip_path = assets_dir / "clip.mp4"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=1",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip_path)],
+        capture_output=True, check=True,
+    )
+    video_asset = VisualAsset("scn1_video", "video_loop", str(clip_path), 640, 360)
+
+    scn0_shots = plan_shots_for_scene("scn0", 4000, "fast", [image_asset])
+    scn1_shots = plan_shots_for_scene("scn1", 4000, "fast", [video_asset])
+    plan = build_visual_track_plan(scn0_shots + scn1_shots, crossfade_ms=400)
+    assert any(shot.asset.kind == "video_loop" for shot in plan.shots)
+
+    narration_path = tmp_path / "narration.wav"
+    _sine_wav(ffmpeg, narration_path, frequency=220, duration_s=8.0)
+
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+    result = renderer.render_composition(
+        visual_plan=plan,
+        narration_path=str(narration_path),
+        narration_duration_ms=8000,
+        output_path=str(tmp_path / "mixed_sources.mp4"),
+        preset=REEL_9x16,
+    )
+
+    assert result.qc.passed, result.qc.issues
+    assert (result.qc.width, result.qc.height) == (1080, 1920)
+    assert abs(result.qc.duration_seconds - 8.0) < 1.0

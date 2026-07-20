@@ -239,6 +239,32 @@ def zoompan_filter(
     )
 
 
+def video_clip_filter(
+    shot: Shot,
+    *,
+    label_in: str,
+    label_out: str,
+    preset_width: int,
+    preset_height: int,
+    fps: int,
+    source_ms: int,
+) -> str:
+    """Trim+scale+crop+format stage for a ``video_loop`` shot's source clip.
+
+    The input is expected to already be looped (``-stream_loop -1`` on the
+    ffmpeg input, not here) so a clip shorter than ``source_ms`` still fills
+    it; this only ever trims down. Cover-fits the target frame (scale to
+    fill, center-crop the overflow) rather than stretching. No zoompan --
+    unlike a static image shot, a real video clip already carries its own
+    motion."""
+    duration_s = source_ms / 1000
+    return (
+        f"[{label_in}]trim=duration={duration_s:.3f},setpts=PTS-STARTPTS,"
+        f"scale={preset_width}:{preset_height}:force_original_aspect_ratio=increase,"
+        f"crop={preset_width}:{preset_height},fps={fps},format=yuv420p,setsar=1[{label_out}]"
+    )
+
+
 def _pan_expressions(pan: str, frames: int) -> tuple[str, str]:
     center_y = "ih/2-(ih/zoom/2)"
     center_x = "iw/2-(iw/zoom/2)"

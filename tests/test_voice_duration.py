@@ -69,6 +69,37 @@ def test_story_engine_uses_real_measured_duration(tmp_path):
     store.close()
 
 
+def test_measurer_carries_per_scene_audio_refs_in_scene_order():
+    class RefVoiceProvider:
+        def __init__(self):
+            self.calls = 0
+
+        def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
+            self.calls += 1
+            return VoiceSynthesisResult(
+                voice_id=request.voice_id, duration_ms=1000,
+                audio_ref=f"/audio/scene_{self.calls}.mp3",
+            )
+
+    provider = RefVoiceProvider()
+    measurer = SceneDurationMeasurer(provider, voice_id="es-BO-SofiaNeural")
+
+    result = measurer.measure(
+        [type("S", (), {"narration": "uno"}), type("S", (), {"narration": "dos"})]
+    )
+
+    assert result.audio_refs == ("/audio/scene_1.mp3", "/audio/scene_2.mp3")
+
+
+def test_measurer_uses_empty_string_when_provider_writes_no_file():
+    provider = EstimatingVoiceProvider(words_per_minute=150)  # never sets audio_ref
+    measurer = SceneDurationMeasurer(provider, voice_id="es-BO-SofiaNeural")
+
+    result = measurer.measure([type("S", (), {"narration": "una frase"})])
+
+    assert result.audio_refs == ("",)
+
+
 def test_estimating_provider_marks_degraded_but_measures():
     provider = EstimatingVoiceProvider(words_per_minute=150)
     result = provider.synthesize(

@@ -13,6 +13,7 @@ absent.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -20,7 +21,13 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from kronara.audio_mix import DuckingEnvelope, SfxCue, build_mix_filters
-from kronara.composition import VisualTrackPlan, generated_source_ms, xfade_chain, zoompan_filter
+from kronara.composition import (
+    VisualTrackPlan,
+    generated_source_ms,
+    video_clip_filter,
+    xfade_chain,
+    zoompan_filter,
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,8 @@ class QCReport:
     has_audio: bool
     passed: bool
     issues: tuple[str, ...] = ()
+    black_seconds: float = 0.0
+    integrated_lufs: float | None = None
 
 
 @dataclass(frozen=True)
@@ -221,24 +230,32 @@ def build_composition_args(
 
     visual_input_start = next_index
     for shot in visual_plan.shots:
-        args += ["-loop", "1", "-i", shot.asset.path]
+        if shot.asset.kind == "video_loop":
+            # Loop indefinitely so a clip shorter than the shot's generated
+            # source length still fills it; the per-shot filter trims down
+            # to the exact length needed, never pads.
+            args += ["-stream_loop", "-1", "-i", shot.asset.path]
+        else:
+            args += ["-loop", "1", "-i", shot.asset.path]
         next_index += 1
 
     filter_lines: list[str] = []
     shot_labels = [f"v{i}" for i in range(len(visual_plan.shots))]
     for index, shot in enumerate(visual_plan.shots):
         source_ms = generated_source_ms(visual_plan, index)
-        filter_lines.append(
-            zoompan_filter(
-                shot,
-                label_in=f"{visual_input_start + index}:v",
-                label_out=shot_labels[index],
-                preset_width=preset.width,
-                preset_height=preset.height,
-                fps=preset.fps,
-                source_ms=source_ms,
-            )
+        label_in = f"{visual_input_start + index}:v"
+        common = dict(
+            label_in=label_in,
+            label_out=shot_labels[index],
+            preset_width=preset.width,
+            preset_height=preset.height,
+            fps=preset.fps,
+            source_ms=source_ms,
         )
+        if shot.asset.kind == "video_loop":
+            filter_lines.append(video_clip_filter(shot, **common))
+        else:
+            filter_lines.append(zoompan_filter(shot, **common))
     xfade_lines = xfade_chain(visual_plan, shot_labels)
     filter_lines.extend(xfade_lines)
     video_label = "vout" if xfade_lines else shot_labels[0]
@@ -440,7 +457,23 @@ class FfmpegRenderer:
         completed = subprocess.run(args, capture_output=True, text=True, timeout=60)
         return json.loads(completed.stdout or "{}")
 
-    def qc(self, path: str, preset: RenderPreset) -> QCReport:
+    def qc(
+        self,
+        path: str,
+        preset: RenderPreset,
+        *,
+        max_black_seconds: float | None = None,
+        loudness_range_lufs: tuple[float, float] | None = None,
+        timeout: int = 120,
+    ) -> QCReport:
+        """Both extended checks are opt-in (None skips them) so the two internal
+        callers -- ``render()``'s intentional solid-color background and
+        ``render_composition()``'s pre-loudnorm pass -- keep their existing,
+        already-tested behavior. The production pipeline (V8) requests both
+        explicitly on the final file: ``max_black_seconds`` to catch a shot
+        that somehow rendered as a black frame despite V1's per-image check,
+        ``loudness_range_lufs`` to confirm normalize_loudness() actually took
+        (a file QC'd before normalization has no target to compare against)."""
         data = self.probe(path)
         streams = data.get("streams", [])
         video = next((s for s in streams if s.get("codec_type") == "video"), {})
@@ -448,6 +481,8 @@ class FfmpegRenderer:
         width = int(video.get("width", 0))
         height = int(video.get("height", 0))
         duration = float(data.get("format", {}).get("duration", 0.0))
+        black_seconds = self._detect_black(path, timeout=timeout) if max_black_seconds is not None else 0.0
+        integrated_lufs = None
         issues: list[str] = []
         if (width, height) != (preset.width, preset.height):
             issues.append("resolution_mismatch")
@@ -455,6 +490,13 @@ class FfmpegRenderer:
             issues.append("missing_audio")
         if duration <= 0:
             issues.append("zero_duration")
+        if max_black_seconds is not None and black_seconds > max_black_seconds:
+            issues.append("black_frames_detected")
+        if loudness_range_lufs is not None and has_audio:
+            integrated_lufs = self.measure_loudness(path, timeout=timeout).integrated_lufs
+            low, high = loudness_range_lufs
+            if not (low <= integrated_lufs <= high):
+                issues.append("loudness_out_of_range")
         return QCReport(
             width=width,
             height=height,
@@ -462,4 +504,19 @@ class FfmpegRenderer:
             has_audio=has_audio,
             passed=not issues,
             issues=tuple(issues),
+            black_seconds=black_seconds,
+            integrated_lufs=integrated_lufs,
+        )
+
+    def _detect_black(self, path: str, *, timeout: int) -> float:
+        result = subprocess.run(
+            [
+                self.ffmpeg, "-i", path,
+                "-vf", "blackdetect=d=0.1:pic_th=0.98",
+                "-an", "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return sum(
+            float(match) for match in re.findall(r"black_duration:([\d.]+)", result.stderr)
         )

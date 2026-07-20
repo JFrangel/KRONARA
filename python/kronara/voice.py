@@ -233,6 +233,12 @@ class MeasuredDuration:
     per_scene_ms: tuple[int, ...]
     word_boundaries: tuple[WordBoundary, ...] = field(default_factory=tuple)
     degraded: bool = False
+    # Per-scene audio file paths, same order as per_scene_ms (empty string for
+    # a scene whose provider didn't write a file, e.g. the estimating
+    # fallback). The video pipeline concatenates these into one narration
+    # track rather than re-synthesizing -- reusing the exact audio this
+    # duration was measured from keeps word_boundaries/SFX timing accurate.
+    audio_refs: tuple[str, ...] = field(default_factory=tuple)
 
 
 class SceneDurationMeasurer:
@@ -251,6 +257,7 @@ class SceneDurationMeasurer:
 
     def measure(self, scenes) -> MeasuredDuration:
         per_scene: list[int] = []
+        audio_refs: list[str] = []
         boundaries: list[WordBoundary] = []
         degraded = False
         offset = 0
@@ -260,6 +267,7 @@ class SceneDurationMeasurer:
                 VoiceSynthesisRequest(text=text, voice_id=self.voice_id, rate=self.rate, pitch=self.pitch)
             )
             per_scene.append(result.duration_ms)
+            audio_refs.append(result.audio_ref or "")
             degraded = degraded or result.degraded
             for boundary in result.word_boundaries:
                 boundaries.append(
@@ -269,6 +277,7 @@ class SceneDurationMeasurer:
         total_ms = sum(per_scene)
         return MeasuredDuration(
             total_seconds=total_ms / 1000.0,
+            audio_refs=tuple(audio_refs),
             per_scene_ms=tuple(per_scene),
             word_boundaries=tuple(boundaries),
             degraded=degraded,
