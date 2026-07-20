@@ -21,12 +21,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
+import time  # noqa: E402
+
 import httpx  # noqa: E402
 
 from kronara.graph_memory import KronaraGraph  # noqa: E402
 from kronara.narrative_craft import LiteraryCraftEvaluator  # noqa: E402
+from kronara.reddit_client import (  # noqa: E402
+    RedditAccessPolicy,
+    RedditClient,
+    RedditCredentials,
+)
 from kronara.series import SeriesCanonBuilder, StoryPart  # noqa: E402
 from kronara.voice import EdgeTtsVoiceProvider, VoiceSynthesisRequest  # noqa: E402
+
+# The channel's target subreddits (inspiration only; the pipeline uses the
+# abstract pattern of the title, never the source body).
+TARGET_SUBREDDITS = [
+    "AmItheAsshole",
+    "ProRevenge",
+    "TrueScaryStories",
+    "confessions",
+    "relationship_advice",
+    "MaliciousCompliance",
+]
 
 CREATIVE_SYSTEM = (
     "Eres Kronara: narradora en español con oido de novelista premiado. Escribes prosa "
@@ -122,7 +140,39 @@ def complete(env: dict, system: str, user: str, *, min_narration_words: int = 45
     raise RuntimeError(f"all models failed: {last_error}")
 
 
-def part_prompt(part_number: int, is_final: bool, canon_block: str) -> str:
+def resolve_trend(env: dict) -> tuple[str, str]:
+    """Real Reddit trend via OAuth when configured; else the abstract theme.
+
+    Uses the app-only client_credentials grant (no password). Only the abstract
+    title pattern is used; the source body is never copied.
+    """
+    cid = env.get("KRONARA_REDDIT_CLIENT_ID")
+    sec = env.get("KRONARA_REDDIT_CLIENT_SECRET")
+    ua = env.get("KRONARA_REDDIT_USER_AGENT")
+    contract = env.get("KRONARA_REDDIT_CONTRACT_REFERENCE")
+    enabled = env.get("KRONARA_REDDIT_ENABLED", "false").lower() == "true"
+    if not (enabled and cid and sec and ua and contract):
+        return ABSTRACT_THEME, "tema abstracto (Reddit sin credenciales OAuth)"
+    client = RedditClient(
+        RedditCredentials(cid, sec, ua),
+        policy=RedditAccessPolicy.approved(contract),
+    )
+    best = None
+    for index, sub in enumerate(TARGET_SUBREDDITS):
+        if index:
+            time.sleep(2)  # respect Reddit rate limits
+        try:
+            for signal in client.hot_signals(sub, limit=15):
+                if best is None or signal.velocity > best.velocity:
+                    best = signal
+        except Exception:  # noqa: BLE001 - rate limit / transient: keep what we have
+            continue
+    if best is None:
+        return ABSTRACT_THEME, "tema abstracto (Reddit no respondió)"
+    return best.theme_hint, f"Reddit real (velocity {best.velocity:.0f})"
+
+
+def part_prompt(part_number: int, is_final: bool, canon_block: str, theme: str) -> str:
     role = "la PARTE FINAL" if is_final else f"la PARTE {part_number} de 3"
     close = (
         "Cierra la historia con una consecuencia proporcional (sin cliffhanger)."
@@ -136,7 +186,7 @@ def part_prompt(part_number: int, is_final: bool, canon_block: str) -> str:
         else ""
     )
     return (
-        f"Tema abstracto (patron, no copiar): {ABSTRACT_THEME}.\n"
+        f"Tema abstracto (patron, no copiar): {theme}.\n"
         f"Escribe {role} de una historia serializada para video vertical, en espanol latino, "
         f"~95 palabras (unos 30 segundos narrados a ritmo natural). {keep}{close}{canon}\n"
         'Responde SOLO este JSON: {"title": "...", "narration": "...", '
@@ -152,10 +202,11 @@ def main() -> int:
     craft = LiteraryCraftEvaluator()
     series_id = "demo-herencia"
 
+    theme, trend_source = resolve_trend(env)
     print("=" * 72)
     print("KRONARA — demo: historia de 90s en 3 partes (modelos gratuitos)")
-    print("Trend Reddit: NO disponible (requiere OAuth); se usa un tema abstracto.")
-    print("Tema abstracto:", ABSTRACT_THEME)
+    print("Fuente de tendencia:", trend_source)
+    print("Tema/patron:", theme[:120])
     print("=" * 72)
 
     base = 1_800_000_000
@@ -165,7 +216,7 @@ def main() -> int:
         # Query canon AFTER prior parts' ingest time so their facts are visible.
         t = base + part_number * 100
         canon_block = builder.context_for_part(series_id, part_number, now=t).context_block
-        data = complete(env, CREATIVE_SYSTEM, part_prompt(part_number, is_final, canon_block))
+        data = complete(env, CREATIVE_SYSTEM, part_prompt(part_number, is_final, canon_block, theme))
         narration = str(data["narration"]).strip()
 
         # Real duration via edge-tts.
