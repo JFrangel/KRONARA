@@ -18,6 +18,10 @@ dependencies = [
 media = ["edge-tts>=7,<8", "faster-whisper>=1.2,<2"]
 rag = ["sentence-transformers>=5,<6"]
 rag-onnx = ["fastembed>=0.4"]
+# Local Stable Diffusion image generation (V1+). Isolated from rag/media so
+# fast tests never pull multi-GB torch wheels. Install torch separately with
+# the matching CUDA index (see docs/roadmap) for GPU acceleration.
+visual = ["diffusers>=0.31", "accelerate>=1.0", "pillow>=10", "safetensors>=0.4", "huggingface_hub>=0.25"]
 dev = ["pytest>=9,<10", "pyinstaller>=6,<7"]
 
 [tool.pytest.ini_options]

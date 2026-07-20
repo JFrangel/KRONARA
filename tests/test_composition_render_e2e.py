@@ -1,0 +1,174 @@
+"""V0 milestone: the composition spine proven end-to-end with zero heavyweight
+dependencies — Pillow-drawn placeholder shots + ffmpeg `sine=` tones standing
+in for narration/music/SFX (the same trick test_render.py already uses).
+Produces one real MP4: sequenced animated shots, ducked music, timed SFX,
+burned subtitles, passing QC — with no torch, no diffusers, no API keys."""
+
+from __future__ import annotations
+
+import subprocess
+
+import pytest
+
+from kronara.audio_mix import SfxCue, match_sfx_cues
+from kronara.composition import (
+    VisualAsset,
+    build_visual_track_plan,
+    plan_shots_for_scene,
+    tier_for_scene,
+)
+from kronara.render import REEL_9x16, FfmpegRenderer, build_srt, cues_from_word_boundaries, find_ffmpeg
+
+
+class _Boundary:
+    def __init__(self, word, offset_ms, duration_ms):
+        self.word = word
+        self.offset_ms = offset_ms
+        self.duration_ms = duration_ms
+
+
+def _placeholder_png(path, *, width, height, color):
+    try:
+        from PIL import Image
+    except ImportError:
+        pytest.skip("Pillow not installed")
+    Image.new("RGB", (width, height), color).save(path)
+
+
+def _sine_wav(ffmpeg, path, *, frequency, duration_s):
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", f"sine=frequency={frequency}:duration={duration_s}", str(path)],
+        capture_output=True, check=True,
+    )
+
+
+FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v0_placeholder_pipeline_produces_a_real_composed_reel(tmp_path):
+    ffmpeg = find_ffmpeg("ffmpeg")
+
+    # --- fixture data: a 3-scene story with real-shaped per-scene timing ---
+    per_scene_ms = (8000, 7000, 6000)  # hook, context, climax-ish close
+    total_ms = sum(per_scene_ms)
+
+    # word boundaries across the whole track (global offsets, matching how
+    # SceneDurationMeasurer accumulates them across scenes in production)
+    word_boundaries = [
+        _Boundary("Mara", 200, 300),
+        _Boundary("abre", 600, 250),
+        _Boundary("la", 900, 100),
+        _Boundary("puerta", 1050, 400),
+        _Boundary("y", 1500, 100),
+        _Boundary("escucha", 1650, 400),
+        _Boundary("pasos", 9200, 350),
+        _Boundary("en", 9600, 100),
+        _Boundary("el", 9700, 100),
+        _Boundary("pasillo", 9850, 500),
+    ]
+
+    # --- shot plan: one scene gets premium tier (climax), others fast ---
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    palette = [(30, 30, 60), (60, 30, 30), (30, 60, 40), (50, 50, 20)]
+    all_shots = []
+    for scene_index, duration_ms in enumerate(per_scene_ms):
+        tier = tier_for_scene(scene_index, per_scene_ms)
+        scene_assets = []
+        for i in range(2):
+            color = palette[(scene_index * 2 + i) % len(palette)]
+            path = assets_dir / f"scn{scene_index}_a{i}.png"
+            _placeholder_png(path, width=768, height=1344, color=color)
+            scene_assets.append(VisualAsset(f"scn{scene_index}_a{i}", "placeholder", str(path), 768, 1344))
+        all_shots.extend(plan_shots_for_scene(f"scn{scene_index}", duration_ms, tier, scene_assets))
+    plan = build_visual_track_plan(all_shots, crossfade_ms=400)
+    assert plan.total_duration_ms == total_ms
+    # the climax scene (index 2, last -> forced premium) should show larger zoom
+    climax_shots = [s for s in plan.shots if s.scene_id == "scn2"]
+    assert all(s.tier == "premium" for s in climax_shots)
+
+    # --- audio fixtures: narration + music + one sfx clip (real ffmpeg tones) ---
+    narration_path = tmp_path / "narration.wav"
+    music_path = tmp_path / "music.wav"
+    footsteps_path = tmp_path / "footsteps.wav"
+    _sine_wav(ffmpeg, narration_path, frequency=220, duration_s=total_ms / 1000)
+    _sine_wav(ffmpeg, music_path, frequency=440, duration_s=total_ms / 1000)
+    _sine_wav(ffmpeg, footsteps_path, frequency=110, duration_s=0.3)
+
+    sfx_cues = match_sfx_cues(word_boundaries)
+    assert any(cue.tag == "door_creak" for cue in sfx_cues)
+    assert any(cue.tag == "footsteps" for cue in sfx_cues)
+    # Only seed an asset for footsteps -> door_creak cue should be silently
+    # dropped by build_mix_filters (missing-asset degrade, not an error).
+    sfx_paths = {"footsteps": str(footsteps_path)}
+
+    # --- subtitles from the same word boundaries (already-working v0.6 path) ---
+    srt_path = tmp_path / "subs.srt"
+    cues = cues_from_word_boundaries(word_boundaries)
+    srt_path.write_text(build_srt(cues), encoding="utf-8")
+
+    # --- render the full composition ---
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+    result = renderer.render_composition(
+        visual_plan=plan,
+        narration_path=str(narration_path),
+        narration_duration_ms=total_ms,
+        output_path=str(tmp_path / "episode_v0.mp4"),
+        preset=REEL_9x16,
+        music_path=str(music_path),
+        sfx_cues=sfx_cues,
+        sfx_paths=sfx_paths,
+        subtitle_path=str(srt_path),
+    )
+
+    assert result.qc.passed, result.qc.issues
+    assert (result.qc.width, result.qc.height) == (1080, 1920)
+    assert result.qc.has_audio is True
+    # allow generous slack: xfade/loop timing on placeholder assets, not exact-frame
+    assert abs(result.qc.duration_seconds - total_ms / 1000) < 1.0
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v0_composition_without_music_still_renders(tmp_path):
+    """No-music path: audio map must be a raw stream selector, not a filter
+    label, and the render must still succeed."""
+    ffmpeg = find_ffmpeg("ffmpeg")
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    asset_path = assets_dir / "a.png"
+    _placeholder_png(asset_path, width=768, height=1344, color=(10, 10, 10))
+    asset = VisualAsset("a1", "placeholder", str(asset_path), 768, 1344)
+    shots = plan_shots_for_scene("scn0", 4000, "fast", [asset])
+    plan = build_visual_track_plan(shots, crossfade_ms=400)
+
+    narration_path = tmp_path / "narration.wav"
+    _sine_wav(ffmpeg, narration_path, frequency=220, duration_s=4.0)
+
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+    result = renderer.render_composition(
+        visual_plan=plan,
+        narration_path=str(narration_path),
+        narration_duration_ms=4000,
+        output_path=str(tmp_path / "episode_no_music.mp4"),
+        preset=REEL_9x16,
+    )
+    assert result.qc.passed, result.qc.issues
+    assert result.qc.has_audio is True
+
+
+@pytest.mark.skipif(FFMPEG_MISSING, reason="ffmpeg not installed")
+def test_v0_loudness_normalization_two_pass(tmp_path):
+    ffmpeg = find_ffmpeg("ffmpeg")
+    src = tmp_path / "tone.wav"
+    _sine_wav(ffmpeg, src, frequency=1000, duration_s=2.0)
+    # wrap the tone in a trivial video so normalize_loudness has a real file
+    video_src = tmp_path / "tone.mp4"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=10:d=2",
+         "-i", str(src), "-c:v", "libx264", "-c:a", "aac", "-shortest", str(video_src)],
+        capture_output=True, check=True,
+    )
+    renderer = FfmpegRenderer(ffmpeg=ffmpeg)
+    report = renderer.normalize_loudness(str(video_src), str(tmp_path / "normalized.mp4"))
+    assert -30.0 < report.integrated_lufs < 0.0
