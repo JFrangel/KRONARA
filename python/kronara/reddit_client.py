@@ -13,6 +13,11 @@ class RedditCredentials:
     client_id: str
     client_secret: str
     user_agent: str
+    # Optional: enables the OAuth "password" grant (keeps a user session) for a
+    # script app. When absent, the client uses app-only client_credentials
+    # (read-only, no password), which is enough to read public subreddits.
+    username: str | None = None
+    password: str | None = None
 
 
 @dataclass(frozen=True)
@@ -101,12 +106,21 @@ class RedditClient:
         now = self.clock()
         if self._token and now < self._token_expires_at:
             return self._token
+        if self.credentials.username and self.credentials.password:
+            # Password grant: authenticate as the user and keep the session.
+            grant = {
+                "grant_type": "password",
+                "username": self.credentials.username,
+                "password": self.credentials.password,
+            }
+        else:
+            grant = {"grant_type": "client_credentials"}
         response = self.http.request(
             "POST",
             self.TOKEN_URL,
             basic_auth=(self.credentials.client_id, self.credentials.client_secret),
             headers={"User-Agent": self.credentials.user_agent},
-            data={"grant_type": "client_credentials"},
+            data=grant,
         )
         if response["status"] != 200:
             raise RuntimeError(f"Reddit OAuth failed with status {response['status']}")

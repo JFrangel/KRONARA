@@ -61,6 +61,48 @@ def test_reddit_client_uses_oauth_and_returns_abstract_signals():
     assert http.calls[1][2]["headers"]["Authorization"] == "Bearer token"
 
 
+def test_reddit_client_uses_password_grant_when_user_credentials_present():
+    http = FakeHttp(
+        [
+            {"status": 200, "json": {"access_token": "usertoken", "expires_in": 3600}},
+            {"status": 200, "json": {"data": {"children": []}}, "headers": {}},
+        ]
+    )
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent", username="kronara45", password="s3cr3t"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+
+    client.hot_signals("stories")
+
+    token_request = http.calls[0]
+    assert token_request[2]["data"]["grant_type"] == "password"
+    assert token_request[2]["data"]["username"] == "kronara45"
+    assert token_request[2]["data"]["password"] == "s3cr3t"
+    # basic auth still carries the app client_id/secret (required by Reddit).
+    assert token_request[2]["basic_auth"] == ("client", "secret")
+    assert http.calls[1][2]["headers"]["Authorization"] == "Bearer usertoken"
+
+
+def test_reddit_client_defaults_to_app_only_grant_without_user_credentials():
+    http = FakeHttp(
+        [
+            {"status": 200, "json": {"access_token": "apptoken", "expires_in": 3600}},
+            {"status": 200, "json": {"data": {"children": []}}, "headers": {}},
+        ]
+    )
+    client = RedditClient(
+        RedditCredentials("client", "secret", "agent"),
+        http=http,
+        clock=lambda: 200,
+        policy=RedditAccessPolicy.approved("reddit-contract-1"),
+    )
+    client.hot_signals("stories")
+    assert http.calls[0][2]["data"] == {"grant_type": "client_credentials"}
+
+
 def test_reddit_client_surfaces_retry_after_on_rate_limit():
     http = FakeHttp(
         [

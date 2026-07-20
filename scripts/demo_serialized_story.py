@@ -27,11 +27,8 @@ import httpx  # noqa: E402
 
 from kronara.graph_memory import KronaraGraph  # noqa: E402
 from kronara.narrative_craft import LiteraryCraftEvaluator  # noqa: E402
-from kronara.reddit_client import (  # noqa: E402
-    RedditAccessPolicy,
-    RedditClient,
-    RedditCredentials,
-)
+from kronara.opportunities import OpportunityStore, StoryLedger  # noqa: E402
+from kronara.reddit_rss import RedditRssReader  # noqa: E402
 from kronara.series import SeriesCanonBuilder, StoryPart  # noqa: E402
 from kronara.voice import EdgeTtsVoiceProvider, VoiceSynthesisRequest  # noqa: E402
 
@@ -141,35 +138,27 @@ def complete(env: dict, system: str, user: str, *, min_narration_words: int = 45
 
 
 def resolve_trend(env: dict) -> tuple[str, str]:
-    """Real Reddit trend via OAuth when configured; else the abstract theme.
+    """Pull an unused opportunity from the harvested queue (no credentials).
 
-    Uses the app-only client_credentials grant (no password). Only the abstract
-    title pattern is used; the source body is never copied.
+    Reads Reddit via public RSS (no app/login/password), saves the harvest, and
+    dispenses one unused post at a time so the agent never reuses the same seed
+    (anti-repeat). Harvests live only when the queue is empty.
     """
-    cid = env.get("KRONARA_REDDIT_CLIENT_ID")
-    sec = env.get("KRONARA_REDDIT_CLIENT_SECRET")
-    ua = env.get("KRONARA_REDDIT_USER_AGENT")
-    contract = env.get("KRONARA_REDDIT_CONTRACT_REFERENCE")
-    enabled = env.get("KRONARA_REDDIT_ENABLED", "false").lower() == "true"
-    if not (enabled and cid and sec and ua and contract):
-        return ABSTRACT_THEME, "tema abstracto (Reddit sin credenciales OAuth)"
-    client = RedditClient(
-        RedditCredentials(cid, sec, ua),
-        policy=RedditAccessPolicy.approved(contract),
-    )
-    best = None
-    for index, sub in enumerate(TARGET_SUBREDDITS):
-        if index:
-            time.sleep(2)  # respect Reddit rate limits
+    db = Path(__file__).resolve().parents[1] / ".kronara" / "opportunities.db"
+    store = OpportunityStore(db).initialize()
+    if store.count("new") == 0:
         try:
-            for signal in client.hot_signals(sub, limit=15):
-                if best is None or signal.velocity > best.velocity:
-                    best = signal
-        except Exception:  # noqa: BLE001 - rate limit / transient: keep what we have
-            continue
-    if best is None:
-        return ABSTRACT_THEME, "tema abstracto (Reddit no respondió)"
-    return best.theme_hint, f"Reddit real (velocity {best.velocity:.0f})"
+            posts = RedditRssReader(
+                user_agent="windows:kronara45:v0.6 (public rss)"
+            ).trending(TARGET_SUBREDDITS, max_subs=2, per_sub=8)
+            store.harvest(posts, now=1_800_000_000)
+        except Exception:  # noqa: BLE001 - offline / blocked: fall back
+            pass
+    oppo = store.take_next(now=1_800_000_000)
+    store.close()
+    if oppo is not None:
+        return oppo.theme_hint, f"Reddit real (RSS) r/{oppo.subreddit}"
+    return ABSTRACT_THEME, "tema abstracto (cola vacía)"
 
 
 def part_prompt(part_number: int, is_final: bool, canon_block: str, theme: str) -> str:
@@ -211,6 +200,7 @@ def main() -> int:
 
     base = 1_800_000_000
     total_ms = 0
+    story_texts: list[str] = []
     for part_number in (1, 2, 3):
         is_final = part_number == 3
         # Query canon AFTER prior parts' ingest time so their facts are visible.
@@ -218,6 +208,7 @@ def main() -> int:
         canon_block = builder.context_for_part(series_id, part_number, now=t).context_block
         data = complete(env, CREATIVE_SYSTEM, part_prompt(part_number, is_final, canon_block, theme))
         narration = str(data["narration"]).strip()
+        story_texts.append(narration)
 
         # Real duration via edge-tts.
         try:
@@ -256,9 +247,24 @@ def main() -> int:
             f"| clichés={report.cliche_count} | antipatrones={list(report.antipatterns)}"
         )
 
+    # Anti-repetition: record this story so future runs stay authentic
+    # (series-aware: later parts of THIS series are never treated as repeats).
+    ledger = StoryLedger(
+        Path(__file__).resolve().parents[1] / ".kronara" / "story_ledger.db"
+    ).initialize()
+    full_text = " ".join(story_texts)
+    was_repeat = ledger.is_repeat(full_text, series_id=series_id)
+    ledger.record(series_id, full_text, series_id=series_id, now=base)
+    ledger_total = ledger.count()
+    ledger.close()
+
     canon = graph.canon(series_id)
     print("\n" + "=" * 72)
     print(f"TOTAL medido: {total_ms/1000:.1f}s (objetivo ~90s)")
+    print(
+        f"Anti-repeticion: {'REPETIA una serie previa' if was_repeat else 'historia autentica (registrada)'}"
+        f" | historias en ledger: {ledger_total}"
+    )
     print("CANON compartido entre las 3 partes:")
     print("  personajes:", list(dict.fromkeys(e.name for e in canon.entities if e.entity_type == "character")))
     print("  hechos:", [e.name for e in canon.entities if e.entity_type == "fact"][:6])
