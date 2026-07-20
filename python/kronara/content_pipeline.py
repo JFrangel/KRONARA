@@ -139,6 +139,8 @@ class ProductionContentPipeline:
         model_registry: ModelCapabilityRegistryV2,
         artifact_root: Path,
         graph: "KronaraGraph | None" = None,
+        voice_provider: "object | None" = None,
+        voice_id: str = "es-BO-SofiaNeural",
     ):
         self.authority = authority
         self.store = store
@@ -147,6 +149,13 @@ class ProductionContentPipeline:
         self.artifacts = ArtifactStore(artifact_root)
         # Optional bitemporal knowledge graph for serialized (multi-part) stories.
         self.graph = graph
+        # Optional real-voice duration: when a provider is supplied the story
+        # engine measures narration length instead of estimating it.
+        self._duration_measurer = None
+        if voice_provider is not None:
+            from kronara.voice import SceneDurationMeasurer
+
+            self._duration_measurer = SceneDurationMeasurer(voice_provider, voice_id=voice_id)
 
     def run(self, params: dict[str, Any]) -> dict[str, Any]:
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
@@ -277,6 +286,7 @@ class ProductionContentPipeline:
             store=self.store,
             generator=generator,
             critic=RoutedIndependentCritic(router, generator=generator),
+            duration_measurer=self._duration_measurer,
         ).run(brief)
         if result.status != "completed" or result.script is None:
             return {

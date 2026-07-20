@@ -78,6 +78,32 @@ def test_estimating_provider_marks_degraded_but_measures():
     assert result.duration_ms > 0
 
 
+def test_edge_tts_live_measures_real_duration(tmp_path):
+    """Live check: real edge-tts synthesis yields a plausible measured duration.
+
+    Skips cleanly when edge-tts or the network is unavailable so CI stays green.
+    """
+    import pytest
+
+    pytest.importorskip("edge_tts")
+    from kronara.voice import EdgeTtsVoiceProvider
+
+    provider = EdgeTtsVoiceProvider(audio_dir=str(tmp_path / "audio"))
+    request = VoiceSynthesisRequest(
+        text="Mara escucha el audio incompleto y decide restaurarlo esa misma noche.",
+        voice_id="es-BO-SofiaNeural",
+    )
+    try:
+        result = provider.synthesize(request)
+    except RuntimeError as error:
+        pytest.skip(f"edge-tts unavailable: {error}")
+
+    assert result.degraded is False
+    assert result.duration_ms > 1000  # a real sentence lasts more than a second
+    assert len(result.word_boundaries) >= 1  # word- or sentence-level, version dependent
+    assert result.audio_ref is not None
+
+
 def test_authority_voice_provider_caches(tmp_path):
     class OneShotAuthority:
         def __init__(self):

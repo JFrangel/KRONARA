@@ -125,6 +125,94 @@ class AuthorityVoiceProvider:
         return result
 
 
+class EdgeTtsVoiceProvider:
+    """Real synthesis via the Microsoft Edge neural voices (``edge-tts`` library).
+
+    Uses the library's ``WordBoundary`` events for true per-word timings and a
+    real duration (the end of the last word). Requires the optional ``edge-tts``
+    dependency and network access; callers should treat ``ImportError`` /
+    ``RuntimeError`` as "degrade to the estimate". Secret-free (the endpoint needs
+    no credential), so it is safe to run in-process.
+    """
+
+    # edge-tts offsets/durations are in 100-nanosecond ticks.
+    _TICKS_PER_MS = 10_000
+
+    def __init__(self, *, audio_dir: "str | None" = None):
+        self.audio_dir = audio_dir
+
+    def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
+        import asyncio
+
+        try:
+            import edge_tts
+        except ImportError as error:  # pragma: no cover - environment dependent
+            raise RuntimeError("edge-tts is not installed") from error
+
+        def _pct(value: float, unit: str) -> str:
+            amount = round(value * 100)
+            sign = "+" if amount >= 0 else ""
+            return f"{sign}{amount}{unit}"
+
+        async def _run() -> tuple[bytes, list[WordBoundary]]:
+            # Prefer word-level timings; fall back to whatever boundary the
+            # installed edge-tts version supports (older ones only emit sentences).
+            try:
+                communicate = edge_tts.Communicate(
+                    request.text,
+                    request.voice_id,
+                    rate=_pct(request.rate, "%"),
+                    pitch=_pct(request.pitch, "Hz"),
+                    boundary="WordBoundary",
+                )
+            except TypeError:
+                communicate = edge_tts.Communicate(
+                    request.text,
+                    request.voice_id,
+                    rate=_pct(request.rate, "%"),
+                    pitch=_pct(request.pitch, "Hz"),
+                )
+            audio = bytearray()
+            boundaries: list[WordBoundary] = []
+            async for chunk in communicate.stream():
+                kind = chunk.get("type")
+                if kind == "audio":
+                    audio.extend(chunk["data"])
+                elif isinstance(kind, str) and kind.endswith("Boundary"):
+                    boundaries.append(
+                        WordBoundary(
+                            word=str(chunk.get("text", "")),
+                            offset_ms=int(chunk["offset"] / self._TICKS_PER_MS),
+                            duration_ms=int(chunk["duration"] / self._TICKS_PER_MS),
+                        )
+                    )
+            return bytes(audio), boundaries
+
+        try:
+            audio, boundaries = asyncio.run(_run())
+        except Exception as error:  # network / voice errors -> caller degrades
+            raise RuntimeError(f"edge-tts synthesis failed: {type(error).__name__}") from error
+
+        duration_ms = (
+            max(b.offset_ms + b.duration_ms for b in boundaries) if boundaries else 0
+        )
+        audio_ref = None
+        if self.audio_dir and audio:
+            import os
+
+            os.makedirs(self.audio_dir, exist_ok=True)
+            path = os.path.join(self.audio_dir, f"{request.cache_key()}.mp3")
+            with open(path, "wb") as handle:
+                handle.write(audio)
+            audio_ref = path
+        return VoiceSynthesisResult(
+            voice_id=request.voice_id,
+            duration_ms=duration_ms,
+            audio_ref=audio_ref,
+            word_boundaries=tuple(boundaries),
+        )
+
+
 class EstimatingVoiceProvider:
     """No-network fallback: duration from a spoken words-per-minute rate."""
 
