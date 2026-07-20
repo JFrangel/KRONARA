@@ -8,6 +8,7 @@
   import Episodios from './lib/views/Episodios.svelte';
   import Calendario from './lib/views/Calendario.svelte';
   import Estudio from './lib/views/Estudio.svelte';
+  import Configuracion from './lib/views/Configuracion.svelte';
   import StubView from './lib/views/StubView.svelte';
   import { createControlState } from './lib/control-state.js';
   import { createOperationsState } from './lib/operations-state.js';
@@ -71,6 +72,8 @@
         <Calendario />
       {:else if activeView === 'estudio'}
         <Estudio bind:operations connection={operations.connection} />
+      {:else if activeView === 'configuracion'}
+        <Configuracion />
       {:else}
         <StubView icon={VIEW_META[activeView]?.icon} title={VIEW_META[activeView]?.title} description={VIEW_META[activeView]?.description} />
       {/if}
