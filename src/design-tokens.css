@@ -1,0 +1,32 @@
+/* Design tokens for Kronara Studio -- extracted from the existing styles.css
+   palette (already dark/purple, consistent with the reference mockups) plus
+   the additional surface/status tones the full 11-section UI needs. Mapped
+   into Tailwind v4's @theme so every token is also a utility class
+   (bg-surface, text-ink-secondary, border-line, etc). */
+
+@theme {
+  --color-bg: #090b12;
+  --color-surface: #11141d;
+  --color-surface-inset: #0d1018;
+  --color-surface-hover: #171b26;
+
+  --color-line: #242836;
+  --color-line-subtle: #1a1d29;
+
+  --color-purple-300: #c4b9ef;
+  --color-purple-400: #9f83ff;
+  --color-purple-500: #7b5cff;
+  --color-purple-600: #6547e0;
+
+  --color-ink: #edf0f7;
+  --color-ink-secondary: #9299aa;
+  --color-ink-tertiary: #697389;
+
+  --color-success: #52c69a;
+  --color-error: #ed496e;
+  --color-warning: #e8a13c;
+  --color-info: #5b8def;
+
+  --font-sans: "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+}
