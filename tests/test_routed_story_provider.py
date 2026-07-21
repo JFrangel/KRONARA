@@ -19,7 +19,11 @@ class FakeAuthority:
             "qwen/qwen3-235b-a22b": "healthy",
             "moonshotai/kimi-k2": "healthy",
             "nvidia/nemotron-3-super-120b-a12b:free": "healthy",
+            "nvidia/nemotron-3-ultra-550b-a55b:free": "healthy",
             "tencent/hy3:free": "healthy",
+            "openai/gpt-oss-120b": "healthy",
+            "llama-3.3-70b-versatile": "healthy",
+            "qwen/qwen3.6-27b": "healthy",
         }
 
     def invoke(self, tool_id, arguments):
@@ -116,7 +120,14 @@ def router(authority):
     return AuthorityModelRouter(authority=authority, registry=registry)
 
 
-def test_story_provider_uses_hy3_inspiration_then_qwen_with_nemotron_fallback():
+def test_story_provider_uses_hy3_inspiration_then_groq_first_with_qwen_fallback():
+    """Groq's gpt-oss-120b leads creative_primary now, not qwen: a real run
+    showed qwen (via OpenRouter) doesn't reliably honor strict structured
+    output for this task, producing valid-but-wrong-shaped JSON repeatedly,
+    while Groq is both faster and (being OpenAI's own architecture, the
+    originator of structured outputs) more likely to comply. qwen stays in
+    the chain -- when it does comply, its prose quality was excellent -- just
+    no longer first."""
     authority = FakeAuthority()
     provider = RoutedStoryProvider(router(authority))
 
@@ -125,12 +136,17 @@ def test_story_provider_uses_hy3_inspiration_then_qwen_with_nemotron_fallback():
     completion_calls = [args for tool, args in authority.calls if tool == "model.complete"]
     assert len(concepts) == 3
     assert completion_calls[0]["candidates"][0]["model_id"] == "tencent/hy3:free"
-    assert completion_calls[1]["candidates"][0]["model_id"] == "qwen/qwen3-235b-a22b"
+    assert completion_calls[1]["candidates"][0]["model_id"] == "openai/gpt-oss-120b"
+    assert completion_calls[1]["candidates"][0]["provider"] == "groq"
     assert any(
-        item["model_id"] == "nvidia/nemotron-3-super-120b-a12b:free"
+        item["model_id"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
         for item in completion_calls[1]["candidates"]
     )
-    assert provider.family == "qwen-routed"
+    assert any(
+        item["model_id"] == "qwen/qwen3-235b-a22b"
+        for item in completion_calls[1]["candidates"]
+    )
+    assert provider.family == "groq-routed"
 
 
 def test_independent_critic_routes_to_kimi_and_returns_structured_scores():
@@ -171,8 +187,14 @@ def test_critic_excludes_the_actual_generator_fallback_family():
         for tool, args in authority.calls
         if tool == "model.complete" and args["task"] == "story.critique"
     ][0]
-    assert critique_call["candidates"][0]["model_id"] == (
-        "nvidia/nemotron-3-super-120b-a12b:free"
+    # Groq's gpt-oss-120b leads creative_primary regardless of qwen's health
+    # (it isn't even reached) -> concepts() uses gpt-oss-120b -> critic's own
+    # alias excludes that specific model and lands on its own first
+    # remaining healthy candidate, kimi.
+    assert critique_call["candidates"][0]["model_id"] == "moonshotai/kimi-k2"
+    assert not any(
+        item["model_id"] == "openai/gpt-oss-120b"
+        for item in critique_call["candidates"]
     )
 
 

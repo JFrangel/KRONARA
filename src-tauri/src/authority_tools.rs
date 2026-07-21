@@ -31,34 +31,44 @@ pub struct ProductionAuthorityTools {
 impl ProductionAuthorityTools {
     pub fn from_config(config: &AppConfig) -> Result<Self, String> {
         let mut model_providers = Vec::new();
-        let openrouter = config
+        // Cascade: every configured key becomes its own ModelProvider entry
+        // (see config::provider_variants) -- model_gateway.rs tries each one
+        // in turn for a given model before moving to the next candidate
+        // model, so a second/third OpenRouter or Groq account picks up
+        // automatically when an earlier one runs out of credit or quota.
+        let openrouter_entries: Vec<_> = config
             .providers
             .iter()
-            .find(|item| item.provider == "openrouter" && item.api_key.is_some())
-            .or_else(|| {
-                config.providers.iter().find(|item| {
+            .filter(|item| item.provider == "openrouter" && item.api_key.is_some())
+            .collect();
+        let openrouter_entries = if openrouter_entries.is_empty() {
+            config
+                .providers
+                .iter()
+                .filter(|item| {
                     matches!(item.provider.as_str(), "qwen" | "kimi")
                         && item.api_key.is_some()
                         && item.base_url.as_deref().is_some_and(|value| {
                             value.trim_end_matches('/') == "https://openrouter.ai/api/v1"
                         })
                 })
-            });
-        if let Some(provider) = openrouter {
+                .collect()
+        } else {
+            openrouter_entries
+        };
+        for provider in &openrouter_entries {
             model_providers.push(ModelProvider::openrouter(secret(provider)?)?);
         }
-        if let Some(provider) = config
+        let groq_entries: Vec<_> = config
             .providers
             .iter()
-            .find(|item| item.provider == "groq" && item.api_key.is_some() && item.model.is_some())
-        {
-            model_providers.push(ModelProvider::groq(
-                secret(provider)?,
-                provider.model.as_deref().unwrap_or_default(),
-            )?);
+            .filter(|item| item.provider == "groq" && item.api_key.is_some())
+            .collect();
+        for provider in &groq_entries {
+            model_providers.push(ModelProvider::groq(secret(provider)?)?);
         }
         let mut health = BTreeMap::new();
-        if openrouter.is_some() {
+        if !openrouter_entries.is_empty() {
             for model in [
                 "qwen/qwen3-235b-a22b",
                 "moonshotai/kimi-k2",
@@ -71,11 +81,10 @@ impl ProductionAuthorityTools {
                 health.insert(model.to_owned(), "degraded".to_owned());
             }
         }
-        if model_providers
-            .iter()
-            .any(|item| format!("{item:?}").contains("groq"))
-        {
-            health.insert("groq-live-catalog".into(), "healthy".into());
+        if !groq_entries.is_empty() {
+            for model in ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3.6-27b"] {
+                health.insert(model.to_owned(), "degraded".to_owned());
+            }
         }
         let model = if model_providers.is_empty() {
             None

@@ -134,7 +134,7 @@ impl AppConfig {
             parse_non_negative(values, "KRONARA_MAX_RESEARCH_COST_USD", 1.0)?;
         let providers = ["QWEN", "KIMI", "OPENROUTER", "GROQ"]
             .into_iter()
-            .map(|name| provider(values, name))
+            .flat_map(|name| provider_variants(values, name))
             .collect();
         let reddit_enabled = parse_bool(values, "KRONARA_REDDIT_ENABLED", false)?;
         let reddit = RedditConfig {
@@ -304,6 +304,35 @@ fn provider(values: &BTreeMap<String, String>, name: &str) -> ProviderConfig {
         model: non_empty(values, &format!("{prefix}_MODEL")),
         base_url: non_empty(values, &format!("{prefix}_BASE_URL")),
     }
+}
+
+/// Every configured credential for one provider name: the base
+/// `KRONARA_{NAME}_API_KEY` plus any `KRONARA_{NAME}_API_KEY_2`,
+/// `_API_KEY_3`, ... found in sequence (stops at the first gap). This is
+/// the cascade the user asked for: when one account's credits/quota run
+/// out, the model gateway tries the next configured key for the same
+/// provider before giving up on that provider entirely. `_MODEL_{n}` /
+/// `_BASE_URL_{n}` fall back to the unsuffixed variant so a second key
+/// for the same account doesn't need to repeat shared config.
+fn provider_variants(values: &BTreeMap<String, String>, name: &str) -> Vec<ProviderConfig> {
+    let prefix = format!("KRONARA_{name}");
+    let base_model = non_empty(values, &format!("{prefix}_MODEL"));
+    let base_url = non_empty(values, &format!("{prefix}_BASE_URL"));
+    let mut variants = vec![provider(values, name)];
+    let mut index = 2;
+    loop {
+        let Some(api_key) = non_empty(values, &format!("{prefix}_API_KEY_{index}")) else {
+            break;
+        };
+        variants.push(ProviderConfig {
+            provider: name.to_lowercase(),
+            api_key: Some(SecretString(api_key)),
+            model: non_empty(values, &format!("{prefix}_MODEL_{index}")).or_else(|| base_model.clone()),
+            base_url: non_empty(values, &format!("{prefix}_BASE_URL_{index}")).or_else(|| base_url.clone()),
+        });
+        index += 1;
+    }
+    variants
 }
 
 fn non_empty(values: &BTreeMap<String, String>, key: &str) -> Option<String> {

@@ -11,6 +11,14 @@ const ALLOWED_MODELS: &[&str] = &[
     "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "tencent/hy3:free",
+    // Groq-hosted, verified current as of 2026-07 (console.groq.com/docs/models):
+    // llama-3.3-70b-versatile and openai/gpt-oss-120b are production tier;
+    // qwen/qwen3.6-27b is preview but the highest-intelligence model Groq
+    // hosts. Each has its own independent per-model rate-limit bucket, so
+    // listing several multiplies real throughput, not just redundancy.
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "qwen/qwen3.6-27b",
 ];
 
 #[derive(Clone)]
@@ -18,7 +26,6 @@ pub struct ModelProvider {
     provider: String,
     api_key: String,
     endpoint: String,
-    configured_model: Option<String>,
 }
 
 impl fmt::Debug for ModelProvider {
@@ -28,7 +35,6 @@ impl fmt::Debug for ModelProvider {
             .field("provider", &self.provider)
             .field("api_key", &"[REDACTED]")
             .field("endpoint", &self.endpoint)
-            .field("configured_model", &self.configured_model)
             .finish()
     }
 }
@@ -38,13 +44,8 @@ impl ModelProvider {
         Self::custom("openrouter", api_key, "https://openrouter.ai/api/v1")
     }
 
-    pub fn groq(api_key: &str, configured_model: &str) -> Result<Self, String> {
-        let mut provider = Self::custom("groq", api_key, "https://api.groq.com/openai/v1")?;
-        if configured_model.trim().is_empty() {
-            return Err("Groq requires a configured catalog model".into());
-        }
-        provider.configured_model = Some(configured_model.trim().to_owned());
-        Ok(provider)
+    pub fn groq(api_key: &str) -> Result<Self, String> {
+        Self::custom("groq", api_key, "https://api.groq.com/openai/v1")
     }
 
     pub fn custom(provider: &str, api_key: &str, base_url: &str) -> Result<Self, String> {
@@ -64,15 +65,7 @@ impl ModelProvider {
             provider: provider.to_owned(),
             api_key: api_key.trim().to_owned(),
             endpoint: format!("{normalized}/chat/completions"),
-            configured_model: None,
         })
-    }
-
-    fn resolve_model(&self, requested: &str) -> Option<String> {
-        if requested == "groq-live-catalog" && self.provider == "groq" {
-            return self.configured_model.clone();
-        }
-        Some(requested.to_owned())
     }
 }
 
@@ -177,19 +170,17 @@ impl<C: ModelHttpClient> ModelGateway<C> {
     ) -> Result<ModelCompletionReceipt, String> {
         self.validate(&request)?;
         let mut last_error = "no configured provider for model route".to_string();
-        for (index, candidate) in request.candidates.iter().enumerate() {
-            let Some(provider) = self
+        let mut attempt_index = 0u32;
+        for candidate in request.candidates.iter() {
+            let matching_providers: Vec<&ModelProvider> = self
                 .providers
                 .iter()
-                .find(|item| item.provider == candidate.provider)
-            else {
+                .filter(|item| item.provider == candidate.provider)
+                .collect();
+            if matching_providers.is_empty() {
                 last_error = format!("provider unavailable: {}", candidate.provider);
                 continue;
-            };
-            let Some(model) = provider.resolve_model(&candidate.model_id) else {
-                last_error = "dynamic model catalog is unavailable".into();
-                continue;
-            };
+            }
             let response_format = if candidate.model_id == "tencent/hy3:free"
                 || request.response_schema.get("properties").is_none()
             {
@@ -204,8 +195,8 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                     }
                 })
             };
-            let body = json!({
-                "model": model,
+            let mut body = json!({
+                "model": candidate.model_id,
                 "messages": [
                     {"role": "system", "content": request.system},
                     {"role": "user", "content": serde_json::to_string(&request.input).unwrap_or_default()}
@@ -214,6 +205,8 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 "max_tokens": request.max_tokens,
                 "temperature": 0.7,
                 "stream": false,
+            });
+            if candidate.provider == "openrouter" {
                 // Found via a real run: a free reasoning-hybrid candidate
                 // (nvidia/nemotron :free) spent its entire max_tokens budget
                 // narrating visible chain-of-thought ("We need to produce a
@@ -223,90 +216,110 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 // unified `reasoning.enabled=false` asks any reasoning-
                 // capable candidate to skip that internal narration; models
                 // without a reasoning mode (qwen, kimi, hy3) ignore it.
-                "reasoning": {"enabled": false},
-            });
-            let headers = BTreeMap::from([
-                (
-                    "Authorization".to_string(),
-                    format!("Bearer {}", provider.api_key),
-                ),
-                ("Content-Type".to_string(), "application/json".to_string()),
-                ("X-OpenRouter-Title".to_string(), "Kronara".to_string()),
-            ]);
-            let response = match self.http.post(&provider.endpoint, headers, body) {
-                Ok(value) => value,
-                Err(error) => {
-                    last_error = error;
-                    continue;
-                }
-            };
-            if !(200..300).contains(&response.status) {
-                // The RPC caller only ever sees `last_error`'s short, generic
-                // form (never leak provider internals over the wire) -- but a
-                // real failure (rate limit, expired free-tier model, an
-                // exhausted credit balance) was previously invisible to
-                // anyone, including whoever runs Kronara locally. This lands
-                // in the same place Python's stderr does when run via a
-                // console (`cargo run`/`cargo run --example`); a real
-                // shipped GUI build has no attached console for this to
-                // reach yet -- a follow-up, not solved here.
-                eprintln!(
-                    "[model_gateway] non-2xx status={} model={} body={}",
-                    response.status, candidate.model_id, response.json
-                );
-                last_error = format!("model provider failed with status {}", response.status);
-                continue;
+                // OpenRouter-specific: Groq's own API rejects an unrecognized
+                // `reasoning` property outright (400 "property 'reasoning' is
+                // unsupported"), so this must not be sent there.
+                body["reasoning"] = json!({"enabled": false});
             }
-            let Some(content) = response.json.pointer("/choices/0/message/content").cloned() else {
-                eprintln!(
-                    "[model_gateway] missing content model={} body={}",
-                    candidate.model_id, response.json
-                );
-                last_error = "model response content is missing".into();
-                continue;
-            };
-            let payload = match content {
-                Value::Object(_) => content,
-                Value::String(text) => match serde_json::from_str::<Value>(&text) {
+            // Cascade across every configured key for this provider (e.g. a
+            // second or third OpenRouter/Groq account, added specifically so
+            // an exhausted key doesn't stall the whole model) before giving
+            // up on this model and moving to the next candidate.
+            for provider in &matching_providers {
+                attempt_index += 1;
+                let headers = BTreeMap::from([
+                    (
+                        "Authorization".to_string(),
+                        format!("Bearer {}", provider.api_key),
+                    ),
+                    ("Content-Type".to_string(), "application/json".to_string()),
+                    ("X-OpenRouter-Title".to_string(), "Kronara".to_string()),
+                ]);
+                let response = match self.http.post(&provider.endpoint, headers, body.clone()) {
                     Ok(value) => value,
                     Err(error) => {
-                        // Local stderr log only (see SidecarProcess::spawn) --
-                        // seeing the actual text is the only way to tell
-                        // "truncated by max_tokens" from "wrapped in a
-                        // markdown fence" from something else entirely,
-                        // instead of guessing at the fix.
+                        // Distinct from the non-2xx branch below: this is the
+                        // request never getting a response at all (timeout,
+                        // connection refused, DNS, TLS) -- previously silent,
+                        // so a candidate could vanish from the fallback chain
+                        // with zero trace of why.
                         eprintln!(
-                            "[model_gateway] non-JSON string content model={} error={error} text={text:?}",
+                            "[model_gateway] request failed before a response arrived model={} error={error}",
                             candidate.model_id
                         );
-                        last_error = "model returned invalid structured content".into();
+                        last_error = error;
                         continue;
                     }
-                },
-                _ => {
-                    last_error = "model returned unsupported content".into();
+                };
+                if !(200..300).contains(&response.status) {
+                    // The RPC caller only ever sees `last_error`'s short, generic
+                    // form (never leak provider internals over the wire) -- but a
+                    // real failure (rate limit, expired free-tier model, an
+                    // exhausted credit balance) was previously invisible to
+                    // anyone, including whoever runs Kronara locally. This lands
+                    // in the same place Python's stderr does when run via a
+                    // console (`cargo run`/`cargo run --example`); a real
+                    // shipped GUI build has no attached console for this to
+                    // reach yet -- a follow-up, not solved here.
+                    eprintln!(
+                        "[model_gateway] non-2xx status={} model={} body={}",
+                        response.status, candidate.model_id, response.json
+                    );
+                    last_error = format!("model provider failed with status {}", response.status);
                     continue;
                 }
-            };
-            if !payload_matches_schema(&payload, &request.response_schema) {
-                eprintln!(
-                    "[model_gateway] schema mismatch model={} payload={payload}",
-                    candidate.model_id
-                );
-                last_error = "model structured payload failed schema validation".into();
-                continue;
+                let Some(content) = response.json.pointer("/choices/0/message/content").cloned()
+                else {
+                    eprintln!(
+                        "[model_gateway] missing content model={} body={}",
+                        candidate.model_id, response.json
+                    );
+                    last_error = "model response content is missing".into();
+                    continue;
+                };
+                let payload = match content {
+                    Value::Object(_) => content,
+                    Value::String(text) => match serde_json::from_str::<Value>(&text) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            // Local stderr log only (see SidecarProcess::spawn) --
+                            // seeing the actual text is the only way to tell
+                            // "truncated by max_tokens" from "wrapped in a
+                            // markdown fence" from something else entirely,
+                            // instead of guessing at the fix.
+                            eprintln!(
+                                "[model_gateway] non-JSON string content model={} error={error} text={text:?}",
+                                candidate.model_id
+                            );
+                            last_error = "model returned invalid structured content".into();
+                            continue;
+                        }
+                    },
+                    _ => {
+                        last_error = "model returned unsupported content".into();
+                        continue;
+                    }
+                };
+                if !payload_matches_schema(&payload, &request.response_schema) {
+                    eprintln!(
+                        "[model_gateway] schema mismatch model={} payload={payload}",
+                        candidate.model_id
+                    );
+                    last_error = "model structured payload failed schema validation".into();
+                    continue;
+                }
+                return Ok(ModelCompletionReceipt {
+                    payload,
+                    provider: provider.provider.clone(),
+                    model: candidate.model_id.clone(),
+                    fallback_used: attempt_index > 1,
+                    usage: response
+                        .json
+                        .get("usage")
+                        .cloned()
+                        .unwrap_or_else(|| json!({})),
+                });
             }
-            return Ok(ModelCompletionReceipt {
-                payload,
-                provider: provider.provider.clone(),
-                model: candidate.model_id.clone(),
-                fallback_used: index > 0,
-                usage: response
-                    .json
-                    .get("usage")
-                    .cloned()
-                    .unwrap_or_else(|| json!({})),
-            });
         }
         Err(last_error)
     }
@@ -324,9 +337,7 @@ impl<C: ModelHttpClient> ModelGateway<C> {
             return Err("invalid bounded model request".into());
         }
         for candidate in &request.candidates {
-            let allowed = ALLOWED_MODELS.contains(&candidate.model_id.as_str())
-                || (candidate.provider == "groq" && candidate.model_id == "groq-live-catalog");
-            if !allowed {
+            if !ALLOWED_MODELS.contains(&candidate.model_id.as_str()) {
                 return Err(format!("model is not allowlisted: {}", candidate.model_id));
             }
         }

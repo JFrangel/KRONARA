@@ -85,18 +85,26 @@ def test_registry_fails_closed_when_no_candidate_meets_requirements():
         registry.resolve(
             "fast_tools",
             requirements("video_generation"),
-            health={"groq-live-catalog": "healthy"},
+            health={"openai/gpt-oss-120b": "healthy"},
         )
 
 
-def test_registry_contains_requested_models_and_dynamic_groq_route():
+def test_registry_contains_requested_models_including_groq_cascade():
     payload = json.loads(REGISTRY.read_text(encoding="utf-8"))
     model_ids = {item["model_id"] for item in payload["candidates"]}
+    groq_ids = {
+        item["model_id"] for item in payload["candidates"] if item["provider"] == "groq"
+    }
 
     assert "nvidia/nemotron-3-super-120b-a12b:free" in model_ids
     assert "tencent/hy3:free" in model_ids
-    assert "groq-live-catalog" in model_ids
+    # Real Groq-hosted models directly in the cascade (no more single-model
+    # "groq-live-catalog" sentinel) -- each gets its own independent
+    # per-model rate-limit bucket on Groq's side.
+    assert groq_ids == {"openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3.6-27b"}
     assert payload["aliases"]["experimental_hy3"][0] == "tencent/hy3:free"
+    for alias, model_ids_for_alias in payload["aliases"].items():
+        assert len(model_ids_for_alias) <= 5, f"{alias} exceeds Rust's 5-candidate request cap"
 
 
 def test_environment_template_exposes_aliases_without_secrets():
