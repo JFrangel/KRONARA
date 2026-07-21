@@ -158,7 +158,10 @@ class OperationsService:
 
     def episodes_list(self, params: dict[str, Any]) -> dict[str, Any]:
         limit = int(params.get("limit", 50))
-        episodes = self.store.list_owned_story_artifacts(limit=limit)
+        program_id = params.get("program_id")
+        episodes = self.store.list_owned_story_artifacts(
+            limit=limit, program_id=str(program_id) if program_id else None
+        )
         return {
             "schema_version": 1,
             "episodes": [
@@ -282,6 +285,7 @@ class OperationsService:
         with self._lock:
             if self._paused:
                 raise ValueError("global pause blocks content runs")
+        params = self._resolve_program_defaults(params)
         return ProductionContentPipeline(
             authority=self.authority,
             store=self.store,
@@ -297,6 +301,29 @@ class OperationsService:
             opportunity_store=self._opportunity_store,
             rate_learner=self._rate_learner,
         ).run(params)
+
+    @staticmethod
+    def _resolve_program_defaults(params: dict[str, Any]) -> dict[str, Any]:
+        """When the caller names a program_id but doesn't already supply
+        subreddits (the UI's "create an episode for this program" action,
+        as opposed to Estudio's free-text manual test), derive them the
+        same way the autonomous scheduler already does for its own weekly
+        runs -- see autonomous_loop.py's _fire(). A caller that already
+        knows exactly what it wants (produce_episode.rs, the manual test
+        flow) is left untouched."""
+        program_id = params.get("program_id")
+        if not program_id or params.get("subreddits"):
+            return params
+        from kronara.programs import ProgramRegistry, default_registry_path
+        from kronara.reddit_source_map import subreddits_for_program
+
+        program = ProgramRegistry.load(default_registry_path()).get(str(program_id))
+        resolved = dict(params)
+        resolved.setdefault("subreddits", list(subreddits_for_program(str(program_id))))
+        resolved.setdefault("target_duration_seconds", program.target_duration_seconds)
+        resolved.setdefault("sort", "hot")
+        resolved.setdefault("limit", 25)
+        return resolved
 
     def performance_learn(self, params: dict[str, Any]) -> dict[str, Any]:
         story_id = str(params["story_id"])

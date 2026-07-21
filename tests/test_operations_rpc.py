@@ -30,6 +30,39 @@ def _server(tmp_path: Path) -> tuple[JsonRpcServer, OperationsService]:
     return server, service
 
 
+def test_resolve_program_defaults_fills_subreddits_and_duration_from_the_program():
+    """The UI's "create an episode for program X" action only needs to send
+    program_id -- subreddits and target_duration_seconds are derived the
+    same way the autonomous scheduler already derives them for its own
+    weekly runs (see autonomous_loop.py's _fire())."""
+    resolved = OperationsService._resolve_program_defaults(
+        {"program_id": "viernes-paranormal", "story_id": "owned_manual_1"}
+    )
+
+    assert resolved["subreddits"]
+    assert all(isinstance(item, str) for item in resolved["subreddits"])
+    assert resolved["target_duration_seconds"] > 0
+    assert resolved["sort"] == "hot"
+    assert resolved["story_id"] == "owned_manual_1"
+
+
+def test_resolve_program_defaults_never_overrides_explicit_subreddits():
+    """Estudio's free-text manual test path already supplies its own
+    subreddits -- program_id auto-fill must never override a caller who
+    already knows exactly what it wants."""
+    resolved = OperationsService._resolve_program_defaults(
+        {"program_id": "viernes-paranormal", "subreddits": ["Historias"]}
+    )
+
+    assert resolved["subreddits"] == ["Historias"]
+
+
+def test_resolve_program_defaults_is_a_no_op_without_a_program_id():
+    params = {"subreddits": ["Historias"], "target_duration_seconds": 60}
+
+    assert OperationsService._resolve_program_defaults(params) == params
+
+
 def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path):
     server, service = _server(tmp_path)
 

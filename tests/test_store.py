@@ -109,3 +109,15 @@ def test_list_owned_story_artifacts_rejects_out_of_range_limit(tmp_path: Path):
         store.list_owned_story_artifacts(limit=0)
     store.close()
 
+
+def test_list_owned_story_artifacts_filters_by_program_id(tmp_path: Path):
+    store = KronaraStore(tmp_path / "kronara.db")
+    store.initialize()
+    _seed_artifact(store, "ep_paranormal", created_at=100, program_id="viernes-paranormal")
+    _seed_artifact(store, "ep_justicia", created_at=200, program_id="cronicas-de-justicia")
+
+    episodes = store.list_owned_story_artifacts(program_id="viernes-paranormal")
+
+    assert [item["story_id"] for item in episodes] == ["ep_paranormal"]
+    store.close()
+

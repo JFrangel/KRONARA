@@ -435,17 +435,31 @@ class KronaraStore:
             "program_id": row[5],
         }
 
-    def list_owned_story_artifacts(self, *, limit: int = 50) -> list[dict[str, Any]]:
-        """Most recently created first -- powers the Episodios list view."""
+    def list_owned_story_artifacts(
+        self, *, limit: int = 50, program_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Most recently created first -- powers the Episodios list view.
+        program_id narrows to one program's episodes (Programas' detail
+        view); omitted, returns across all programs (the flat Episodios
+        list)."""
         if not 1 <= limit <= 200:
             raise ValueError("episode list limit must be between one and two hundred")
-        rows = self._db().execute(
-            """
-            SELECT story_id, artifact_uri, path, sha256, metadata_json, created_at, program_id
-            FROM owned_story_artifacts ORDER BY created_at DESC LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        if program_id is None:
+            rows = self._db().execute(
+                """
+                SELECT story_id, artifact_uri, path, sha256, metadata_json, created_at, program_id
+                FROM owned_story_artifacts ORDER BY created_at DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        else:
+            rows = self._db().execute(
+                """
+                SELECT story_id, artifact_uri, path, sha256, metadata_json, created_at, program_id
+                FROM owned_story_artifacts WHERE program_id = ? ORDER BY created_at DESC LIMIT ?
+                """,
+                (program_id, limit),
+            ).fetchall()
         return [
             {
                 "story_id": row[0],
