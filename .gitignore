@@ -10,6 +10,8 @@ target/
 *.db
 .test-tmp/
 .test-tmp*/
+.pytest-temp/
+.claude/*.lock
 .pyinstaller-build/
 .pyinstaller-spec/
 src-tauri/binaries/*.exe

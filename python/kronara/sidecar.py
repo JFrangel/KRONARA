@@ -96,10 +96,22 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
     if renderer is not None:
         try:
             from kronara.asset_library import AssetLibraryStore
-            from kronara.image_gen import DiffusersImageProvider
             from kronara.visual_style import VisualStyleRegistry, default_registry_path
 
-            image_provider = DiffusersImageProvider(output_dir=str(data_dir / "images"))
+            # Diagnostic affordance: KRONARA_IMAGE_PROVIDER=placeholder swaps
+            # in the Pillow placeholder generator so the full compose->render
+            # ->MP4 transport can be exercised in seconds instead of minutes
+            # of SDXL. Real SDXL (the default) is separately covered by the
+            # GPU test suite; this only changes which image tier a diagnostic
+            # run uses, never production behaviour.
+            if os.environ.get("KRONARA_IMAGE_PROVIDER") == "placeholder":
+                from kronara.image_gen import PlaceholderImageProvider
+
+                image_provider = PlaceholderImageProvider(output_dir=str(data_dir / "images"))
+            else:
+                from kronara.image_gen import DiffusersImageProvider
+
+                image_provider = DiffusersImageProvider(output_dir=str(data_dir / "images"))
             visual_style_registry = VisualStyleRegistry.load(default_registry_path())
             asset_library = AssetLibraryStore(data_dir / "asset_library.db").initialize()
         except Exception:
@@ -409,6 +421,38 @@ def _rag_evaluate(params: dict) -> dict:
     return {"evaluation": asdict(evaluation), "promotion": promotion}
 
 
+def _isolate_protocol_stdout() -> "object":
+    """Reserve the real stdout exclusively for the JSON-RPC protocol and make
+    every other write to stdout harmless.
+
+    The sidecar speaks JSON-RPC over stdout, one JSON object per line. That
+    stream is fragile: a single non-JSON line -- a torch/transformers/
+    huggingface warning, a stray print, a progress bar -- makes Rust's line
+    reader fail to parse and kill the sidecar mid-run (observed as
+    "invalid RPC response" on the Rust side and an [Errno 22] broken-pipe
+    crash on ours). This is the standard stdio-server hazard (LSP/MCP solve
+    it the same way).
+
+    Fix: dup the real stdout fd into a dedicated binary, UTF-8, line-buffered
+    writer used ONLY for the protocol -- binary avoids the Windows text-mode
+    pipe write bug ([Errno 22]) on large payloads -- then point sys.stdout at
+    sys.stderr so any library that prints to "stdout" lands on stderr and can
+    never corrupt the protocol. Returns the dedicated protocol writer.
+    """
+    import io
+
+    try:
+        raw = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
+        protocol_out = io.TextIOWrapper(raw, encoding="utf-8", newline="\n", write_through=True)
+        sys.stdout.flush()
+    except (OSError, ValueError, io.UnsupportedOperation):
+        # No real fd (e.g. captured in an in-process test) -- keep the
+        # original stdout as the protocol channel and skip redirection.
+        return sys.stdout
+    sys.stdout = sys.stderr  # stray library prints now go to stderr, not the protocol
+    return protocol_out
+
+
 def serve(
     token: str,
     data_dir: Path | None = None,
@@ -416,6 +460,9 @@ def serve(
     embedding_alias: str = "bge_m3",
     reranker_alias: str | None = "bge_reranker_v2_m3",
 ) -> int:
+    # Must happen before _build_visual_stack imports torch/diffusers (which
+    # can print to stdout) and before any RPC is served.
+    protocol_out = _isolate_protocol_stdout()
     resolved_data_dir = data_dir or Path(".kronara") / "runtime"
     visual_stack = _build_visual_stack(resolved_data_dir)
     # Cache-first Reddit discovery (see ProductionContentPipeline's RSS
@@ -429,7 +476,7 @@ def serve(
     services = OperationsService(
         resolved_data_dir,
         resource_root=_resource_root(),
-        authority=StdioAuthorityClient(reader=sys.stdin, writer=sys.stdout),
+        authority=StdioAuthorityClient(reader=sys.stdin, writer=protocol_out),
         embedding_alias=embedding_alias,
         reranker_alias=reranker_alias,
         opportunity_store=opportunity_store,
@@ -467,7 +514,10 @@ def serve(
                     "id": None,
                     "error": {"code": -32700, "message": "parse error"},
                 }
-            print(json.dumps(response, separators=(",", ":")), flush=True)
+            # Dedicated protocol channel, never plain print() -- see
+            # _isolate_protocol_stdout for why sys.stdout is now stderr.
+            protocol_out.write(json.dumps(response, separators=(",", ":")) + "\n")
+            protocol_out.flush()
     finally:
         services.close()
     return 0

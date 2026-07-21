@@ -280,16 +280,32 @@ impl SidecarProcess {
             .map_err(|_| "cannot send RPC request".to_string())?;
         loop {
             let mut line = String::new();
-            if self
-                .stdout
-                .read_line(&mut line)
-                .map_err(|_| "cannot read RPC response".to_string())?
-                == 0
-            {
+            let read_result = self.stdout.read_line(&mut line);
+            let bytes_read = match read_result {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("[sidecar_bridge] read_line I/O error: {error}");
+                    return Err("cannot read RPC response".to_string());
+                }
+            };
+            if bytes_read == 0 {
+                eprintln!(
+                    "[sidecar_bridge] stdout EOF while awaiting response to method={method} \
+                     request_id={request_id} (partial line buffered: {line:?})"
+                );
                 return Err("cognitive sidecar closed unexpectedly".into());
             }
-            let response: Value =
-                serde_json::from_str(&line).map_err(|_| "invalid RPC response".to_string())?;
+            let response: Value = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!(
+                        "[sidecar_bridge] JSON parse error for method={method} \
+                         request_id={request_id}: {error} -- raw line ({} bytes): {line:?}",
+                        line.len()
+                    );
+                    return Err("invalid RPC response".to_string());
+                }
+            };
             if let Some(nested) = dispatch_authority_request(&response, authority) {
                 serde_json::to_writer(&mut self.stdin, &nested)
                     .map_err(|_| "cannot encode authority response".to_string())?;
