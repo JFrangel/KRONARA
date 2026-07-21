@@ -72,7 +72,7 @@
       {#if activeView === 'panel'}
         <Panel {operations} {control} onNavigate={(id) => (activeView = id)} />
       {:else if activeView === 'programas'}
-        <Programas />
+        <Programas connection={operations.connection} />
       {:else if activeView === 'calendario'}
         <Calendario />
       {:else if activeView === 'estudio'}

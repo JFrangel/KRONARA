@@ -6,12 +6,16 @@
   import { callOperations } from '../tauri-operations.js';
   import { programGradient } from '../programArt.js';
 
+  let { connection = 'disconnected' } = $props();
+
   let programs = $state([]);
   let episodes = $state([]);
   let loadError = $state(false);
   let loading = $state(true);
   let selected = $state(null);
   let activeTab = $state('resumen');
+  let creating = $state(false);
+  let createNotice = $state('');
 
   // Episodios lives here rather than as its own top-level section -- every
   // episode belongs to exactly one program, so browsing them detached from
@@ -40,6 +44,32 @@
   function openProgram(program) {
     selected = program;
     activeTab = 'resumen';
+    createNotice = '';
+  }
+
+  async function createEpisode() {
+    if (creating || connection !== 'connected' || !selected) return;
+    creating = true;
+    createNotice = '';
+    const programId = selected.program_id;
+    try {
+      const result = await callOperations('content.run', {
+        program_id: programId,
+        story_id: `owned_ui_${Date.now()}`,
+      });
+      if (result.status === 'completed') {
+        createNotice = `Episodio creado: "${result.story?.title ?? result.run_id}".`;
+        activeTab = 'episodios';
+        const refreshed = await callOperations('episodes.list', { limit: 200 });
+        episodes = refreshed.episodes ?? episodes;
+      } else {
+        createNotice = `No se pudo completar el episodio (${result.error_code ?? result.status}). El vertical no publica nada a menos que Reddit, los modelos, los derechos y la calidad pasen todas las validaciones.`;
+      }
+    } catch (error) {
+      createNotice = 'Falló la creación del episodio. Revisa la conexión con el sidecar.';
+    } finally {
+      creating = false;
+    }
   }
 
   function episodesFor(programId) {
@@ -68,9 +98,23 @@
   <p class="text-[13px] text-ink-secondary">No se pudo cargar la parrilla de programas. Abre Kronara desde la aplicación de escritorio.</p>
 {:else if selected}
   <div class="space-y-4">
-    <button class="flex items-center gap-1.5 text-[12.5px] text-ink-tertiary hover:text-ink" onclick={() => (selected = null)}>
-      <Icon name="chevron-left" size={14} /> Programas
-    </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <button class="flex items-center gap-1.5 text-[12.5px] text-ink-tertiary hover:text-ink" onclick={() => (selected = null)}>
+        <Icon name="chevron-left" size={14} /> Programas
+      </button>
+      <button
+        class="flex items-center gap-1.5 rounded-full bg-purple-500 px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+        onclick={createEpisode}
+        disabled={creating || connection !== 'connected'}
+      >
+        <Icon name="plus" size={14} />
+        {creating ? 'Creando episodio… (puede tardar varios minutos)' : 'Crear episodio'}
+      </button>
+    </div>
+
+    {#if createNotice}
+      <p class="rounded-lg border border-line bg-surface-inset px-3 py-2 text-[12.5px] text-ink-secondary">{createNotice}</p>
+    {/if}
 
     <Card>
       <div class="flex flex-wrap items-start justify-between gap-4">
