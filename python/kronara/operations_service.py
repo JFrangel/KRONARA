@@ -19,6 +19,7 @@ from kronara.operations_chat import OperationsChatAgent
 from kronara.operations_contracts import OperationsChatRequest
 from kronara.prompt_stack import AgentNarrativeProfile, PersonaProfile, PromptStackCompiler
 from kronara.rag_v2 import IngestDocument
+from kronara.resource_root import resource_root as _default_resource_root
 from kronara.rag_v3 import RAGV3Index, RetrievalQueryV3
 from kronara.store import KronaraStore
 from kronara.performance import MetricSnapshot
@@ -69,7 +70,7 @@ class OperationsService:
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.resource_root = resource_root or Path(__file__).resolve().parents[2]
+        self.resource_root = resource_root or _default_resource_root()
         self.authority = authority or UnavailableAuthorityClient()
         self.embedding_alias = embedding_alias
         self.reranker_alias = reranker_alias

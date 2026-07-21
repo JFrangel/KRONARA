@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from kronara.resource_root import resource_root
+
 _VALID_SENSITIVITY = {"entertainment", "real_experience_serious"}
 _SEPARATOR_ROW = re.compile(r"^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?$")
 
@@ -39,7 +41,7 @@ class SourceEntry:
 
 
 def _default_sources_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "knowledge" / "reddit-sources"
+    return resource_root() / "knowledge" / "reddit-sources"
 
 
 def _parse_node_table(path: Path) -> list[tuple[str, str]]:

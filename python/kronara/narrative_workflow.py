@@ -10,6 +10,7 @@ from langgraph.graph import END, START, StateGraph
 
 from kronara.agent_catalog import AgentCatalog
 from kronara.llm import NarrativeConcept
+from kronara.resource_root import resource_root
 from kronara.trends import TrendSignal
 
 
@@ -67,7 +68,7 @@ class NarrativeWorkflow:
     def _runtime_profiles_for(self, agent_id: str, config_root: Path | None = None) -> tuple[Any, Any]:
         if agent_id in self._runtime_profiles:
             return self._runtime_profiles[agent_id]
-        root = config_root or Path(__file__).resolve().parents[2] / "config"
+        root = config_root or resource_root() / "config"
         persona, narrative = AgentCatalog.load_runtime_profiles(
             agent_id,
             root / "agents",

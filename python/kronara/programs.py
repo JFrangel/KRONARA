@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from kronara.resource_root import resource_root
+
 
 @dataclass(frozen=True)
 class ProgramDescriptor:
@@ -73,4 +75,4 @@ class ProgramRegistry:
 
 
 def default_registry_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "config" / "programs" / "programs.v1.json"
+    return resource_root() / "config" / "programs" / "programs.v1.json"

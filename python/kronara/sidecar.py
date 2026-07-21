@@ -26,6 +26,7 @@ from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.operations_service import OperationsService
 from kronara.opportunities import OpportunityStore
 from kronara.performance import MetricSnapshot, PerformanceScientist
+from kronara.resource_root import resource_root
 from kronara.rag_v2 import (
     DeterministicHashEmbedder,
     IngestDocument,
@@ -54,12 +55,6 @@ def _extract_trend(params: dict) -> dict:
     )
     signal = RedditSignalExtractor().extract(post, now=int(params["now"]))
     return {key: value for key, value in asdict(signal).items() if key != "source_text"}
-
-
-def _resource_root() -> Path:
-    if getattr(sys, "_MEIPASS", None):
-        return Path(sys._MEIPASS)
-    return Path(__file__).resolve().parents[2]
 
 
 def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
@@ -146,7 +141,7 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
 
 def _agent_capabilities(_: dict) -> dict:
-    root = _resource_root()
+    root = resource_root()
     catalog = AgentCatalog.load(root / "config" / "agents")
     skill_payload = json.loads(
         (root / "config" / "skills" / "catalog.v1.json").read_text(encoding="utf-8")
@@ -516,7 +511,7 @@ def serve(
     opportunity_store = OpportunityStore(resolved_data_dir / "opportunities.db").initialize()
     services = OperationsService(
         resolved_data_dir,
-        resource_root=_resource_root(),
+        resource_root=resource_root(),
         authority=StdioAuthorityClient(reader=sys.stdin, writer=protocol_out),
         embedding_alias=embedding_alias,
         reranker_alias=reranker_alias,

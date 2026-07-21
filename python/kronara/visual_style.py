@@ -14,6 +14,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from kronara.resource_root import resource_root
+
 MOTION_BIASES = frozenset({"subtle", "standard", "dynamic"})
 
 
@@ -73,7 +75,7 @@ class VisualStyleRegistry:
 
 
 def default_registry_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "config" / "programs" / "visual_style.v1.json"
+    return resource_root() / "config" / "programs" / "visual_style.v1.json"
 
 
 def apply_style(
