@@ -7,6 +7,7 @@
 
   let state = $state(createOperationsState());
   let question = $state('');
+  let approving = $state(false);
 
   async function ask() {
     const message = question.trim();
@@ -30,6 +31,37 @@
       };
     }
   }
+
+  function dismissAction() {
+    state = { ...state, pendingAction: null };
+  }
+
+  async function approveAction() {
+    const intent = state.pendingAction;
+    if (!intent || approving) return;
+    approving = true;
+    try {
+      const outcome = await callOperations('action.approve', { idempotency_key: intent.idempotency_key });
+      let content;
+      if (outcome.status === 'executed' && outcome.result?.status === 'completed') {
+        content = `Episodio creado: "${outcome.result.story?.title ?? outcome.result.run_id}".`;
+      } else if (outcome.status === 'executed') {
+        content = `No se pudo completar el episodio (${outcome.result?.error_code ?? outcome.result?.status}). No se publica nada a menos que Reddit, los modelos, los derechos y la calidad pasen todas las validaciones.`;
+      } else if (outcome.status === 'not_found') {
+        content = 'Esa propuesta ya no está disponible (expiró o ya se ejecutó).';
+      } else {
+        content = 'Esa propuesta todavía no se puede ejecutar automáticamente.';
+      }
+      state = { ...state, pendingAction: null, messages: [...state.messages, { role: 'assistant', content, citations: [] }] };
+    } catch (error) {
+      state = {
+        ...state,
+        messages: [...state.messages, { role: 'assistant', content: 'No pude aprobar la propuesta; la operación de Rust la rechazó.', citations: [] }],
+      };
+    } finally {
+      approving = false;
+    }
+  }
 </script>
 
 {#if open}
@@ -48,7 +80,7 @@
     <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
       {#if state.messages.length === 0}
         <p class="text-[13px] leading-relaxed text-ink-secondary">
-          Pregunta por agentes, bloqueos, evidencia, métricas o decisiones. Los cambios se proponen; no se ejecutan desde el chat.
+          Pregunta por agentes, bloqueos, evidencia, métricas o decisiones -- o pide "crea un episodio de &lt;programa&gt;". Los cambios se proponen; no se ejecutan desde el chat sin tu aprobación.
         </p>
       {/if}
       {#each state.messages as message}
@@ -60,8 +92,28 @@
         </article>
       {/each}
       {#if state.pendingAction}
-        <aside class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning">
-          Propuesta pendiente: {state.pendingAction.kind}. Requiere aprobación administrativa.
+        <aside class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-[12px] text-warning">
+          <p>
+            {#if state.pendingAction.kind === 'create_episode'}
+              Propuesta: crear un episodio nuevo. Nada se ejecuta hasta que la apruebes.
+            {:else}
+              Propuesta pendiente: {state.pendingAction.kind}. Requiere aprobación administrativa.
+            {/if}
+          </p>
+          <div class="mt-2 flex gap-2">
+            {#if state.pendingAction.kind === 'create_episode'}
+              <button
+                class="rounded-full bg-purple-500 px-3 py-1 text-[11.5px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+                onclick={approveAction}
+                disabled={approving || connection !== 'connected'}
+              >
+                {approving ? 'Ejecutando…' : 'Aprobar y crear'}
+              </button>
+            {/if}
+            <button class="rounded-full border border-line px-3 py-1 text-[11.5px] text-ink-secondary hover:text-ink" onclick={dismissAction} disabled={approving}>
+              Descartar
+            </button>
+          </div>
         </aside>
       {/if}
     </div>

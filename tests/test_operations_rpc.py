@@ -272,3 +272,102 @@ def test_schedule_tick_respects_global_pause(tmp_path):
 
     assert response["result"]["outcomes"] == []
     service.close()
+
+
+def test_action_approve_executes_a_pending_create_episode_intent(tmp_path, monkeypatch):
+    """The chat assistant can only ever PROPOSE a create_episode intent
+    (see OperationsChatAgent); action.approve is what actually executes it,
+    by looking the intent up server-side via its idempotency_key rather
+    than trusting client-resupplied arguments. content_run itself is
+    monkeypatched here since its real pipeline is already exercised end to
+    end by test_production_content_vertical.py -- this test is about the
+    propose/approve/execute wiring, not the pipeline."""
+    server, service = _server(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        service,
+        "content_run",
+        lambda params: calls.append(params)
+        or {"status": "completed", "run_id": "content:x", "story": {"title": "La casa vieja"}},
+    )
+
+    chat = server.handle(
+        _request(
+            "operations.chat",
+            {
+                "schema_version": 1,
+                "request_id": "chat_ep",
+                "conversation_id": "conv_ep",
+                "message": "Crea un episodio de Viernes Paranormal",
+            },
+        )
+    )["result"]
+    assert chat["action_intent"]["kind"] == "create_episode"
+    key = chat["action_intent"]["idempotency_key"]
+
+    approved = server.handle(_request("action.approve", {"idempotency_key": key}, 3))["result"]
+
+    assert approved["status"] == "executed"
+    assert approved["result"]["story"]["title"] == "La casa vieja"
+    assert calls[0]["program_id"] == "viernes-paranormal"
+    assert calls[0]["story_id"].startswith("owned_chat_")
+    service.close()
+
+
+def test_action_approve_only_executes_once_for_the_same_proposal(tmp_path, monkeypatch):
+    server, service = _server(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        service, "content_run", lambda params: calls.append(params) or {"status": "completed"}
+    )
+    chat = server.handle(
+        _request(
+            "operations.chat",
+            {
+                "schema_version": 1,
+                "request_id": "chat_ep2",
+                "conversation_id": "conv_ep2",
+                "message": "Crea un episodio de Viernes Paranormal",
+            },
+        )
+    )["result"]
+    key = chat["action_intent"]["idempotency_key"]
+
+    first = server.handle(_request("action.approve", {"idempotency_key": key}, 3))["result"]
+    second = server.handle(_request("action.approve", {"idempotency_key": key}, 4))["result"]
+
+    assert first["status"] == "executed"
+    assert second["status"] == "not_found"
+    assert len(calls) == 1
+    service.close()
+
+
+def test_action_approve_rejects_an_unknown_idempotency_key(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("action.approve", {"idempotency_key": "does-not-exist"}))[
+        "result"
+    ]
+
+    assert response["status"] == "not_found"
+    assert response["result"] is None
+    service.close()
+
+
+def test_action_approve_inherits_the_content_run_pause_gate(tmp_path):
+    """action.approve does not duplicate the pause check -- it delegates to
+    content_run, which already enforces it. This confirms that inherited
+    safety actually holds rather than assuming it."""
+    server, service = _server(tmp_path)
+    with service._lock:
+        service._pending_intents["intent_key_1"] = {
+            "kind": "create_episode",
+            "arguments": {"program_id": "viernes-paranormal"},
+        }
+    server.handle(_request("operations.control_snapshot", {"paused": True}, 3))
+
+    response = server.handle(_request("action.approve", {"idempotency_key": "intent_key_1"}, 4))
+
+    assert response["error"]["code"] == -32602
+    assert "global pause blocks content runs" in response["error"]["message"]
+    service.close()

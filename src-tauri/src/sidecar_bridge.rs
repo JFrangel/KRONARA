@@ -24,6 +24,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "programs.list",
     "episodes.list",
     "schedule.tick",
+    "action.approve",
 ];
 
 const ALLOWED_AUTHORITY_TOOLS: &[&str] = &[
@@ -369,7 +370,7 @@ pub fn is_allowed_method(method: &str) -> bool {
 pub fn is_effectful_method(method: &str) -> bool {
     matches!(
         method,
-        "story.test" | "content.run" | "performance.learn" | "schedule.tick"
+        "story.test" | "content.run" | "performance.learn" | "schedule.tick" | "action.approve"
     )
 }
 
@@ -412,6 +413,7 @@ mod tests {
         assert!(is_allowed_method("content.run"));
         assert!(is_allowed_method("performance.learn"));
         assert!(is_allowed_method("schedule.tick"));
+        assert!(is_allowed_method("action.approve"));
         assert!(!is_allowed_method("shell.execute"));
         assert!(!is_allowed_method("publication.publish"));
     }
@@ -426,6 +428,10 @@ mod tests {
         // user-triggered content.run -- global pause must block it too,
         // not just the interactively-triggered actions.
         assert!(is_effectful_method("schedule.tick"));
+        // The chat assistant's "approve" action can also execute a real
+        // content.run (see OperationsChatAgent's create_episode intent) --
+        // pause must block it exactly like the direct button does.
+        assert!(is_effectful_method("action.approve"));
         assert!(!is_effectful_method("operations.chat"));
         assert!(!is_effectful_method("run.cancel"));
     }

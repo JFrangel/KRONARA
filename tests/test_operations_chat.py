@@ -4,9 +4,23 @@ from pathlib import Path
 from kronara.observable_tools import ObservableToolRegistry
 from kronara.operations_chat import OperationsChatAgent
 from kronara.operations_contracts import OperationsChatRequest
+from kronara.programs import ProgramDescriptor
 from kronara.prompt_stack import PersonaProfile, PromptStackCompiler
 from kronara.store import KronaraStore
 from kronara.tools import ToolRegistry, ToolSpec
+
+
+def viernes_paranormal() -> ProgramDescriptor:
+    return ProgramDescriptor(
+        program_id="viernes-paranormal",
+        name="Viernes Paranormal",
+        weekday="viernes",
+        genre="Horror",
+        description="Historias reales de encuentros paranormales.",
+        visual_style_id="viernes-paranormal",
+        target_duration_seconds=180,
+        platforms=("youtube",),
+    )
 
 
 class RecordingResponder:
@@ -39,7 +53,7 @@ def request(
     )
 
 
-def chat_fixture(tmp_path, *, with_evidence: bool = True):
+def chat_fixture(tmp_path, *, with_evidence: bool = True, programs: tuple = ()):
     store = KronaraStore(tmp_path / "chat.db")
     store.initialize()
 
@@ -74,6 +88,7 @@ def chat_fixture(tmp_path, *, with_evidence: bool = True):
         prompt_compiler=PromptStackCompiler(),
         persona=persona(),
         responder=responder,
+        programs=programs,
     )
     return agent, store, responder
 
@@ -145,4 +160,39 @@ def test_chat_never_persists_raw_user_text_that_may_contain_external_source_body
     persisted = str(store.list_conversation_turns("conv_1"))
     assert source_body not in persisted
     assert "sha256=" in persisted
+    store.close()
+
+
+def test_chat_recognizes_a_creation_request_naming_a_real_program(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
+
+    response = agent.answer(
+        request("Crea un episodio nuevo de Viernes Paranormal para mañana")
+    )
+
+    assert response.action_intent.kind == "create_episode"
+    assert response.action_intent.arguments == {"program_id": "viernes-paranormal"}
+    assert response.action_intent.status == "requires_approval"
+    assert "Viernes Paranormal" in response.answer
+    assert "todavía no se ha creado nada" in response.answer
+    store.close()
+
+
+def test_chat_ignores_creation_verbs_without_a_recognizable_program(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
+
+    response = agent.answer(request("Crea un episodio nuevo"))
+
+    assert response.action_intent is None
+    store.close()
+
+
+def test_chat_ignores_a_program_name_mentioned_without_a_creation_verb(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
+
+    response = agent.answer(
+        request("¿Cuántos episodios lleva Viernes Paranormal?")
+    )
+
+    assert response.action_intent is None
     store.close()

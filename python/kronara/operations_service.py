@@ -7,6 +7,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from kronara.agent_catalog import AgentCatalog
 from kronara.authority_client import AuthorityClient, UnavailableAuthorityClient
@@ -80,6 +81,13 @@ class OperationsService:
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.RLock()
         self._paused = False
+        # Chat can only ever PROPOSE an action (see OperationsChatAgent);
+        # action.approve executes one by its idempotency_key, never by
+        # arguments the client resupplies -- otherwise a compromised
+        # frontend (or an injected chat reply) could execute an arbitrary
+        # content.run with attacker-chosen params. Popped on approval, so
+        # each proposal is single-use.
+        self._pending_intents: dict[str, dict[str, Any]] = {}
         self._model_registry = ModelCapabilityRegistryV2.load(
             self.resource_root / "config" / "models" / "registry.v2.json"
         )
@@ -114,6 +122,7 @@ class OperationsService:
             "programs.list": self.programs_list,
             "episodes.list": self.episodes_list,
             "schedule.tick": self.schedule_tick,
+            "action.approve": self.action_approve,
         }
 
     def schedule_tick(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -213,7 +222,25 @@ class OperationsService:
             message=str(params["message"]),
             minimum_context_coverage=float(params.get("minimum_context_coverage", 0.7)),
         )
-        return self._json(asdict(self._chat.answer(request)))
+        response = self._chat.answer(request)
+        if response.action_intent is not None:
+            with self._lock:
+                self._pending_intents[response.action_intent.idempotency_key] = asdict(
+                    response.action_intent
+                )
+        return self._json(asdict(response))
+
+    def action_approve(self, params: dict[str, Any]) -> dict[str, Any]:
+        idempotency_key = str(params["idempotency_key"])
+        with self._lock:
+            intent = self._pending_intents.pop(idempotency_key, None)
+        if intent is None:
+            return {"schema_version": 1, "status": "not_found", "kind": None, "result": None}
+        if intent["kind"] == "create_episode":
+            story_id = f"owned_chat_{uuid4().hex[:16]}"
+            result = self.content_run({**intent["arguments"], "story_id": story_id})
+            return {"schema_version": 1, "status": "executed", "kind": intent["kind"], "result": result}
+        return {"schema_version": 1, "status": "unsupported", "kind": intent["kind"], "result": None}
 
     def operations_context(self, _: dict[str, Any]) -> dict[str, Any]:
         status = self._status_snapshot()
@@ -559,6 +586,10 @@ class OperationsService:
                 )
             )
             narrative_profile = AgentNarrativeProfile.from_dict(narrative_payload)
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        registry = ProgramRegistry.load(default_registry_path())
+        programs = tuple(registry.get(pid) for pid in registry.program_ids)
         return OperationsChatAgent(
             tools=tools,
             store=self.store,
@@ -566,6 +597,7 @@ class OperationsService:
             persona=PersonaProfile.from_dict(persona_payload),
             responder=LocalOperationsResponder(),
             narrative_profile=narrative_profile,
+            programs=programs,
         )
 
     def _build_rag(self) -> RAGV3Index:

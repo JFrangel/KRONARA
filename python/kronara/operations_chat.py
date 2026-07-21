@@ -14,6 +14,7 @@ from kronara.operations_contracts import (
     OperationsChatResponse,
     OperationsContextPacket,
 )
+from kronara.programs import ProgramDescriptor
 from kronara.prompt_stack import (
     AgentNarrativeProfile,
     PersonaProfile,
@@ -91,6 +92,14 @@ class OperationsChatAgent:
         "memory.search",
     )
 
+    # Deliberately regex-based, not LLM-classified -- the same "no inventes
+    # tool calls" policy this agent's own prompt stack enforces on the
+    # responder applies to itself: an action_intent must be a deterministic,
+    # auditable function of the literal text, never a guess.
+    CREATION_VERB_PATTERN = re.compile(
+        r"\b(crea|crear|creame|cr[eé]ame|genera|generar|produce|producir|arma|armame)\b"
+    )
+
     def __init__(
         self,
         *,
@@ -102,6 +111,7 @@ class OperationsChatAgent:
         narrative_profile: AgentNarrativeProfile | None = None,
         context_builder: OperationsContextBuilder | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        programs: tuple[ProgramDescriptor, ...] = (),
     ):
         self.tools = tools
         self.store = store
@@ -111,6 +121,8 @@ class OperationsChatAgent:
         self.narrative_profile = narrative_profile
         self.context_builder = context_builder or OperationsContextBuilder()
         self.clock = clock
+        self._programs = programs
+        self._program_by_id = {program.program_id: program for program in programs}
 
     def answer(self, request: OperationsChatRequest) -> OperationsChatResponse:
         intent = self._classify(request.message)
@@ -163,10 +175,7 @@ class OperationsChatAgent:
                 schema_version=1,
                 request_id=request.request_id,
                 status="completed",
-                answer=(
-                    "Preparé una propuesta administrativa, pero no está autorizada ni "
-                    "ha cambiado la operación. Rust debe validarla y pedir confirmación."
-                ),
+                answer=self._confirmation_text(intent, action_intent),
                 citations=packet.citations,
                 tool_trace_ids=packet.tool_trace_ids,
                 gaps=(),
@@ -207,8 +216,7 @@ class OperationsChatAgent:
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return f"[{role} turn omitted from durable memory; sha256={digest}; chars={len(content)}]"
 
-    @staticmethod
-    def _classify(message: str) -> ChatIntent:
+    def _classify(self, message: str) -> ChatIntent:
         normalized = message.casefold()
         budget_match = re.search(
             r"(?:presupuesto|budget)[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)",
@@ -222,9 +230,42 @@ class OperationsChatAgent:
                 action_kind="set_budget",
                 action_arguments={"requested_maximum_usd": amount},
             )
+        if self.CREATION_VERB_PATTERN.search(normalized):
+            program = self._match_program(normalized)
+            if program is not None:
+                return ChatIntent(
+                    kind="administrative_action",
+                    tools=("operations.status",),
+                    action_kind="create_episode",
+                    action_arguments={"program_id": program.program_id},
+                )
         return ChatIntent(
             kind="operation_status",
             tools=("operations.status", "tools.timeline"),
+        )
+
+    def _match_program(self, normalized_message: str) -> ProgramDescriptor | None:
+        """Only ever matches a program whose real configured name literally
+        appears in the message -- never a fuzzy or LLM-guessed match, so an
+        approved action can't silently target a program the user didn't
+        name."""
+        for program in self._programs:
+            if program.name.casefold() in normalized_message:
+                return program
+        return None
+
+    def _confirmation_text(self, intent: ChatIntent, action_intent: ActionIntent) -> str:
+        if intent.action_kind == "create_episode":
+            program_id = str(action_intent.arguments.get("program_id", ""))
+            program = self._program_by_id.get(program_id)
+            name = program.name if program is not None else program_id
+            return (
+                f'Preparé la creación de un episodio nuevo de "{name}". '
+                "Apruébala para ejecutarla; todavía no se ha creado nada."
+            )
+        return (
+            "Preparé una propuesta administrativa, pero no está autorizada ni "
+            "ha cambiado la operación. Rust debe validarla y pedir confirmación."
         )
 
     @staticmethod
