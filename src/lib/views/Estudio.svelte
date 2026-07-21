@@ -3,7 +3,7 @@
   import Badge from '../components/Badge.svelte';
   import StubView from './StubView.svelte';
   import { applyProgressEvent } from '../operations-state.js';
-  import { callOperations } from '../tauri-operations.js';
+  import { assetSrc, callOperations } from '../tauri-operations.js';
 
   let { operations = $bindable({}), connection = 'disconnected' } = $props();
 
@@ -126,7 +126,7 @@
         <div class="mt-4 border-t border-line pt-4">
           <div class="flex items-center gap-2">
             <Badge tone={contentResult.status === 'completed' ? 'success' : 'error'}>{contentResult.status}</Badge>
-            <h3 class="font-display text-sm font-semibold text-ink">{contentResult.story?.title ?? 'Ejecución bloqueada de forma segura'}</h3>
+            <h3 class="font-display text-sm font-semibold text-ink">{contentResult.story?.title ?? contentResult.error_code ?? 'Ejecución bloqueada de forma segura'}</h3>
           </div>
           {#if contentResult.story}
             <p class="mt-1.5 text-[13px] text-ink-secondary">{contentResult.story.hook}</p>
@@ -139,15 +139,75 @@
             </dl>
           {/if}
         </div>
+
+        {#if contentResult.selected_signal}
+          <div class="mt-4 border-t border-line pt-4">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-tertiary">Investigación · señal elegida</p>
+            <p class="mt-2 text-[13px] text-ink-secondary">{contentResult.selected_signal.theme_hint}</p>
+            <dl class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div class="rounded-lg border border-line bg-surface-inset p-2.5"><dt class="text-[10.5px] text-ink-tertiary">Velocidad</dt><dd class="mt-0.5 text-[12px] text-ink">{contentResult.selected_signal.velocity.toFixed(2)}</dd></div>
+              <div class="rounded-lg border border-line bg-surface-inset p-2.5"><dt class="text-[10.5px] text-ink-tertiary">Saturación</dt><dd class="mt-0.5 text-[12px] text-ink">{Math.round(contentResult.selected_signal.saturation * 100)}%</dd></div>
+              <div class="rounded-lg border border-line bg-surface-inset p-2.5"><dt class="text-[10.5px] text-ink-tertiary">Aceleración</dt><dd class="mt-0.5 text-[12px] text-ink">{contentResult.selected_signal.acceleration.toFixed(2)}</dd></div>
+              <div class="rounded-lg border border-line bg-surface-inset p-2.5"><dt class="text-[10.5px] text-ink-tertiary">Derechos</dt><dd class="mt-0.5 text-[12px] text-ink">{contentResult.selected_signal.rights_mode}</dd></div>
+            </dl>
+            <small class="mt-2 block break-all text-[11px] text-ink-tertiary">{contentResult.selected_signal.source_uri}</small>
+          </div>
+        {/if}
+
+        {#if contentResult.rejected_signals && Object.keys(contentResult.rejected_signals).length > 0}
+          <div class="mt-4 border-t border-line pt-4">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-tertiary">Señales descartadas por los filtros</p>
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              {#each Object.entries(contentResult.rejected_signals) as [reason, count]}
+                <span class="rounded-full border border-line bg-surface-inset px-2.5 py-1 text-[11px] text-ink-tertiary">{reason}: {count}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
       {/if}
     </Card>
   {:else if activeTab === 'guion'}
     <Card title="Guion" subtitle={contentResult?.story ? `${contentResult.story.word_count} palabras` : undefined}>
       {#if contentResult?.story}
-        <p class="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-secondary">{contentResult.story.script}</p>
-        {#each contentResult.rag_citations ?? [] as citation}
-          <small class="mt-1 block break-all text-[11px] text-ink-tertiary">{citation}</small>
-        {/each}
+        <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="rounded-lg border border-line bg-surface-inset p-2.5">
+            <dt class="text-[10.5px] text-ink-tertiary">Duración real / objetivo</dt>
+            <dd class="mt-0.5 text-[12px] text-ink">{Math.round(contentResult.story.duration_qc.estimated_seconds)}s / {contentResult.story.duration_qc.target_seconds}s</dd>
+          </div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2.5">
+            <dt class="text-[10.5px] text-ink-tertiary">Palabras reales / objetivo</dt>
+            <dd class="mt-0.5 text-[12px] text-ink">{contentResult.story.duration_qc.actual_word_count} / {contentResult.story.duration_qc.target_word_count}</dd>
+          </div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2.5">
+            <dt class="text-[10.5px] text-ink-tertiary">Calidad narrativa</dt>
+            <dd class="mt-0.5 text-[12px] text-ink">{contentResult.story.quality.total.toFixed(1)}/10</dd>
+          </div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2.5">
+            <dt class="text-[10.5px] text-ink-tertiary">Originalidad</dt>
+            <dd class="mt-0.5"><Badge tone={contentResult.story.originality.passed ? 'success' : 'error'}>{contentResult.story.originality.passed ? 'Aprobada' : 'Revisar'}</Badge></dd>
+          </div>
+        </dl>
+        <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="rounded-lg border border-line bg-surface-inset p-2"><p class="text-[10px] text-ink-tertiary">Similitud léxica</p><p class="mt-0.5 text-[11.5px] text-ink">{Math.round(contentResult.story.originality.lexical_similarity * 100)}%</p></div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2"><p class="text-[10px] text-ink-tertiary">Similitud semántica</p><p class="mt-0.5 text-[11.5px] text-ink">{Math.round(contentResult.story.originality.semantic_similarity * 100)}%</p></div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2"><p class="text-[10px] text-ink-tertiary">Similitud estructural</p><p class="mt-0.5 text-[11.5px] text-ink">{Math.round(contentResult.story.originality.structural_similarity * 100)}%</p></div>
+          <div class="rounded-lg border border-line bg-surface-inset p-2"><p class="text-[10px] text-ink-tertiary">Secuencia de eventos</p><p class="mt-0.5 text-[11.5px] text-ink">{Math.round(contentResult.story.originality.event_sequence_similarity * 100)}%</p></div>
+        </div>
+        {#if contentResult.story.revision_count > 0}
+          <p class="mt-2 text-[11px] text-ink-tertiary">{contentResult.story.revision_count} revisión(es) aplicadas por el crítico independiente antes de aprobar.</p>
+        {/if}
+        {#if (contentResult.story.quality.blocking_dimensions ?? []).length > 0}
+          <p class="mt-2 text-[11px] text-error">Dimensiones bloqueantes: {contentResult.story.quality.blocking_dimensions.join(', ')}</p>
+        {/if}
+        <p class="mt-4 whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-secondary">{contentResult.story.script}</p>
+        {#if (contentResult.rag_citations ?? []).length > 0}
+          <div class="mt-3 border-t border-line pt-3">
+            <p class="text-[10.5px] text-ink-tertiary">Fragmentos propios citados (RAG)</p>
+            {#each contentResult.rag_citations as citation}
+              <small class="mt-1 block break-all text-[11px] text-ink-tertiary">{citation}</small>
+            {/each}
+          </div>
+        {/if}
       {:else}
         <p class="text-[13px] text-ink-secondary">Crea una historia desde la pestaña Resumen para ver el guion aquí.</p>
       {/if}
@@ -197,13 +257,37 @@
   {:else if activeTab === 'exportaciones'}
     <Card title="Exportaciones">
       {#if contentResult?.video?.output_path}
-        <div class="flex items-center justify-between rounded-lg border border-line bg-surface-inset p-3">
-          <div>
-            <p class="text-[12.5px] text-ink">{contentResult.video.output_path}</p>
-            <p class="mt-1 text-[11px] text-ink-tertiary">{contentResult.video.scene_count} escenas · {contentResult.video.shot_count} tomas</p>
+        <div class="flex items-start gap-3 rounded-lg border border-line bg-surface-inset p-3">
+          {#if assetSrc(contentResult.video.cover_image_path)}
+            <img src={assetSrc(contentResult.video.cover_image_path)} alt="" class="h-16 w-16 shrink-0 rounded-lg object-cover" />
+          {/if}
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2">
+              <p class="truncate text-[12.5px] text-ink">{contentResult.video.output_path}</p>
+              <Badge tone={contentResult.video.qc_passed ? 'success' : 'error'}>{contentResult.video.qc_passed ? 'QC aprobado' : 'QC con problemas'}</Badge>
+            </div>
+            <p class="mt-1 text-[11px] text-ink-tertiary">
+              {contentResult.video.scene_count} escenas · {contentResult.video.shot_count} tomas
+              {#if contentResult.video.integrated_lufs != null} · {contentResult.video.integrated_lufs.toFixed(1)} LUFS{/if}
+            </p>
+            {#if contentResult.video.source_kind_counts}
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                {#each Object.entries(contentResult.video.source_kind_counts) as [kind, count]}
+                  <span class="rounded-full border border-line bg-surface px-2 py-0.5 text-[10.5px] text-ink-tertiary">{kind}: {count}</span>
+                {/each}
+              </div>
+            {/if}
+            {#if (contentResult.video.qc_issues ?? []).length > 0}
+              <ul class="mt-2 space-y-0.5">
+                {#each contentResult.video.qc_issues as issue}
+                  <li class="text-[11px] text-error">{issue}</li>
+                {/each}
+              </ul>
+            {/if}
           </div>
-          <Badge tone={contentResult.video.qc_passed ? 'success' : 'error'}>{contentResult.video.qc_passed ? 'QC aprobado' : 'QC con problemas'}</Badge>
         </div>
+      {:else if contentResult?.video?.status === 'failed'}
+        <p class="text-[13px] text-ink-secondary">La producción de video falló para esta ejecución ({contentResult.video.error}); el guion de texto se guardó igualmente.</p>
       {:else}
         <p class="text-[13px] text-ink-secondary">Sin exportaciones todavía. El master 16:9 y sus variantes por plataforma aparecerán aquí una vez que el pipeline visual (V0-V8) produzca un episodio.</p>
       {/if}
