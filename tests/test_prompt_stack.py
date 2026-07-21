@@ -99,9 +99,15 @@ def test_versioned_persona_file_matches_runtime_contract():
     assert set(loaded.traits) == {
         "divertida",
         "independiente",
+        "resiliente",
+        "apasionada",
+        "inteligente",
         "investigativa",
         "perfeccionista",
         "creativa",
+        "curiosa",
+        "sociable",
         "analitica",
+        "precisa",
     }
 
