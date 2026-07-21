@@ -3,7 +3,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
-  import { callOperations } from '../tauri-operations.js';
+  import { assetSrc, callOperations } from '../tauri-operations.js';
   import { programGradient } from '../programArt.js';
 
   let { operations = {}, control = {}, onNavigate = () => {} } = $props();
@@ -48,6 +48,13 @@
     return episodes.find((episode) => episode.program_id === programId) ?? null;
   }
 
+  function coverImageFor(programId) {
+    const withCover = episodes.find(
+      (episode) => episode.program_id === programId && episode.cover_image_path
+    );
+    return withCover ? assetSrc(withCover.cover_image_path) : null;
+  }
+
   function programFor(weekday) {
     return programs.find((program) => program.weekday === weekday);
   }
@@ -73,6 +80,7 @@
         {:else}
           <div class="flex gap-3 overflow-x-auto pb-1">
             {#each (loading ? Array.from({ length: 7 }, (_, index) => ({ program_id: `_placeholder_${index}` })) : programs) as program (program.program_id)}
+              {@const cover = loading ? null : coverImageFor(program.program_id)}
               <button
                 class="group relative h-40 w-56 shrink-0 overflow-hidden rounded-xl border text-left transition-colors"
                 class:border-line={!loading}
@@ -84,6 +92,9 @@
                 disabled={loading}
               >
                 {#if !loading}
+                  {#if cover}
+                    <img src={cover} alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                  {/if}
                   <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
                   <div class="relative flex h-full flex-col justify-end p-3.5">
                     <span class="w-fit rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium capitalize text-ink backdrop-blur-sm">{program.weekday}</span>

@@ -175,6 +175,10 @@ class OperationsService:
                     "critic_family": episode["metadata"].get("critic_family"),
                     "narrative_passed": episode["metadata"].get("narrative_passed"),
                     "originality_passed": episode["metadata"].get("originality_passed"),
+                    "video_status": episode["metadata"].get("video_status"),
+                    "video_path": episode["metadata"].get("video_path") or None,
+                    "cover_image_path": episode["metadata"].get("cover_image_path") or None,
+                    "video_qc_passed": episode["metadata"].get("video_qc_passed"),
                 }
                 for episode in episodes
             ],

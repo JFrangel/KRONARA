@@ -355,6 +355,14 @@ class ProductionContentPipeline:
                 "reddit_receipt_id": receipt.get("receipt_id"),
                 "rag_citations": list(citations),
             }
+        # Produced BEFORE the artifact is saved (not after, as this used to
+        # be) so the video/cover paths make it into the SAVED metadata --
+        # episodes.list only ever sees what's persisted here, not the
+        # in-memory response of the run that created it. Without this, a
+        # freshly-created episode showed its video in the moment (Estudio's
+        # own contentResult), but the SAME episode loaded later from
+        # Programas/Episodios had no way to know a video existed at all.
+        video = self._produce_video(story_id=story_id, brief=brief, result=result, run_id=run_id)
         artifact = self.artifacts.put_bytes(result.script.text.encode("utf-8"))
         artifact_uri = f"kronara://sha256/{artifact.sha256}"
         self.store.save_owned_story_artifact(
@@ -375,9 +383,12 @@ class ProductionContentPipeline:
                 "originality_passed": bool(result.originality and result.originality.passed),
                 "safety_passed": True,
                 "golden_no_regression": True,
+                "video_status": video["status"] if video else "not_configured",
+                "video_path": video.get("output_path", "") if video else "",
+                "cover_image_path": video.get("cover_image_path", "") if video else "",
+                "video_qc_passed": video.get("qc_passed") if video else None,
             },
         )
-        video = self._produce_video(story_id=story_id, brief=brief, result=result, run_id=run_id)
         self.store.append_event(
             run_id,
             "content.completed",
@@ -548,6 +559,10 @@ class ProductionContentPipeline:
         try:
             from kronara.visual_production import produce_episode_video
 
+            cover_text = next(
+                (item.hook for item in result.concepts if item.concept_id == result.selected_concept_id),
+                brief.premise,
+            )
             production = produce_episode_video(
                 scenes=result.scenes,
                 voice_duration=voice_duration,
@@ -557,6 +572,7 @@ class ProductionContentPipeline:
                 image_provider=self._image_provider,
                 visual_style=visual_style,
                 library=self._asset_library,
+                cover_text=cover_text,
             )
         except Exception as error:
             self.store.append_event(
@@ -566,6 +582,7 @@ class ProductionContentPipeline:
         return {
             "status": "completed" if production.qc.passed else "qc_failed",
             "output_path": production.output_path,
+            "cover_image_path": production.cover_image_path,
             "qc_passed": production.qc.passed,
             "qc_issues": list(production.qc.issues),
             "integrated_lufs": production.loudness.integrated_lufs,

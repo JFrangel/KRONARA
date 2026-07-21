@@ -555,8 +555,19 @@ def test_content_run_produces_a_real_video_when_visual_stage_is_configured(tmp_p
     assert Path(result["video"]["output_path"]).exists()
     assert result["video"]["scene_count"] == 6
     assert sum(result["video"]["source_kind_counts"].values()) == 6
+    assert Path(result["video"]["cover_image_path"]).exists()
     events = {event.kind for event in store.replay("content:owned-production-video-1")}
     assert "content.completed" in events
+
+    # The SAVED metadata (not just this run's in-memory response) must carry
+    # the video/cover paths -- episodes.list only ever reads what's
+    # persisted here, for an episode loaded long after the run that made it.
+    saved = store.load_owned_story_artifact("owned-production-video-1")
+    assert saved["metadata"]["video_status"] == "completed"
+    assert saved["metadata"]["video_path"] == result["video"]["output_path"]
+    assert saved["metadata"]["cover_image_path"] == result["video"]["cover_image_path"]
+    assert saved["metadata"]["video_qc_passed"] is True
+
     store.close()
     rag.close()
 
