@@ -15,7 +15,16 @@ class ToolSpec:
     tool_id: str
     handler: Callable[[dict[str, Any]], Any]
     side_effect: bool = False
-    timeout_seconds: float = 30.0
+    # A real story-generation tool (story.concept/blueprint/draft) can chain
+    # several sequential OpenRouter calls before succeeding -- a "creative_
+    # primary" alias alone has 5 fallback candidates, and free-tier models
+    # are frequently slower than paid ones under load. 30s was tuned for
+    # deterministic/local tools; the first genuinely end-to-end real run
+    # (real Reddit, real OpenRouter, real fallback chain) measured a single
+    # story-generation step legitimately exceeding it. 120s is generous for
+    # every real call observed so far while still catching an actually-hung
+    # tool rather than waiting forever.
+    timeout_seconds: float = 120.0
     estimated_cost_usd: float = 0.0
 
     def __post_init__(self) -> None:
@@ -88,8 +97,14 @@ class ToolRegistry:
         started_at = self.clock()
         try:
             value = tool.handler(dict(arguments))
-            if self.clock() - started_at > tool.timeout_seconds:
+            elapsed = self.clock() - started_at
+            if elapsed > tool.timeout_seconds:
                 self._record_failure(tool_id)
+                print(
+                    f"[tool_timeout] tool_id={tool_id} agent_id={agent_id} "
+                    f"elapsed={elapsed:.1f}s deadline={tool.timeout_seconds:.1f}s",
+                    file=sys.stderr,
+                )
                 return ToolResult(
                     False,
                     error_code="TOOL_TIMEOUT",

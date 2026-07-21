@@ -147,6 +147,7 @@ class ProductionContentPipeline:
         renderer: "object | None" = None,
         visual_style_registry: "object | None" = None,
         asset_library: "object | None" = None,
+        opportunity_store: "object | None" = None,
     ):
         self.authority = authority
         self.store = store
@@ -171,6 +172,10 @@ class ProductionContentPipeline:
         self._renderer = renderer
         self._visual_style_registry = visual_style_registry
         self._asset_library = asset_library
+        # Optional: caches the no-credential RSS fallback's harvest so a
+        # scheduled program firing repeatedly doesn't re-hit Reddit's live
+        # RSS endpoint (and its per-IP rate limit) on every single run.
+        self._opportunity_store = opportunity_store
         # Loaded once: knowledge/reddit-sources/*.md classify each subreddit as
         # entertainment vs. real_experience_serious (see reddit_source_map.py).
         self._source_map = load_source_map()
@@ -422,48 +427,48 @@ class ProductionContentPipeline:
         self, subreddits: list[str], params: dict[str, Any]
     ) -> tuple[dict[str, Any], int, tuple[ObservableRedditSignal, ...]]:
         """No-credential fallback for reddit.list_signals: the same public
-        RSS reading harvest_reddit.py already uses, just called synchronously
-        here instead of harvest-then-store. RSS exposes no score/comments, so
-        those fields are honestly zero (not fabricated) -- callers must use
-        RedditSignalFilters without score/velocity thresholds for these."""
-        from kronara.reddit_rss import RedditRssReader
+        RSS reading harvest_reddit.py already uses. RSS exposes no score/
+        comments, so those fields are honestly zero (not fabricated) --
+        callers must use RedditSignalFilters without score/velocity
+        thresholds for these.
 
-        reader = RedditRssReader()
-        limit = int(params.get("limit", 25))
-        posts = reader.trending(subreddits, max_subs=max(1, len(subreddits)), per_sub=limit)
+        Cache-first: when an opportunity_store is configured, this draws
+        from it (OpportunityStore -- built for exactly "harvest occasionally,
+        consume many times", but never actually wired into content.run
+        before) instead of hitting Reddit's live RSS endpoint on every single
+        run. A program firing every 30 minutes on B1's scheduler, each
+        reading several subreddits, adds up fast against Reddit's per-IP RSS
+        rate limiting; most calls should now be served from the local cache,
+        with a live fetch (which backfills the cache for next time) only
+        when it's genuinely empty for these subreddits."""
         now = int(datetime.now(UTC).timestamp())
-        signals = []
-        for post in posts:
-            try:
-                published_at = int(datetime.fromisoformat(post.published).timestamp())
-            except (ValueError, TypeError):
-                published_at = now
-            age_hours = max(0.25, (now - published_at) / 3600)
-            title = re.sub(r"https?://\S+", "", post.title)
-            theme_hint = " ".join(title.split())[:180]
-            signals.append(
-                ObservableRedditSignal(
-                    source_id=hashlib.sha256(post.link.encode("utf-8")).hexdigest()[:16],
-                    source_uri=post.link,
-                    theme_hint=theme_hint,
-                    score=0,
-                    comments=0,
-                    age_hours=age_hours,
-                    language=self._infer_language(theme_hint),  # RSS has no per-post language field
-                    self_post=True,
-                    nsfw=False,
-                    author_deleted=False,
-                    post_deleted=False,
-                    crosspost=False,
-                    repost=False,
-                    observed_length=len(theme_hint),
-                    velocity=0.0,
-                    acceleration=0.0,
-                    saturation=0.0,
-                    lifetime_hours=age_hours,
-                    rights_mode="reference_only",
+        if self._opportunity_store is not None:
+            cached = self._opportunity_store.take_next_for_subreddits(subreddits, now)
+            if cached is None:
+                self._harvest_opportunities(subreddits, int(params.get("limit", 25)), now)
+                cached = self._opportunity_store.take_next_for_subreddits(subreddits, now)
+            if cached is not None:
+                signal = self._signal_from_theme(
+                    source_uri=cached.link, theme_hint=cached.theme_hint,
+                    age_hours=max(0.25, (now - cached.harvested_at) / 3600),
                 )
+                receipt = {
+                    "receipt_id": f"cache_{now}", "query_hash": "opportunity_cache",
+                    "contract_reference": "no_credentials_public_rss", "observed_at": now, "count": 1,
+                }
+                return receipt, now, (signal,)
+
+        # No store configured (e.g. a bare unit test), or a live fetch just
+        # ran and still found nothing new for these subreddits -- fall back
+        # to building signals directly from a fresh, uncached live fetch.
+        posts = self._harvest_opportunities(subreddits, int(params.get("limit", 25)), now)
+        signals = tuple(
+            self._signal_from_theme(
+                source_uri=post.link, theme_hint=post.title,
+                age_hours=self._rss_post_age_hours(post, now),
             )
+            for post in posts
+        )
         receipt = {
             "receipt_id": f"rss_{now}",
             "query_hash": "rss",
@@ -471,7 +476,50 @@ class ProductionContentPipeline:
             "observed_at": now,
             "count": len(signals),
         }
-        return receipt, now, tuple(signals)
+        return receipt, now, signals
+
+    def _harvest_opportunities(self, subreddits: list[str], limit: int, now: int) -> list[Any]:
+        """One live RSS fetch, saved into opportunity_store (if configured)
+        for future runs to consume without hitting the network again."""
+        from kronara.reddit_rss import RedditRssReader
+
+        posts = RedditRssReader().trending(subreddits, max_subs=max(1, len(subreddits)), per_sub=limit)
+        if self._opportunity_store is not None and posts:
+            self._opportunity_store.harvest(posts, now)
+        return posts
+
+    @staticmethod
+    def _rss_post_age_hours(post: Any, now: int) -> float:
+        try:
+            published_at = int(datetime.fromisoformat(post.published).timestamp())
+        except (ValueError, TypeError):
+            published_at = now
+        return max(0.25, (now - published_at) / 3600)
+
+    def _signal_from_theme(self, *, source_uri: str, theme_hint: str, age_hours: float) -> ObservableRedditSignal:
+        clean_title = re.sub(r"https?://\S+", "", theme_hint)
+        hint = " ".join(clean_title.split())[:180]
+        return ObservableRedditSignal(
+            source_id=hashlib.sha256(source_uri.encode("utf-8")).hexdigest()[:16],
+            source_uri=source_uri,
+            theme_hint=hint,
+            score=0,
+            comments=0,
+            age_hours=age_hours,
+            language=self._infer_language(hint),  # RSS has no per-post language field
+            self_post=True,
+            nsfw=False,
+            author_deleted=False,
+            post_deleted=False,
+            crosspost=False,
+            repost=False,
+            observed_length=len(hint),
+            velocity=0.0,
+            acceleration=0.0,
+            saturation=0.0,
+            lifetime_hours=age_hours,
+            rights_mode="reference_only",
+        )
 
     def _produce_video(
         self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str

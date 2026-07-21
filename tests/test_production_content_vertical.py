@@ -408,6 +408,71 @@ def test_rss_fallback_signals_have_honest_zero_engagement_not_fabricated_numbers
     store.close()
 
 
+def test_rss_fallback_serves_from_the_opportunity_cache_without_touching_the_network(tmp_path, monkeypatch):
+    """A program on B1's 30-minute scheduler tick hits this fallback
+    repeatedly -- it must not re-fetch Reddit's live RSS endpoint (and its
+    per-IP rate limit) on every single run when a cached, unused opportunity
+    is already sitting in the store for these subreddits."""
+    from kronara.opportunities import OpportunityStore
+    from kronara.reddit_rss import RedditRssReader, RssPost
+
+    def _must_not_be_called(self, *a, **k):
+        raise AssertionError("RedditRssReader.trending() must not be called on a cache hit")
+
+    monkeypatch.setattr(RedditRssReader, "trending", _must_not_be_called)
+
+    opportunity_store = OpportunityStore(":memory:").initialize()
+    opportunity_store.harvest(
+        [RssPost("Historias", "Historia ya cosechada previamente", "https://www.reddit.com/r/Historias/comments/cached/", "2026-07-19T12:00:00+00:00")],
+        now=1_784_000_000,
+    )
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    pipeline = ProductionContentPipeline(
+        authority=RedditDisabledAuthority(), store=store,
+        rag=RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64)),
+        model_registry=ModelCapabilityRegistryV2.load(ROOT / "config" / "models" / "registry.v2.json"),
+        artifact_root=tmp_path / "artifacts",
+        opportunity_store=opportunity_store,
+    )
+
+    _receipt, _now, signals = pipeline._rss_fallback_signals(["Historias"], {"limit": 25})
+
+    assert len(signals) == 1
+    assert signals[0].theme_hint == "Historia ya cosechada previamente"
+    assert opportunity_store.count("used") == 1  # anti-repeat: marked consumed
+    store.close()
+
+
+def test_rss_fallback_backfills_the_cache_on_a_miss_for_next_time(tmp_path, monkeypatch):
+    from kronara.opportunities import OpportunityStore
+    from kronara.reddit_rss import RedditRssReader, RssPost
+
+    monkeypatch.setattr(
+        RedditRssReader, "trending",
+        lambda self, *a, **k: [RssPost("Historias", "Historia recien cosechada en vivo", "https://www.reddit.com/r/Historias/comments/fresh/", "2026-07-19T12:00:00+00:00")],
+    )
+    opportunity_store = OpportunityStore(":memory:").initialize()  # empty -- cache miss
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    pipeline = ProductionContentPipeline(
+        authority=RedditDisabledAuthority(), store=store,
+        rag=RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64)),
+        model_registry=ModelCapabilityRegistryV2.load(ROOT / "config" / "models" / "registry.v2.json"),
+        artifact_root=tmp_path / "artifacts",
+        opportunity_store=opportunity_store,
+    )
+
+    _receipt, _now, signals = pipeline._rss_fallback_signals(["Historias"], {"limit": 25})
+
+    assert len(signals) == 1
+    assert signals[0].theme_hint == "Historia recien cosechada en vivo"
+    # The live fetch backfilled the store -- a future call for this same
+    # subreddit pool can now be served from cache instead of the network.
+    assert opportunity_store.count("used") == 1
+    store.close()
+
+
 FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None
 
 

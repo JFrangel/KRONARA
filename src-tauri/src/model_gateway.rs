@@ -231,10 +231,27 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 }
             };
             if !(200..300).contains(&response.status) {
+                // The RPC caller only ever sees `last_error`'s short, generic
+                // form (never leak provider internals over the wire) -- but a
+                // real failure (rate limit, expired free-tier model, an
+                // exhausted credit balance) was previously invisible to
+                // anyone, including whoever runs Kronara locally. This lands
+                // in the same place Python's stderr does when run via a
+                // console (`cargo run`/`cargo run --example`); a real
+                // shipped GUI build has no attached console for this to
+                // reach yet -- a follow-up, not solved here.
+                eprintln!(
+                    "[model_gateway] non-2xx status={} model={} body={}",
+                    response.status, candidate.model_id, response.json
+                );
                 last_error = format!("model provider failed with status {}", response.status);
                 continue;
             }
             let Some(content) = response.json.pointer("/choices/0/message/content").cloned() else {
+                eprintln!(
+                    "[model_gateway] missing content model={} body={}",
+                    candidate.model_id, response.json
+                );
                 last_error = "model response content is missing".into();
                 continue;
             };

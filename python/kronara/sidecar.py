@@ -24,6 +24,7 @@ from kronara.improvement import (
 )
 from kronara.narrative_quality import NarrativeQualityEvaluator
 from kronara.operations_service import OperationsService
+from kronara.opportunities import OpportunityStore
 from kronara.performance import MetricSnapshot, PerformanceScientist
 from kronara.rag_v2 import (
     DeterministicHashEmbedder,
@@ -417,12 +418,21 @@ def serve(
 ) -> int:
     resolved_data_dir = data_dir or Path(".kronara") / "runtime"
     visual_stack = _build_visual_stack(resolved_data_dir)
+    # Cache-first Reddit discovery (see ProductionContentPipeline's RSS
+    # fallback) -- same OpportunityStore schema/pattern harvest_reddit.py
+    # uses, co-located with this run's other data (kronara.db,
+    # asset_library.db) under the real data_dir Rust supplies, rather than
+    # harvest_reddit.py's fixed dev-tree-relative path (that script is a
+    # manual, source-tree-run dev tool, not something a packaged app's data
+    # dir would ever line up with).
+    opportunity_store = OpportunityStore(resolved_data_dir / "opportunities.db").initialize()
     services = OperationsService(
         resolved_data_dir,
         resource_root=_resource_root(),
         authority=StdioAuthorityClient(reader=sys.stdin, writer=sys.stdout),
         embedding_alias=embedding_alias,
         reranker_alias=reranker_alias,
+        opportunity_store=opportunity_store,
         **visual_stack,
     )
     methods = {

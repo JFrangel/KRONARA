@@ -20,6 +20,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 _STOPWORDS = {
     "the", "and", "for", "with", "that", "this", "you", "your", "was", "are",
@@ -124,6 +125,31 @@ class OpportunityStore:
         """Return the oldest unused opportunity and mark it used (anti-repeat)."""
         row = self._conn().execute(
             "SELECT * FROM opportunities WHERE status='new' ORDER BY harvested_at ASC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        self._conn().execute(
+            "UPDATE opportunities SET status='used' WHERE opportunity_id=?",
+            (row["opportunity_id"],),
+        )
+        self._conn().commit()
+        used = dict(row)
+        used["status"] = "used"
+        return self._row(used)
+
+    def take_next_for_subreddits(self, subreddits: Iterable[str], now: int) -> Opportunity | None:
+        """Like take_next(), scoped to one program's own subreddit pool (its
+        F0 nodo-<program_id>.md list) -- content.run should draw a program's
+        episode from the sources actually curated for it, not from whatever
+        other program's backlog happens to be oldest in a shared queue."""
+        names = [str(item) for item in subreddits]
+        if not names:
+            return None
+        placeholders = ",".join("?" for _ in names)
+        row = self._conn().execute(
+            f"SELECT * FROM opportunities WHERE status='new' AND subreddit IN ({placeholders}) "
+            "ORDER BY harvested_at ASC LIMIT 1",
+            names,
         ).fetchone()
         if row is None:
             return None

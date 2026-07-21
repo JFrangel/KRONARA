@@ -65,6 +65,38 @@ def test_take_next_dispenses_each_once():
     store.close()
 
 
+def test_take_next_for_subreddits_only_returns_matching_subreddits():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest(posts(), now=100)  # ProRevenge, AmItheAsshole
+
+    result = store.take_next_for_subreddits(["AmItheAsshole"], now=101)
+
+    assert result is not None
+    assert result.subreddit == "AmItheAsshole"
+    # The ProRevenge opportunity is untouched -- still pending for whichever
+    # program actually reads that subreddit.
+    assert store.count("new") == 1
+    store.close()
+
+
+def test_take_next_for_subreddits_ignores_other_programs_backlog():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest([RssPost("nosleep", "a horror story", "l7", "t")], now=100)
+
+    result = store.take_next_for_subreddits(["ProRevenge"], now=101)
+
+    assert result is None  # nothing pending for THIS program's subreddits
+    assert store.count("new") == 1  # the nosleep opportunity is untouched
+    store.close()
+
+
+def test_take_next_for_subreddits_with_empty_list_returns_none():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest(posts(), now=100)
+    assert store.take_next_for_subreddits([], now=101) is None
+    store.close()
+
+
 def test_ledger_flags_near_duplicate_of_a_different_series():
     ledger = StoryLedger(":memory:", threshold=0.6).initialize()
     ledger.record("s1", "Una restauradora descubre un audio que divide a su familia por la herencia",

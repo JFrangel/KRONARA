@@ -242,7 +242,9 @@ _SCENE_ITEM_SCHEMA = {
     "additionalProperties": False,
 }
 
-_SCENES_SCHEMA = _object_schema({"scenes": {"type": "array", "items": _SCENE_ITEM_SCHEMA}})
+_SCENES_SCHEMA = _object_schema({
+    "scenes": {"type": "array", "items": _SCENE_ITEM_SCHEMA, "minItems": 1},
+})
 
 
 class RoutedStoryProvider:
@@ -300,7 +302,9 @@ class RoutedStoryProvider:
                 "abstract_angles": list(self._inspiration),
                 "count": 3,
             },
-            response_schema=_object_schema({"concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA}}),
+            response_schema=_object_schema({
+                "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},
+            }),
         )
         self._remember_model()
         concepts = tuple(
@@ -328,7 +332,9 @@ class RoutedStoryProvider:
             task="story.blueprint",
             system=_creative_system(brief.source_sensitivity),
             input_payload={"brief": asdict(brief), "concept": asdict(concept)},
-            response_schema=_object_schema({"beats": {"type": "array", "items": _BEAT_ITEM_SCHEMA}}),
+            response_schema=_object_schema({
+                "beats": {"type": "array", "items": _BEAT_ITEM_SCHEMA, "minItems": 6},
+            }),
         )
         self._remember_model()
         beats = tuple(
