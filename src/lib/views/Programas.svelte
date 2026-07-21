@@ -4,6 +4,7 @@
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
   import { callOperations } from '../tauri-operations.js';
+  import { programGradient } from '../programArt.js';
 
   let programs = $state([]);
   let episodes = $state([]);
@@ -73,10 +74,16 @@
 
     <Card>
       <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Badge tone="purple">{selected.genre}</Badge>
-          <h2 class="mt-2 font-display text-xl font-bold text-ink">{selected.name}</h2>
-          <p class="mt-1 max-w-xl text-[13px] text-ink-secondary">{selected.description}</p>
+        <div class="flex items-start gap-3.5">
+          <span
+            class="grid h-14 w-14 shrink-0 place-items-center rounded-xl font-display text-lg font-bold text-ink"
+            style={`background:${programGradient(selected.program_id)}`}
+          >{selected.name.charAt(0)}</span>
+          <div>
+            <Badge tone="purple">{selected.genre}</Badge>
+            <h2 class="mt-2 font-display text-xl font-bold text-ink">{selected.name}</h2>
+            <p class="mt-1 max-w-xl text-[13px] text-ink-secondary">{selected.description}</p>
+          </div>
         </div>
         <dl class="grid grid-cols-2 gap-3 text-right sm:grid-cols-4">
           <div><dt class="text-[10.5px] text-ink-tertiary">Día</dt><dd class="mt-0.5 text-[12.5px] capitalize text-ink">{selected.weekday}</dd></div>
@@ -175,19 +182,21 @@
   <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
     {#each programs as program (program.program_id)}
       <button
-        class="rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-purple-500"
+        class="overflow-hidden rounded-2xl border border-line bg-surface text-left transition-colors hover:border-purple-500"
         onclick={() => openProgram(program)}
       >
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between p-3" style={`background:${programGradient(program.program_id)}`}>
           <Badge tone="purple">{program.weekday}</Badge>
           <Badge tone="success">Activo</Badge>
         </div>
-        <p class="mt-3 font-display text-sm font-semibold text-ink">{program.name}</p>
-        <p class="mt-1 text-[12px] text-ink-tertiary">{program.genre}</p>
-        <p class="mt-3 text-[11.5px] leading-relaxed text-ink-secondary">{program.description}</p>
-        <div class="mt-4 flex items-center justify-between text-[11px] text-ink-tertiary">
-          <span>{episodeCountFor(program.program_id)} episodio{episodeCountFor(program.program_id) === 1 ? '' : 's'}</span>
-          <span>{program.target_duration_seconds}s objetivo</span>
+        <div class="p-4">
+          <p class="font-display text-sm font-semibold text-ink">{program.name}</p>
+          <p class="mt-1 text-[12px] text-ink-tertiary">{program.genre}</p>
+          <p class="mt-3 text-[11.5px] leading-relaxed text-ink-secondary">{program.description}</p>
+          <div class="mt-4 flex items-center justify-between text-[11px] text-ink-tertiary">
+            <span>{episodeCountFor(program.program_id)} episodio{episodeCountFor(program.program_id) === 1 ? '' : 's'}</span>
+            <span>{program.target_duration_seconds}s objetivo</span>
+          </div>
         </div>
       </button>
     {/each}
