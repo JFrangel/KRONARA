@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import traceback
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -42,6 +44,13 @@ class JsonRpcServer:
             except (KeyError, TypeError, ValueError) as error:
                 return self._error(request_id, -32602, f"invalid params: {error}")
             except Exception:
+                # The RPC caller only ever sees the generic message below --
+                # never leak internals over the wire. But an unhandled
+                # exception with zero trace anywhere (this used to just
+                # vanish) is undiagnosable by anyone, including whoever is
+                # running Kronara locally. stderr now lands in a real log
+                # file (see SidecarProcess::spawn in sidecar_bridge.rs).
+                traceback.print_exc(file=sys.stderr)
                 return self._error(request_id, -32603, "internal error")
         return self._error(request_id, -32601, "method not found")
 

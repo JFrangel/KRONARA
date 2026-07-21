@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from kronara.authority_client import AuthorityInvocationError
 from kronara.embedding_registry import EmbeddingModelDescriptor
 from kronara.image_gen import PlaceholderImageProvider
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2
@@ -302,6 +303,109 @@ def test_content_run_program_id_flows_into_the_saved_artifact(tmp_path):
     )
     store.close()
     rag.close()
+
+
+class RedditDisabledAuthority(FakeProductionAuthority):
+    """Simulates the real, common case: no KRONARA_REDDIT_* OAuth credentials
+    configured (reddit.rs reports reddit_disabled_by_policy). This is what a
+    freshly installed Kronara actually looks like -- the project's own design
+    principle is that discovery never requires those credentials in the
+    first place (see harvest_reddit.py, knowledge/reddit-sources/)."""
+
+    def invoke(self, tool_id, arguments):
+        if tool_id == "reddit.list_signals":
+            self.calls.append((tool_id, arguments))
+            raise AuthorityInvocationError("reddit_disabled_by_policy")
+        return super().invoke(tool_id, arguments)
+
+
+def test_reddit_oauth_unavailable_falls_back_to_public_rss_and_still_produces_a_story(tmp_path, monkeypatch):
+    from kronara.reddit_rss import RedditRssReader, RssPost
+
+    canned_posts = [
+        RssPost(
+            subreddit="Historias",
+            title="Un audio familiar termina antes de revelar una decision",
+            link="https://www.reddit.com/r/Historias/comments/abc123/un_audio/",
+            published="2026-07-19T12:00:00+00:00",
+        ),
+    ]
+    monkeypatch.setattr(RedditRssReader, "trending", lambda self, *a, **k: canned_posts)
+
+    authority = RedditDisabledAuthority()
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    rag = RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64))
+    rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-1",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas, evidencia y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+    pipeline = ProductionContentPipeline(
+        authority=authority,
+        store=store,
+        rag=rag,
+        model_registry=ModelCapabilityRegistryV2.load(
+            ROOT / "config" / "models" / "registry.v2.json"
+        ),
+        artifact_root=tmp_path / "artifacts",
+    )
+
+    result = pipeline.run(
+        {
+            "story_id": "owned-rss-fallback-1",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "target_duration_seconds": 90,
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["selected_signal"]["source_uri"] == canned_posts[0].link
+    assert result["reddit_receipt_id"].startswith("rss_")
+    fallback_events = [
+        event.payload for event in store.replay("content:owned-rss-fallback-1")
+        if event.kind == "content.reddit_fallback_rss"
+    ]
+    assert len(fallback_events) == 1
+    assert fallback_events[0]["reason"] == "reddit_disabled_by_policy"
+    store.close()
+    rag.close()
+
+
+def test_rss_fallback_signals_have_honest_zero_engagement_not_fabricated_numbers(tmp_path, monkeypatch):
+    from kronara.reddit_rss import RedditRssReader, RssPost
+
+    monkeypatch.setattr(
+        RedditRssReader, "trending",
+        lambda self, *a, **k: [RssPost("Historias", "Titulo de prueba real", "https://www.reddit.com/r/Historias/comments/xyz/", "2026-07-19T12:00:00+00:00")],
+    )
+    authority = RedditDisabledAuthority()
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    pipeline = ProductionContentPipeline(
+        authority=authority, store=store,
+        rag=RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64)),
+        model_registry=ModelCapabilityRegistryV2.load(ROOT / "config" / "models" / "registry.v2.json"),
+        artifact_root=tmp_path / "artifacts",
+    )
+
+    _receipt, _now, signals = pipeline._rss_fallback_signals(["Historias"], {"limit": 25})
+
+    assert len(signals) == 1
+    assert signals[0].score == 0
+    assert signals[0].comments == 0
+    assert signals[0].velocity == 0.0
+    assert signals[0].theme_hint == "Titulo de prueba real"
+    store.close()
 
 
 FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None

@@ -22,8 +22,16 @@ rag-onnx = ["fastembed>=0.4"]
 # fast tests never pull multi-GB torch wheels. Install torch separately with
 # the matching CUDA index (see docs/roadmap) for GPU acceleration.
 visual = ["diffusers>=0.31", "transformers>=4.44", "accelerate>=1.0", "peft>=0.13", "pillow>=10", "safetensors>=0.4", "huggingface_hub>=0.25"]
-dev = ["pytest>=9,<10", "pyinstaller>=6,<7"]
+dev = ["pytest>=9,<10", "pytest-timeout>=2,<3", "pyinstaller>=6,<7"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["python"]
+# A real hang here previously burned 18+ minutes silently: a scheduler-tick
+# test's real-Reddit-authority fallback made live, unthrottled RSS calls
+# across all 7 programs and hit Reddit's rate limiting mid-suite (fixed by
+# mocking RedditRssReader in that test). 60s is generous for every real
+# test in this suite (the slowest -- real SDXL generation under the GPU
+# venv -- finishes in a few seconds each) while still catching a genuine
+# hang quickly instead of silently, indefinitely blocking whoever runs it.
+timeout = 60

@@ -175,12 +175,74 @@ _SCENE_CRAFT_DIRECTIVES = [
 ]
 
 
-def _object_schema(required: tuple[str, ...]) -> dict[str, Any]:
+def _object_schema(properties: dict[str, Any], required: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Builds a real JSON Schema object descriptor, `properties` included.
+
+    This matters more than it looks: model_gateway.rs only sends OpenRouter
+    the strict, generation-constraining `response_format: json_schema` when
+    the schema has a top-level "properties" key -- otherwise (the previous
+    `_object_schema`, which only ever set type/required/additionalProperties)
+    it silently falls back to the generic "any JSON object" response_format,
+    which relies entirely on prompt text to describe the expected shape.
+    That's fine for a small flat object (editorial.brief's title/premise/
+    theme reliably worked) but unreliable for a schema nesting an array of
+    multi-field objects -- story.concepts/story.blueprint/story.scenes were
+    silently never schema-constrained at all, and would periodically fail
+    "model structured payload failed schema validation" across every
+    fallback candidate model with no way to see why (fixed alongside this:
+    tools.py/rpc.py now actually log the traceback instead of discarding it).
+    """
     return {
         "type": "object",
-        "required": list(required),
+        "properties": properties,
+        "required": list(required) if required is not None else list(properties),
         "additionalProperties": False,
     }
+
+
+_CONCEPT_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "concept_id": {"type": "string"},
+        "logline": {"type": "string"},
+        "promise": {"type": "string"},
+        "hook": {"type": "string"},
+        "projected_retention": {"type": "number"},
+    },
+    "required": ["concept_id", "logline", "promise", "hook", "projected_retention"],
+    "additionalProperties": False,
+}
+
+_BEAT_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "beat_id": {"type": "string"},
+        "cause": {"type": "string"},
+        "effect": {"type": "string"},
+        "event": {"type": "string"},
+        "seed_id": {"type": ["string", "null"]},
+        "payoff_for": {"type": ["string", "null"]},
+    },
+    "required": ["beat_id", "cause", "effect", "event", "seed_id", "payoff_for"],
+    "additionalProperties": False,
+}
+
+_SCENE_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "scene_id": {"type": "string"},
+        "purpose": {"type": "string"},
+        "narration": {"type": "string"},
+        "target_seconds": {"type": "integer"},
+        "characters": {"type": "array", "items": {"type": "string"}},
+        "seed_ids": {"type": "array", "items": {"type": "string"}},
+        "payoff_ids": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["scene_id", "purpose", "narration", "target_seconds", "characters", "seed_ids", "payoff_ids"],
+    "additionalProperties": False,
+}
+
+_SCENES_SCHEMA = _object_schema({"scenes": {"type": "array", "items": _SCENE_ITEM_SCHEMA}})
 
 
 class RoutedStoryProvider:
@@ -221,7 +283,7 @@ class RoutedStoryProvider:
                 "theme": brief.theme,
                 "instruction": "extrae dos ángulos abstractos; no redactes la historia",
             },
-            response_schema=_object_schema(("angles",)),
+            response_schema=_object_schema({"angles": {"type": "array", "items": {"type": "string"}}}),
             max_tokens=512,
         )
         self._remember_model()
@@ -238,7 +300,7 @@ class RoutedStoryProvider:
                 "abstract_angles": list(self._inspiration),
                 "count": 3,
             },
-            response_schema=_object_schema(("concepts",)),
+            response_schema=_object_schema({"concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA}}),
         )
         self._remember_model()
         concepts = tuple(
@@ -266,7 +328,7 @@ class RoutedStoryProvider:
             task="story.blueprint",
             system=_creative_system(brief.source_sensitivity),
             input_payload={"brief": asdict(brief), "concept": asdict(concept)},
-            response_schema=_object_schema(("beats",)),
+            response_schema=_object_schema({"beats": {"type": "array", "items": _BEAT_ITEM_SCHEMA}}),
         )
         self._remember_model()
         beats = tuple(
@@ -311,7 +373,7 @@ class RoutedStoryProvider:
                     else ""
                 ),
             },
-            response_schema=_object_schema(("scenes",)),
+            response_schema=_SCENES_SCHEMA,
         )
         self._remember_model()
         return self._scenes(payload)
@@ -330,7 +392,7 @@ class RoutedStoryProvider:
                 "scenes": [asdict(item) for item in scenes],
                 "revision": revision,
             },
-            response_schema=_object_schema(("scenes",)),
+            response_schema=_SCENES_SCHEMA,
         )
         self._remember_model()
         return self._scenes(payload)
@@ -389,7 +451,17 @@ class RoutedIndependentCritic:
                 "scenes": [asdict(item) for item in scenes],
                 "script": asdict(script),
             },
-            response_schema=_object_schema(("passed", "scores", "issues", "revision")),
+            response_schema=_object_schema({
+                "passed": {"type": "boolean"},
+                # Dynamic keys (score dimension name -> 0-10 float, e.g.
+                # "hook"/"clarity"/"agency"/...) -- left as an open object
+                # rather than enumerated, the dimension set isn't fixed here.
+                "scores": {"type": "object"},
+                "issues": {"type": "array", "items": {"type": "string"}},
+                # Open shape: a localized revision instruction (e.g.
+                # {"target_word_count": ...}), not a fixed record.
+                "revision": {"type": "object"},
+            }),
             exclude_models=(self.generator.models_used if self.generator else frozenset()),
         )
         self._family = _model_family(self.router.last_model_id)

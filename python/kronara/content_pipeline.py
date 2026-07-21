@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -8,7 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from kronara.artifacts import ArtifactStore
-from kronara.authority_client import AuthorityClient
+from kronara.authority_client import AuthorityClient, AuthorityInvocationError
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2, ModelRequirements
 from kronara.operations_contracts import ToolTraceEvent
 from kronara.rag_v3 import RAGV3Index, RetrievalQueryV3
@@ -182,38 +183,60 @@ class ProductionContentPipeline:
             store=self.store,
             run_id=run_id,
         )
-        reddit_page = traced.invoke(
-            "reddit.list_signals",
-            {
-                "schema_version": 1,
-                "subreddits": [str(item) for item in params.get("subreddits", ())],
-                "sort": str(params.get("sort", "hot")),
-                "time_filter": params.get("time_filter"),
-                "after": params.get("after"),
-                "limit": int(params.get("limit", 25)),
-                "include_nsfw": False,
-            },
-        )
-        receipt = dict(reddit_page.get("receipt", {}))
-        observed_at = int(receipt.get("observed_at", 0))
-        signals = tuple(
-            self._observable(dict(item), observed_at)
-            for item in reddit_page.get("signals", ())
-            if isinstance(item, dict)
-        )
-        filtered = RedditObservatory().filter(
-            signals,
-            RedditSignalFilters(
+        subreddits = [str(item) for item in params.get("subreddits", ())]
+        try:
+            reddit_page = traced.invoke(
+                "reddit.list_signals",
+                {
+                    "schema_version": 1,
+                    "subreddits": subreddits,
+                    "sort": str(params.get("sort", "hot")),
+                    "time_filter": params.get("time_filter"),
+                    "after": params.get("after"),
+                    "limit": int(params.get("limit", 25)),
+                    "include_nsfw": False,
+                },
+            )
+            receipt = dict(reddit_page.get("receipt", {}))
+            observed_at = int(receipt.get("observed_at", 0))
+            signals = tuple(
+                self._observable(dict(item), observed_at)
+                for item in reddit_page.get("signals", ())
+                if isinstance(item, dict)
+            )
+            signal_filters = RedditSignalFilters(
                 min_score=int(params.get("min_score", 20)),
                 min_comments=int(params.get("min_comments", 3)),
                 max_age_hours=float(params.get("max_age_hours", 168)),
-                language=str(params.get("language", "es")),
+                language=self._language_filter(params),
                 self_posts_only=bool(params.get("self_posts_only", False)),
                 include_nsfw=False,
                 max_saturation=float(params.get("max_saturation", 0.90)),
                 min_velocity=float(params.get("min_velocity", 0.1)),
-            ),
-        )
+            )
+        except AuthorityInvocationError as error:
+            # Reddit's OAuth-gated live API (reddit.rs) needs registered
+            # KRONARA_REDDIT_* credentials -- Kronara's own design principle
+            # is that discovery never requires those (see harvest_reddit.py,
+            # knowledge/reddit-sources/). Fall back to the same no-credential
+            # public RSS reading rather than failing content.run outright;
+            # a run should degrade, not silently produce nothing at all.
+            receipt, observed_at, signals = self._rss_fallback_signals(subreddits, params)
+            # RSS carries no score/comments/velocity -- filtering on those
+            # would reject every signal. What still applies (age, language,
+            # NSFW, self-post-only) still does.
+            signal_filters = RedditSignalFilters(
+                max_age_hours=float(params.get("max_age_hours", 168)),
+                language=self._language_filter(params),
+                self_posts_only=bool(params.get("self_posts_only", False)),
+                include_nsfw=False,
+            )
+            self.store.append_event(
+                run_id,
+                "content.reddit_fallback_rss",
+                {"reason": str(error), "subreddits": subreddits, "signal_count": len(signals)},
+            )
+        filtered = RedditObservatory().filter(signals, signal_filters)
         if not filtered.signals:
             raise ValueError("no Reddit signal passed the governed filters")
         selected = max(
@@ -258,6 +281,11 @@ class ProductionContentPipeline:
             },
             response_schema={
                 "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "premise": {"type": "string"},
+                    "theme": {"type": "string"},
+                },
                 "required": ["title", "premise", "theme"],
                 "additionalProperties": False,
             },
@@ -390,6 +418,61 @@ class ProductionContentPipeline:
             },
         }
 
+    def _rss_fallback_signals(
+        self, subreddits: list[str], params: dict[str, Any]
+    ) -> tuple[dict[str, Any], int, tuple[ObservableRedditSignal, ...]]:
+        """No-credential fallback for reddit.list_signals: the same public
+        RSS reading harvest_reddit.py already uses, just called synchronously
+        here instead of harvest-then-store. RSS exposes no score/comments, so
+        those fields are honestly zero (not fabricated) -- callers must use
+        RedditSignalFilters without score/velocity thresholds for these."""
+        from kronara.reddit_rss import RedditRssReader
+
+        reader = RedditRssReader()
+        limit = int(params.get("limit", 25))
+        posts = reader.trending(subreddits, max_subs=max(1, len(subreddits)), per_sub=limit)
+        now = int(datetime.now(UTC).timestamp())
+        signals = []
+        for post in posts:
+            try:
+                published_at = int(datetime.fromisoformat(post.published).timestamp())
+            except (ValueError, TypeError):
+                published_at = now
+            age_hours = max(0.25, (now - published_at) / 3600)
+            title = re.sub(r"https?://\S+", "", post.title)
+            theme_hint = " ".join(title.split())[:180]
+            signals.append(
+                ObservableRedditSignal(
+                    source_id=hashlib.sha256(post.link.encode("utf-8")).hexdigest()[:16],
+                    source_uri=post.link,
+                    theme_hint=theme_hint,
+                    score=0,
+                    comments=0,
+                    age_hours=age_hours,
+                    language=self._infer_language(theme_hint),  # RSS has no per-post language field
+                    self_post=True,
+                    nsfw=False,
+                    author_deleted=False,
+                    post_deleted=False,
+                    crosspost=False,
+                    repost=False,
+                    observed_length=len(theme_hint),
+                    velocity=0.0,
+                    acceleration=0.0,
+                    saturation=0.0,
+                    lifetime_hours=age_hours,
+                    rights_mode="reference_only",
+                )
+            )
+        receipt = {
+            "receipt_id": f"rss_{now}",
+            "query_hash": "rss",
+            "contract_reference": "no_credentials_public_rss",
+            "observed_at": now,
+            "count": len(signals),
+        }
+        return receipt, now, tuple(signals)
+
     def _produce_video(
         self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str
     ) -> dict[str, Any] | None:
@@ -401,7 +484,7 @@ class ProductionContentPipeline:
         if self._image_provider is None or self._renderer is None:
             return None
         voice_duration = result.voice_duration
-        if voice_duration is None or voice_duration.degraded:
+        if voice_duration is None:
             return None
         if not voice_duration.audio_refs or any(not ref for ref in voice_duration.audio_refs):
             return None
@@ -493,6 +576,22 @@ class ProductionContentPipeline:
             lifetime_hours=min(168.0, age_hours * (1 + comments / max(score, 1))),
             rights_mode="reference_only",
         )
+
+    @staticmethod
+    def _language_filter(params: dict[str, Any]) -> str | None:
+        """No default language restriction on the SOURCE signal. Reddit's
+        title is only ever used as an abstract theme_hint -- the actual
+        story is always freshly generated Spanish prose (KRONARA_CREATIVE_
+        SYSTEM, es-* voices), regardless of what language the source post
+        was written in. Kronara's own curated subreddits (knowledge/reddit-
+        sources/) are uniformly English communities (nosleep, ProRevenge,
+        AmItheAsshole...), so a hardcoded "es" default here would reject
+        every real signal from every real program -- only every test
+        fixture in this codebase happens to use Spanish sample titles,
+        which is why this went unnoticed. Only filter by language if a
+        caller explicitly asks for one."""
+        language = params.get("language")
+        return str(language) if language else None
 
     @staticmethod
     def _subreddit_of(signal: ObservableRedditSignal) -> str:

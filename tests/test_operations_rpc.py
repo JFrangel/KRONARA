@@ -194,15 +194,22 @@ def test_paused_control_blocks_new_story_runs_and_cancels_active_runs(tmp_path):
     service.close()
 
 
-def test_schedule_tick_with_no_prior_history_finds_every_program_due(tmp_path):
+def test_schedule_tick_with_no_prior_history_finds_every_program_due(tmp_path, monkeypatch):
     """A fresh install has no schedule_last_fired rows, so every program's
     "next occurrence since epoch 0" is deep in the past relative to any real
     `now` -- B1's grid should immediately try all 7 on its very first tick
     rather than silently waiting a full week for each. With no real
     authority configured (OperationsService(tmp_path) defaults to
-    UnavailableAuthorityClient), every attempt fails fast and safely --
-    proving the RPC really reaches content_run() for each due program
-    without crashing the request."""
+    UnavailableAuthorityClient), reddit.list_signals fails immediately and
+    content_pipeline.py's real no-credential fallback kicks in -- which
+    means it would otherwise make 7 real, unthrottled RSS calls to Reddit
+    per test run. Stub it out: this test is about the scheduler reaching
+    every due program safely, not about live Reddit availability/rate
+    limits (those are covered by test_content_pipeline_vertical.py's
+    dedicated, mocked-transport RSS fallback tests)."""
+    from kronara.reddit_rss import RedditRssReader
+
+    monkeypatch.setattr(RedditRssReader, "trending", lambda self, *a, **k: [])
     server, service = _server(tmp_path)
 
     response = server.handle(_request("schedule.tick", {"now": 1_784_930_400}))

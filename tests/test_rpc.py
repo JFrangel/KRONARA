@@ -40,7 +40,7 @@ def test_rpc_dispatches_only_explicitly_registered_methods():
     assert denied["error"]["code"] == -32601
 
 
-def test_rpc_converts_unexpected_handler_failures_to_sanitized_internal_errors():
+def test_rpc_converts_unexpected_handler_failures_to_sanitized_internal_errors(capsys):
     def fail(_):
         raise RuntimeError("provider leaked secret-value")
 
@@ -60,3 +60,7 @@ def test_rpc_converts_unexpected_handler_failures_to_sanitized_internal_errors()
 
     assert response["error"]["code"] == -32603
     assert "secret-value" not in response["error"]["message"]
+    # The RPC wire never leaks it -- but it must land SOMEWHERE (stderr,
+    # which SidecarProcess::spawn redirects to a real log file) or a real
+    # failure is undiagnosable by anyone, including whoever runs Kronara.
+    assert "secret-value" in capsys.readouterr().err

@@ -205,13 +205,23 @@ impl SidecarProcess {
                 command.env(key, value);
             }
         }
+        // rpc.py deliberately returns a generic "internal error" for any
+        // unhandled Python exception (never leak internals over the RPC
+        // wire) -- but that means a real crash needs *somewhere* a
+        // developer can actually see what happened. A log file survives
+        // that; Stdio::null() previously threw the traceback away forever,
+        // Stdio::inherit() would dump raw Python tracebacks into a shipped
+        // GUI app's own (nonexistent) console. Truncated on every spawn --
+        // this is "since the last restart," not a growing history.
+        let stderr_log = fs::File::create(data_dir.join("sidecar-stderr.log"))
+            .map_err(|_| "cannot create sidecar log file".to_string())?;
         command
             .arg("--data-dir")
             .arg(data_dir)
             .env("KRONARA_RPC_SESSION_TOKEN", token)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            .stderr(Stdio::from(stderr_log));
         for argument in sidecar_runtime_args(embedding_alias, reranker_alias) {
             command.arg(argument);
         }

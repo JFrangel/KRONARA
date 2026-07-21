@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import time
+import traceback
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
@@ -98,6 +100,14 @@ class ToolRegistry:
             return ToolResult(True, value=value)
         except Exception as error:  # Tool boundaries convert provider failures to data.
             self._record_failure(tool_id)
+            # The caller (ToolResult.message) only ever sees the exception's
+            # type name -- never its text, which could carry provider
+            # internals. But that means a real failure was previously
+            # undiagnosable by anyone, including whoever runs Kronara
+            # locally. stderr now lands in a real log file (see rpc.py /
+            # SidecarProcess::spawn in sidecar_bridge.rs).
+            print(f"[tool_failed] tool_id={tool_id} agent_id={agent_id}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             return ToolResult(
                 False,
                 error_code="TOOL_FAILED",

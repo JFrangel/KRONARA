@@ -14,7 +14,11 @@ degrades explicitly to the word-rate estimate so the pipeline still runs.
 from __future__ import annotations
 
 import hashlib
+import os
+import shutil
+import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable, Protocol
 
 
@@ -216,14 +220,48 @@ class EdgeTtsVoiceProvider:
 class EstimatingVoiceProvider:
     """No-network fallback: duration from a spoken words-per-minute rate."""
 
-    def __init__(self, words_per_minute: float = 150.0):
+    def __init__(self, words_per_minute: float = 150.0, *, audio_dir: str | None = None):
         self.words_per_minute = words_per_minute
+        self.audio_dir = audio_dir
 
     def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
         words = len(request.text.split())
         duration_ms = int(round(words / self.words_per_minute * 60_000))
+        audio_ref = None
+        if self.audio_dir:
+            ffmpeg = shutil.which("ffmpeg")
+            if ffmpeg:
+                Path(self.audio_dir).mkdir(parents=True, exist_ok=True)
+                audio_ref = os.path.join(self.audio_dir, f"{request.cache_key()}.mp3")
+                duration_seconds = max(duration_ms / 1000.0, 0.25)
+                completed = subprocess.run(
+                    [
+                        ffmpeg,
+                        "-y",
+                        "-f",
+                        "lavfi",
+                        "-i",
+                        "anullsrc=r=24000:cl=mono",
+                        "-t",
+                        f"{duration_seconds:.3f}",
+                        "-acodec",
+                        "libmp3lame",
+                        "-ar",
+                        "24000",
+                        "-ac",
+                        "1",
+                        audio_ref,
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if completed.returncode != 0 or not Path(audio_ref).exists():
+                    audio_ref = None
         return VoiceSynthesisResult(
-            voice_id=request.voice_id, duration_ms=duration_ms, degraded=True
+            voice_id=request.voice_id,
+            duration_ms=duration_ms,
+            audio_ref=audio_ref,
+            degraded=True,
         )
 
 

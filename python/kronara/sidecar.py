@@ -77,7 +77,7 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
     voice_provider = FallbackVoiceProvider(
         EdgeTtsVoiceProvider(audio_dir=str(data_dir / "voice")),
-        EstimatingVoiceProvider(),
+        EstimatingVoiceProvider(audio_dir=str(data_dir / "voice")),
     )
 
     renderer = None
