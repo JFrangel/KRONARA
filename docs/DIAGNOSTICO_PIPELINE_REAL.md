@@ -74,19 +74,38 @@ un MP4 real de 85.1s, H.264 1080x1920 + AAC, `qc_passed: true`,
 `integrated_lufs: -16.16`. Este es el primer MP4 real de punta a punta de toda
 la sesión de depuración.
 
-### B. Créditos de OpenRouter agotados (bloqueo externo)
+### B. Créditos de OpenRouter agotados (bloqueo externo, confirmado, no arreglable en código)
 
-Los logs muestran `402 (This request requires more credits...)` en qwen/kimi y
-`404` en `tencent/hy3:free` (expiró hoy, 2026-07-21). Los modelos **gratis** de
-Nvidia Nemotron (`:free`) sí responden — de hecho, por eso el pipeline avanzó
-hasta `story.draft`. Acciones:
+Verificado corriendo `produce_episode.rs` real varias veces (nuevo atajo dev
+`KRONARA_SIDECAR_DEV_PYTHON`, ver abajo): qwen/kimi devuelven `402` incluso con
+`max_tokens` ya bajado varias veces ("requested up to 6144, but can only afford
+759") — el saldo actual es tan bajo que **ningún** `max_tokens` razonable lo
+arregla; es un tope de cuenta, no un bug de tamaño de request. `tencent/hy3:free`
+sigue en `404` (expiró). Los `:free` de Nemotron (Ultra/Super) devolvieron
+finalmente `429 Rate limit exceeded: free-models-per-day` con el mensaje
+explícito de OpenRouter: **"Add 10 credits to unlock 1000 free model requests
+per day"** — con saldo $0 el límite gratis diario es solo 50 requests, y las
+pruebas de esta misma sesión ya lo agotaron hoy. Conclusión: el código ya está
+verificado y listo; lo único que falta es que el usuario recargue saldo (basta
+un mínimo, según OpenRouter) o que se reinicie la cuota diaria.
 
-- Bajar `max_tokens` en los pasos de guion (4096 es excesivo para salida
-  estructurada; el saldo mínimo no alcanza para 4096 pero sí para menos).
-- Confirmar que la cadena de fallback llega a los Nemotron gratis de forma fiable
-  (ya lo hace; es lo que mantiene vivo el pipeline sin créditos).
-- Nota para el usuario: para usar qwen/kimi (mejor calidad) hace falta recargar
-  saldo en OpenRouter; sin recarga, opera solo con los gratis.
+### C. Razonamiento visible de Nemotron (bug de código real, arreglado)
+
+Con el transporte y la codificación ya arreglados, una corrida real llegó hasta
+`story.blueprint`/`story.scenes` pero falló con `"model returned invalid
+structured content"`. Añadido diagnóstico (`model_gateway.rs` ahora loguea el
+texto crudo no-JSON) reveló la causa real: el modelo gratis (`nvidia/nemotron
+:free`) devolvía su **razonamiento interno visible como texto plano** ("We need
+to produce a JSON object... Let's count words... El(1) amanecer2 se3...") en
+vez de la respuesta JSON directa, agotando `max_tokens` sin llegar nunca a
+escribir el JSON. Arreglado añadiendo `"reasoning": {"enabled": false}`
+(parámetro unificado de OpenRouter) a cada request — los modelos sin modo de
+razonamiento (qwen/kimi/hy3) lo ignoran sin problema. Con esto corregido, el
+mismo modelo escribió prosa literaria genuinamente elaborada (ver ejemplo real
+más abajo) — lo cual a su vez obligó a recalibrar `max_tokens` una segunda vez
+(ver `routed_story_provider.py::_scene_max_tokens` y el flat de
+`story.blueprint`, ambos documentados inline con la evidencia real exacta que
+los motivó).
 
 ## La causa de la lentitud del diagnóstico (corregida)
 
@@ -109,7 +128,25 @@ binario solo se reconstruye para la verificación final.
    ~3.59 palabras/seg, no las ~2.5 que asume el estimado de respaldo del
    código — dato a tener en cuenta si se ajusta `estimated_seconds` en algún
    punto, aunque no bloquea nada porque el medidor real ya manda).
-4. ⏳ **Modelos**: bajar `max_tokens`, confirmar ruta a los gratis (pendiente —
-   requiere créditos/red reales, el harness usa respuestas fake).
-5. ⏳ **Rebuild final** del binario y corrida real definitiva desde el ejemplo Rust.
-6. ⏳ Documentar en memoria lo aprendido del transporte stdio (tras el rebuild final).
+4. ✅ **Modelos**: `max_tokens` recalibrado dos veces contra corridas reales
+   (no adivinado); ruta a los gratis confirmada correcta (Ultra→Super en
+   orden, ambos responden cuando la cuota diaria no está agotada); bug real
+   de razonamiento visible encontrado y arreglado (sección C). Bloqueo
+   restante: cuota/saldo de la cuenta (sección B), no arreglable en código.
+5. ⏳ **Rebuild final** del binario y corrida real definitiva desde el ejemplo
+   Rust — pendiente de que el usuario recargue saldo o se reinicie la cuota
+   diaria de OpenRouter.
+6. ✅ Documentado en memoria: patrón de aislamiento stdio (stdout Y stdin) y el
+   gate de cuota gratis de OpenRouter a saldo $0.
+
+## Nuevo: atajo de desarrollo para probar contra Rust+OpenRouter+Reddit reales sin rebuild
+
+`KRONARA_SIDECAR_DEV_PYTHON=<ruta al intérprete>` (env var leída por
+`SidecarProcess::spawn()` en `sidecar_bridge.rs`) hace que Rust corra
+`kronara.sidecar` desde código fuente (vía ese intérprete) en vez de buscar el
+binario PyInstaller empaquetado. Permite ejecutar
+`cargo run --manifest-path src-tauri/Cargo.toml --example produce_episode`
+contra la autoridad Rust real (OpenRouter, Reddit reales) en segundos, sin el
+rebuild de ~5 min. Nunca se activa en la app empaquetada (solo cuando la env
+var está presente). Así se encontraron y verificaron los tres bugs de las
+secciones A/C y la recalibración de la sección B en esta misma sesión.
