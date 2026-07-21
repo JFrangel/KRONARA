@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Protocol
 
+from kronara.speech_rate import DEFAULT_WORDS_PER_SECOND
+
 
 @dataclass(frozen=True)
 class VoiceProfile:
@@ -218,15 +220,33 @@ class EdgeTtsVoiceProvider:
 
 
 class EstimatingVoiceProvider:
-    """No-network fallback: duration from a spoken words-per-minute rate."""
+    """No-network fallback: duration from a spoken words-per-minute rate.
 
-    def __init__(self, words_per_minute: float = 150.0, *, audio_dir: str | None = None):
+    When a rate_learner is supplied, its per-voice learned words/second
+    (from real past measurements -- see SceneDurationMeasurer) is used
+    instead of the fixed `words_per_minute` default, so even this degraded
+    no-network path reflects reality rather than the original guess.
+    """
+
+    def __init__(
+        self,
+        words_per_minute: float = 150.0,
+        *,
+        audio_dir: str | None = None,
+        rate_learner: "object | None" = None,
+    ):
         self.words_per_minute = words_per_minute
         self.audio_dir = audio_dir
+        self.rate_learner = rate_learner
 
     def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
         words = len(request.text.split())
-        duration_ms = int(round(words / self.words_per_minute * 60_000))
+        words_per_second = (
+            self.rate_learner.estimate(request.voice_id).words_per_second
+            if self.rate_learner is not None
+            else self.words_per_minute / 60.0
+        )
+        duration_ms = int(round(words / words_per_second * 1000))
         audio_ref = None
         if self.audio_dir:
             ffmpeg = shutil.which("ffmpeg")
@@ -304,13 +324,35 @@ class SceneDurationMeasurer:
     Implements the ``DurationMeasurer`` shape the StoryEngine expects: given the
     scenes, return the summed measured duration (in seconds) plus per-scene
     milliseconds and word timings (usable later for subtitles).
+
+    When a rate_learner is supplied, every non-degraded (genuinely
+    synthesized, not estimated) measurement feeds back into it -- see
+    ``record`` in ``measure`` below -- so StoryEngine's word-count targeting
+    (``words_per_second``) keeps converging on the real rate instead of the
+    original fixed guess.
     """
 
-    def __init__(self, provider: VoiceSynthesisProvider, *, voice_id: str, rate: float = 0.0, pitch: float = 0.0):
+    def __init__(
+        self,
+        provider: VoiceSynthesisProvider,
+        *,
+        voice_id: str,
+        rate: float = 0.0,
+        pitch: float = 0.0,
+        rate_learner: "object | None" = None,
+    ):
         self.provider = provider
         self.voice_id = voice_id
         self.rate = rate
         self.pitch = pitch
+        self.rate_learner = rate_learner
+
+    def words_per_second(self) -> float:
+        """Current best-known real speech rate for this voice: the learned
+        running average once real samples exist, else the cold-start prior."""
+        if self.rate_learner is None:
+            return DEFAULT_WORDS_PER_SECOND
+        return self.rate_learner.estimate(self.voice_id).words_per_second
 
     def measure(self, scenes) -> MeasuredDuration:
         per_scene: list[int] = []
@@ -318,8 +360,10 @@ class SceneDurationMeasurer:
         boundaries: list[WordBoundary] = []
         degraded = False
         offset = 0
+        total_words = 0
         for scene in scenes:
             text = getattr(scene, "narration", "") or ""
+            total_words += len(text.split())
             result = self.provider.synthesize(
                 VoiceSynthesisRequest(text=text, voice_id=self.voice_id, rate=self.rate, pitch=self.pitch)
             )
@@ -332,6 +376,8 @@ class SceneDurationMeasurer:
                 )
             offset += result.duration_ms
         total_ms = sum(per_scene)
+        if self.rate_learner is not None and not degraded:
+            self.rate_learner.record(self.voice_id, total_words, total_ms / 1000.0)
         return MeasuredDuration(
             total_seconds=total_ms / 1000.0,
             audio_refs=tuple(audio_refs),

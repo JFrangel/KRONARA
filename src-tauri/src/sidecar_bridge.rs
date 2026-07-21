@@ -189,8 +189,23 @@ impl SidecarProcess {
         authority: &mut dyn AuthorityToolExecutor,
     ) -> Result<Self, String> {
         fs::create_dir_all(data_dir).map_err(|_| "cannot create local runtime directory")?;
-        let binary = locate_sidecar()?;
-        let mut command = Command::new(binary);
+        // Manual-verification escape hatch (see src-tauri/examples/produce_episode.rs):
+        // when set, run kronara.sidecar from SOURCE via the given interpreter
+        // instead of hunting for the packaged PyInstaller binary, so testing
+        // a Python-side change against the real Rust authority plane (real
+        // OpenRouter, real Reddit, real transport) doesn't require a
+        // multi-minute rebuild of the ~2.7GB frozen sidecar first. Never set
+        // in the shipped desktop app -- locate_sidecar() is the only path
+        // there.
+        let dev_python = std::env::var_os("KRONARA_SIDECAR_DEV_PYTHON");
+        let mut command = match &dev_python {
+            Some(python) => {
+                let mut cmd = Command::new(python);
+                cmd.arg("-m").arg("kronara.sidecar");
+                cmd
+            }
+            None => Command::new(locate_sidecar()?),
+        };
         command.env_clear();
         for key in [
             "SYSTEMROOT",
@@ -204,6 +219,12 @@ impl SidecarProcess {
             if let Some(value) = std::env::var_os(key) {
                 command.env(key, value);
             }
+        }
+        if dev_python.is_some() {
+            let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .expect("src-tauri always has a parent directory");
+            command.env("PYTHONPATH", repo_root.join("python"));
         }
         // rpc.py deliberately returns a generic "internal error" for any
         // unhandled Python exception (never leak internals over the RPC

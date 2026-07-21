@@ -270,3 +270,102 @@ def test_critic_gets_sensitive_verification_instruction():
         if tool == "model.complete" and args["task"] == "story.critique"
     ][0]
     assert "detalle identificable" in critique_call["system"].casefold()
+
+
+def test_concepts_request_uses_a_modest_flat_token_budget_not_the_old_4096():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(brief())
+
+    concepts_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert concepts_call["max_tokens"] == 1024
+
+
+def test_blueprint_request_uses_a_generous_flat_token_budget():
+    """Raised to 6144 after a real run truncated mid-beat-6 at 1536 tokens --
+    real elaborate literary beats need real room (see the comment at the
+    call site for the full story)."""
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.blueprint(brief(), StoryConcept("c1", "logline", "promise", "hook", 0.9))
+
+    blueprint_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.blueprint"
+    ][0]
+    assert blueprint_call["max_tokens"] == 6144
+
+
+def test_critique_request_uses_a_modest_flat_token_budget_not_the_old_4096():
+    authority = FakeAuthority()
+    critic = RoutedIndependentCritic(router(authority))
+
+    critic.review(
+        brief(),
+        StoryConcept("concept_1", "Una logline suficientemente original.", "promesa", "hook", 0.9),
+        (),
+        StoryScript("Guion propio verificable.", 3, 1.2),
+    )
+
+    critique_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.critique"
+    ][0]
+    assert critique_call["max_tokens"] == 1536
+
+
+def test_scenes_request_scales_max_tokens_up_for_longer_targets():
+    """90s -> 225 target words -> the 4096 floor (real elaborate literary
+    scenes need real room -- see _scene_max_tokens' docstring for the two
+    real-run recalibrations that produced this floor). Longer targets
+    should still scale above the floor."""
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    concepts = provider.concepts(brief())
+    blueprint = provider.blueprint(brief(), concepts[0])
+
+    provider.scenes(brief(), concepts[0], blueprint)
+
+    scenes_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.scenes"
+    ][0]
+    assert scenes_call["max_tokens"] == 4096
+
+
+def test_revise_sizes_max_tokens_from_the_revision_target_word_count_when_present():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    concepts = provider.concepts(brief())
+    blueprint = provider.blueprint(brief(), concepts[0])
+    scenes = provider.scenes(brief(), concepts[0], blueprint)
+
+    provider.revise(scenes, {"operation": "fit_duration", "target_word_count": 500})
+
+    revise_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.revise"
+    ][-1]
+    assert revise_call["max_tokens"] == max(4096, min(8192, round(500 * 3.0) + 1536))
+
+
+def test_revise_without_a_target_word_count_falls_back_to_existing_scene_length():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    concepts = provider.concepts(brief())
+    blueprint = provider.blueprint(brief(), concepts[0])
+    scenes = provider.scenes(brief(), concepts[0], blueprint)
+
+    provider.revise(scenes, {"scene_index": 0})
+
+    revise_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.revise"
+    ][-1]
+    existing_words = sum(len(scene.narration.split()) for scene in scenes)
+    assert revise_call["max_tokens"] == max(4096, min(8192, round(existing_words * 3.0) + 1536))

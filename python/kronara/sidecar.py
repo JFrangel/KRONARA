@@ -73,12 +73,20 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
     whether the rest of the stack is available: real per-word timing from
     edge-tts is valuable for duration_qc accuracy on its own, and the
     fallback means a transient network failure degrades gracefully to the
-    word-rate estimate instead of crashing content.run outright."""
+    word-rate estimate instead of crashing content.run outright.
+
+    rate_learner persists the real words/second rate observed from actual
+    edge-tts measurements (see speech_rate.py), replacing the original
+    words/2.5 guess with a running average as real production accumulates.
+    Shared with EstimatingVoiceProvider so even the no-network fallback
+    reflects what has actually been learned."""
+    from kronara.speech_rate import SpeechRateLearner
     from kronara.voice import EdgeTtsVoiceProvider, EstimatingVoiceProvider, FallbackVoiceProvider
 
+    rate_learner = SpeechRateLearner(data_dir / "speech_rate.db").initialize()
     voice_provider = FallbackVoiceProvider(
         EdgeTtsVoiceProvider(audio_dir=str(data_dir / "voice")),
-        EstimatingVoiceProvider(audio_dir=str(data_dir / "voice")),
+        EstimatingVoiceProvider(audio_dir=str(data_dir / "voice"), rate_learner=rate_learner),
     )
 
     renderer = None
@@ -87,7 +95,15 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
         if find_ffmpeg("ffmpeg"):
             renderer = FfmpegRenderer()
-    except RuntimeError:
+    except (RuntimeError, ImportError):
+        # ImportError included deliberately: kronara.render pulls in
+        # kronara.composition -> kronara.narrative_workflow -> langgraph at
+        # module level. langgraph is a base (non-optional) dependency today,
+        # so this doesn't fire in the dev venvs, but a PyInstaller build that
+        # fails to bundle one of its submodules would otherwise raise
+        # ModuleNotFoundError here -- uncaught, that crashes the whole
+        # sidecar at startup instead of degrading to text-only content.run
+        # like this function's docstring promises.
         renderer = None
 
     image_provider = None
@@ -121,6 +137,7 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
     return {
         "voice_provider": voice_provider,
+        "rate_learner": rate_learner,
         "renderer": renderer,
         "image_provider": image_provider,
         "visual_style_registry": visual_style_registry,
@@ -421,25 +438,49 @@ def _rag_evaluate(params: dict) -> dict:
     return {"evaluation": asdict(evaluation), "promotion": promotion}
 
 
-def _isolate_protocol_stdout() -> "object":
-    """Reserve the real stdout exclusively for the JSON-RPC protocol and make
-    every other write to stdout harmless.
+def _isolate_protocol_io() -> "object":
+    """Reserve the real stdout exclusively for the JSON-RPC protocol, make
+    every other write to stdout harmless, and force stdin to decode as UTF-8.
 
-    The sidecar speaks JSON-RPC over stdout, one JSON object per line. That
-    stream is fragile: a single non-JSON line -- a torch/transformers/
-    huggingface warning, a stray print, a progress bar -- makes Rust's line
-    reader fail to parse and kill the sidecar mid-run (observed as
-    "invalid RPC response" on the Rust side and an [Errno 22] broken-pipe
-    crash on ours). This is the standard stdio-server hazard (LSP/MCP solve
-    it the same way).
+    The sidecar speaks JSON-RPC over stdin/stdout, one JSON object per line.
+    That channel is fragile in two independent ways:
 
-    Fix: dup the real stdout fd into a dedicated binary, UTF-8, line-buffered
-    writer used ONLY for the protocol -- binary avoids the Windows text-mode
-    pipe write bug ([Errno 22]) on large payloads -- then point sys.stdout at
-    sys.stderr so any library that prints to "stdout" lands on stderr and can
-    never corrupt the protocol. Returns the dedicated protocol writer.
+    1. WRITE side: a single non-JSON line on stdout -- a torch/transformers/
+       huggingface warning, a stray print, a progress bar -- makes Rust's
+       line reader fail to parse and kill the sidecar mid-run (observed as
+       "invalid RPC response" on the Rust side and an [Errno 22] broken-pipe
+       crash on ours). This is the standard stdio-server hazard (LSP/MCP
+       solve it the same way).
+
+    2. READ side (found via a real run: 117s in, real OpenRouter Spanish
+       narration, "lone leading surrogate in hex escape"): Python's default
+       encoding for a pipe-attached stdin comes from the OS locale
+       (`locale.getpreferredencoding()`), which on this machine is the
+       Windows ANSI codepage (cp1252), not UTF-8. Rust always writes valid
+       UTF-8, but Python was silently *decoding* those UTF-8 bytes as
+       cp1252 -- classic mojibake (a real "n"+tilde character is two UTF-8
+       bytes; read as cp1252 they become two unrelated mangled characters),
+       and bytes cp1252 has no mapping for became lone surrogates. When
+       that already-corrupted string was later re-serialized (json.dumps
+       only *escapes* text, it never validates it), the lone surrogate
+       broke Rust's strict JSON parser outright and killed the run.
+
+    Fix: force stdin to decode as UTF-8 (matching what Rust actually
+    writes), and dup the real stdout fd into a dedicated binary, UTF-8,
+    line-buffered writer used ONLY for the protocol -- binary avoids the
+    Windows text-mode pipe write bug ([Errno 22]) on large payloads -- then
+    point sys.stdout at sys.stderr so any library that prints to "stdout"
+    lands on stderr and can never corrupt the protocol. Returns the
+    dedicated protocol writer.
     """
     import io
+
+    try:
+        sys.stdin.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError, ValueError, io.UnsupportedOperation):
+        # Not a reconfigurable TextIOWrapper (e.g. a fake reader in an
+        # in-process test) -- nothing to fix, leave it as given.
+        pass
 
     try:
         raw = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
@@ -462,7 +503,7 @@ def serve(
 ) -> int:
     # Must happen before _build_visual_stack imports torch/diffusers (which
     # can print to stdout) and before any RPC is served.
-    protocol_out = _isolate_protocol_stdout()
+    protocol_out = _isolate_protocol_io()
     resolved_data_dir = data_dir or Path(".kronara") / "runtime"
     visual_stack = _build_visual_stack(resolved_data_dir)
     # Cache-first Reddit discovery (see ProductionContentPipeline's RSS
@@ -515,8 +556,11 @@ def serve(
                     "error": {"code": -32700, "message": "parse error"},
                 }
             # Dedicated protocol channel, never plain print() -- see
-            # _isolate_protocol_stdout for why sys.stdout is now stderr.
-            protocol_out.write(json.dumps(response, separators=(",", ":")) + "\n")
+            # _isolate_protocol_io for why sys.stdout is now stderr.
+            # ensure_ascii=False: real UTF-8 on the wire (stdin is now
+            # forced to decode as UTF-8 too), not \uXXXX escapes that are
+            # unreadable in a raw log and were never the actual bug anyway.
+            protocol_out.write(json.dumps(response, separators=(",", ":"), ensure_ascii=False) + "\n")
             protocol_out.flush()
     finally:
         services.close()

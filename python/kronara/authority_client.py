@@ -55,7 +55,10 @@ class StdioAuthorityClient:
             "method": "authority.invoke",
             "params": {"tool_id": tool_id, "arguments": arguments},
         }
-        self.writer.write(json.dumps(request, separators=(",", ":")) + "\n")
+        # ensure_ascii=False: real UTF-8 on the wire, not \uXXXX escapes --
+        # readable in a raw log, and avoids ever re-escaping a string that
+        # (pre stdin-encoding-fix) could contain a lone surrogate.
+        self.writer.write(json.dumps(request, separators=(",", ":"), ensure_ascii=False) + "\n")
         self.writer.flush()
         raw = self.reader.readline()
         if not raw:

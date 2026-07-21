@@ -148,6 +148,7 @@ class ProductionContentPipeline:
         visual_style_registry: "object | None" = None,
         asset_library: "object | None" = None,
         opportunity_store: "object | None" = None,
+        rate_learner: "object | None" = None,
     ):
         self.authority = authority
         self.store = store
@@ -162,7 +163,9 @@ class ProductionContentPipeline:
         if voice_provider is not None:
             from kronara.voice import SceneDurationMeasurer
 
-            self._duration_measurer = SceneDurationMeasurer(voice_provider, voice_id=voice_id)
+            self._duration_measurer = SceneDurationMeasurer(
+                voice_provider, voice_id=voice_id, rate_learner=rate_learner
+            )
         # V8: the visual production stage (V0-V6) runs only when all three of
         # these are supplied -- image_provider + renderer are required to
         # produce anything at all; visual_style_registry/asset_library are

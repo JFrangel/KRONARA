@@ -64,6 +64,7 @@ class OperationsService:
         visual_style_registry: "object | None" = None,
         asset_library: "object | None" = None,
         opportunity_store: "object | None" = None,
+        rate_learner: "object | None" = None,
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -95,6 +96,7 @@ class OperationsService:
         self._visual_style_registry = visual_style_registry
         self._asset_library = asset_library
         self._opportunity_store = opportunity_store
+        self._rate_learner = rate_learner
 
     def methods(self) -> dict[str, Callable[[dict[str, Any]], dict[str, Any]]]:
         return {
@@ -293,6 +295,7 @@ class OperationsService:
             visual_style_registry=self._visual_style_registry,
             asset_library=self._asset_library,
             opportunity_store=self._opportunity_store,
+            rate_learner=self._rate_learner,
         ).run(params)
 
     def performance_learn(self, params: dict[str, Any]) -> dict[str, Any]:

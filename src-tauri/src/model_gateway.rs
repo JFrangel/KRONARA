@@ -214,6 +214,16 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 "max_tokens": request.max_tokens,
                 "temperature": 0.7,
                 "stream": false,
+                // Found via a real run: a free reasoning-hybrid candidate
+                // (nvidia/nemotron :free) spent its entire max_tokens budget
+                // narrating visible chain-of-thought ("We need to produce a
+                // JSON object... Let's count words...") and never reached
+                // the actual answer, so every fallback attempt died with
+                // "model returned invalid structured content". OpenRouter's
+                // unified `reasoning.enabled=false` asks any reasoning-
+                // capable candidate to skip that internal narration; models
+                // without a reasoning mode (qwen, kimi, hy3) ignore it.
+                "reasoning": {"enabled": false},
             });
             let headers = BTreeMap::from([
                 (
@@ -259,7 +269,16 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 Value::Object(_) => content,
                 Value::String(text) => match serde_json::from_str::<Value>(&text) {
                     Ok(value) => value,
-                    Err(_) => {
+                    Err(error) => {
+                        // Local stderr log only (see SidecarProcess::spawn) --
+                        // seeing the actual text is the only way to tell
+                        // "truncated by max_tokens" from "wrapped in a
+                        // markdown fence" from something else entirely,
+                        // instead of guessing at the fix.
+                        eprintln!(
+                            "[model_gateway] non-JSON string content model={} error={error} text={text:?}",
+                            candidate.model_id
+                        );
                         last_error = "model returned invalid structured content".into();
                         continue;
                     }
@@ -270,6 +289,10 @@ impl<C: ModelHttpClient> ModelGateway<C> {
                 }
             };
             if !payload_matches_schema(&payload, &request.response_schema) {
+                eprintln!(
+                    "[model_gateway] schema mismatch model={} payload={payload}",
+                    candidate.model_id
+                );
                 last_error = "model structured payload failed schema validation".into();
                 continue;
             }

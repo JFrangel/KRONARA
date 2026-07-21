@@ -247,6 +247,39 @@ _SCENES_SCHEMA = _object_schema({
 })
 
 
+def _scene_max_tokens(word_count: int) -> int:
+    """Size max_tokens off the same word-count math the duration QC already
+    uses, scaling UP for long-form content instead of a flat cap regardless
+    of target length -- while staying generous enough for real output.
+
+    History, calibrated against real runs rather than guessed, twice over:
+
+    1. An initial flat 4096 (every request, any length) made OpenRouter's
+       paid candidates (qwen/kimi) reject pre-flight with 402 on a near-
+       empty credit balance.
+    2. A first proportional formula (1.6 tokens/word + 768, floor 1536)
+       fixed that, but a real free-tier candidate (nvidia/nemotron:free)
+       then truncated mid-JSON ("model returned invalid structured
+       content") -- turned out to be the model narrating its own visible
+       chain-of-thought ("We need to produce a JSON object... let's count
+       words...") instead of answering directly, burning the whole budget
+       before ever reaching the JSON. Fixed separately in model_gateway.rs
+       (`reasoning: {enabled: false}`).
+    3. With reasoning suppressed, the SAME real model then wrote genuinely
+       elaborate, literary beats/scenes (the system prompt asks for
+       sensorial, "show don't tell" prose throughout, and free models don't
+       hold back) and hit a real, lower floor (1536) truncating mid-string.
+
+    Conclusion: at the account's current near-zero credit balance, qwen/kimi
+    are unaffordable at ANY reasonable content-completing budget anyway
+    (their own 402s report affording only ~600-1150 tokens) -- so there is
+    no longer a real trade-off to protect by staying small. Sized generously
+    for the free models that actually respond, capped at Rust's own hard
+    ceiling (model_gateway.rs allows up to 8192).
+    """
+    return max(4096, min(8192, round(word_count * 3.0) + 1536))
+
+
 class RoutedStoryProvider:
     def __init__(self, router: AuthorityModelRouter):
         self.router = router
@@ -305,6 +338,7 @@ class RoutedStoryProvider:
             response_schema=_object_schema({
                 "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},
             }),
+            max_tokens=1024,
         )
         self._remember_model()
         concepts = tuple(
@@ -335,6 +369,13 @@ class RoutedStoryProvider:
             response_schema=_object_schema({
                 "beats": {"type": "array", "items": _BEAT_ITEM_SCHEMA, "minItems": 6},
             }),
+            # Raised from 1536 after a real run truncated mid-beat-6: with
+            # model reasoning suppressed (see model_gateway.rs), a real free
+            # candidate still wrote genuinely elaborate, literary
+            # cause/effect/event/payoff_for prose per beat (the system
+            # prompt asks for sensorial "show don't tell" writing
+            # throughout) -- 6 beats of that easily exceeds 1536 tokens.
+            max_tokens=6144,
         )
         self._remember_model()
         beats = tuple(
@@ -358,6 +399,7 @@ class RoutedStoryProvider:
         concept: StoryConcept,
         blueprint: tuple[CausalBeat, ...],
     ) -> tuple[StoryScene, ...]:
+        target_word_count = round(brief.target_duration_seconds * 2.5)
         payload = self.router.complete(
             alias="creative_primary",
             requirements=ModelRequirements(
@@ -369,7 +411,7 @@ class RoutedStoryProvider:
                 "brief": asdict(brief),
                 "concept": asdict(concept),
                 "blueprint": [asdict(item) for item in blueprint],
-                "target_word_count": round(brief.target_duration_seconds * 2.5),
+                "target_word_count": target_word_count,
                 "craft_directives": _SCENE_CRAFT_DIRECTIVES,
                 "series_canon": brief.series_context,
                 "series_instruction": (
@@ -380,6 +422,7 @@ class RoutedStoryProvider:
                 ),
             },
             response_schema=_SCENES_SCHEMA,
+            max_tokens=_scene_max_tokens(target_word_count),
         )
         self._remember_model()
         return self._scenes(payload)
@@ -387,6 +430,9 @@ class RoutedStoryProvider:
     def revise(
         self, scenes: tuple[StoryScene, ...], revision: dict[str, Any]
     ) -> tuple[StoryScene, ...]:
+        target_word_count = revision.get("target_word_count")
+        if not isinstance(target_word_count, (int, float)):
+            target_word_count = sum(len(item.narration.split()) for item in scenes)
         payload = self.router.complete(
             alias="creative_primary",
             requirements=ModelRequirements(
@@ -399,6 +445,7 @@ class RoutedStoryProvider:
                 "revision": revision,
             },
             response_schema=_SCENES_SCHEMA,
+            max_tokens=_scene_max_tokens(int(target_word_count)),
         )
         self._remember_model()
         return self._scenes(payload)
@@ -469,6 +516,7 @@ class RoutedIndependentCritic:
                 "revision": {"type": "object"},
             }),
             exclude_models=(self.generator.models_used if self.generator else frozenset()),
+            max_tokens=1536,
         )
         self._family = _model_family(self.router.last_model_id)
         scores = {str(key): float(value) for key, value in dict(payload["scores"]).items()}

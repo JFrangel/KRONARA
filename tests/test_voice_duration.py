@@ -1,3 +1,4 @@
+from kronara.speech_rate import DEFAULT_WORDS_PER_SECOND, SpeechRateLearner
 from kronara.story_engine import (
     DeterministicIndependentCritic,
     DeterministicStoryProvider,
@@ -176,6 +177,94 @@ def test_edge_tts_live_measures_real_duration(tmp_path):
     assert result.duration_ms > 1000  # a real sentence lasts more than a second
     assert len(result.word_boundaries) >= 1  # word- or sentence-level, version dependent
     assert result.audio_ref is not None
+
+
+def test_duration_qc_target_word_count_uses_the_learned_rate_not_the_fixed_guess(tmp_path):
+    """The whole point: once real samples exist, the word-count target
+    handed to the writer (and the raw pre-measurement estimate) should
+    track the learned rate, not silently keep re-deriving the original
+    words/2.5 guess forever."""
+    store = KronaraStore(tmp_path / "voice.db")
+    store.initialize()
+    learner = SpeechRateLearner(tmp_path / "speech_rate.db").initialize()
+    learner.record("es-BO-SofiaNeural", 400, 100.0)  # 4.0 wps, real and learned
+    measurer = SceneDurationMeasurer(
+        FakeVoiceProvider(ms_per_scene=1000), voice_id="es-BO-SofiaNeural", rate_learner=learner
+    )
+    engine = StoryEngine(
+        store=store,
+        generator=DeterministicStoryProvider(),
+        critic=DeterministicIndependentCritic(),
+        duration_measurer=measurer,
+    )
+
+    script = engine._script((type("S", (), {"narration": "una dos tres cuatro"}),))
+    qc = engine._duration_qc(brief(), script, revision_applied=False, measured_seconds=90.0)
+
+    assert script.estimated_seconds == 4 / 4.0  # 4 words at 4.0 wps, not /2.5
+    assert qc.target_word_count == round(90 * 4.0)  # not round(90 * 2.5) == 225
+    store.close()
+
+
+def test_measurer_words_per_second_defaults_without_a_rate_learner():
+    measurer = SceneDurationMeasurer(FakeVoiceProvider(ms_per_scene=1000), voice_id="v1")
+
+    assert measurer.words_per_second() == DEFAULT_WORDS_PER_SECOND
+
+
+def test_measurer_records_a_real_non_degraded_measurement_into_the_rate_learner(tmp_path):
+    learner = SpeechRateLearner(tmp_path / "speech_rate.db").initialize()
+    # 2 scenes * 4 words each = 8 words; 1000ms each = 2.0s total -> 4.0 wps.
+    provider = FakeVoiceProvider(ms_per_scene=1000)
+    measurer = SceneDurationMeasurer(provider, voice_id="es-BO-SofiaNeural", rate_learner=learner)
+    scenes = [
+        type("S", (), {"narration": "una dos tres cuatro"}),
+        type("S", (), {"narration": "cinco seis siete ocho"}),
+    ]
+
+    measurer.measure(scenes)
+
+    result = learner.estimate("es-BO-SofiaNeural")
+    assert result.learned is True
+    assert result.words_per_second == 4.0
+    assert measurer.words_per_second() == 4.0
+
+
+def test_measurer_does_not_record_a_degraded_measurement(tmp_path):
+    class DegradedProvider:
+        def synthesize(self, request):
+            return VoiceSynthesisResult(voice_id=request.voice_id, duration_ms=1000, degraded=True)
+
+    learner = SpeechRateLearner(tmp_path / "speech_rate.db").initialize()
+    measurer = SceneDurationMeasurer(DegradedProvider(), voice_id="v1", rate_learner=learner)
+
+    measurer.measure([type("S", (), {"narration": "una dos tres"})])
+
+    assert learner.estimate("v1").learned is False
+    assert measurer.words_per_second() == DEFAULT_WORDS_PER_SECOND
+
+
+def test_estimating_provider_uses_the_learned_rate_when_supplied(tmp_path):
+    learner = SpeechRateLearner(tmp_path / "speech_rate.db").initialize()
+    learner.record("es-BO-SofiaNeural", 400, 100.0)  # 4.0 wps, not the 2.5 default
+    provider = EstimatingVoiceProvider(rate_learner=learner)
+
+    result = provider.synthesize(
+        VoiceSynthesisRequest(text="una dos tres cuatro", voice_id="es-BO-SofiaNeural")
+    )
+
+    assert result.duration_ms == 1000  # 4 words / 4.0 wps = 1.0s
+    assert result.degraded is True  # still the no-network estimating path
+
+
+def test_estimating_provider_without_a_rate_learner_keeps_the_fixed_rate():
+    provider = EstimatingVoiceProvider(words_per_minute=150)  # 2.5 wps
+
+    result = provider.synthesize(
+        VoiceSynthesisRequest(text="una dos tres cuatro cinco", voice_id="v1")
+    )
+
+    assert result.duration_ms == 2000  # 5 words / 2.5 wps = 2.0s
 
 
 def test_authority_voice_provider_caches(tmp_path):
