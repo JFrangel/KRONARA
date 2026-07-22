@@ -1,5 +1,40 @@
 # Bugs conocidos y estado real (actualizado 2026-07-21)
 
+## 🔴 Nuevo hallazgo real: SDXL tier premium ~25-35x más lento de lo esperado
+
+Una generación fresca de UNA sola imagen tier `premium` (34 pasos, sin LoRA,
+con IP-Adapter cargado) tardó **7 minutos 12 segundos**. El propio docstring
+de `image_gen.py` documenta ~12-20s/imagen en tarjeta de 8GB para ese tier --
+esta corrida fue 25-35x más lenta que lo documentado.
+
+**Evidencia directa:** el log de progreso por paso muestra degradación
+progresiva real, no un bloqueo puntual: pasos 1-17 a ~5-6s/paso (normal para
+esta GPU), pasos 26-33 a 20-27s/paso. `nvidia-smi` durante la corrida:
+**7836 MiB / 8188 MiB de VRAM (95.7%)**, GPU al 100%. Al matar el proceso,
+la VRAM bajó a 657 MiB de inmediato -- confirma que es presión de memoria
+del propio proceso (UNet+VAE+IP-Adapter+LoRA cargados a la vez dejan muy
+poco margen en una tarjeta de 8GB), no un proceso zombie ni fuga permanente.
+
+**No investigado todavía:** por qué la degradación empieza recién a mitad
+de los pasos en vez de ser constante desde el principio, y si
+`enable_model_cpu_offload()` (mencionado en el diseño original para casos
+de OOM) se está activando aquí o no. Afecta directamente el cálculo de
+"videos/día reales con las cuotas gratis actuales" hecho antes en la sesión,
+que asumía las cifras del docstring, no esta medición real.
+
+## 🟢 Confirmado con evidencia: las imágenes SÍ quedan en el video final
+
+Verificado end-to-end evitando el costo de generación SDXL (ver hallazgo de
+arriba): `ProductionContentPipeline` real, con 3 imágenes SDXL reales ya
+generadas (no placeholders) inyectadas vía un `ReplayImageProvider` de
+prueba, produjo un MP4 real de 88.8s (1080×1920, H264+AAC, `qc_passed:
+true`, `mean_volume: -15.2dB`). Se extrajeron fotogramas reales en 5s, 40s
+y 80s del video final y se inspeccionaron visualmente: las imágenes SDXL
+reales aparecen correctamente compuestas, con subtítulos quemados
+sincronizados al texto exacto de la narración en ese instante. No es un
+supuesto ni una imagen de referencia aislada -- es el fotograma real
+extraído del MP4 final.
+
 Documento vivo: qué se arregló, qué sigue roto, qué bloquea qué. Léase junto a
 [`docs/DIAGNOSTICO_PIPELINE_REAL.md`](DIAGNOSTICO_PIPELINE_REAL.md) (narrativa
 detallada del transporte stdio) y [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md)
