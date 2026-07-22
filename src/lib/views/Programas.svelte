@@ -6,6 +6,7 @@
   import { assetSrc, callOperations } from '../local-operations.js';
   import { programGradient } from '../programArt.js';
   import {
+    clearEpisodeGeneration,
     episodeGeneration,
     failEpisodeGeneration,
     completeEpisodeGeneration,
@@ -625,13 +626,29 @@
             <p class="font-mono text-lg font-semibold text-ink">{percent}%</p>
             <p class="text-[10.5px] text-ink-tertiary">{formatElapsed(selectedGeneration.elapsedSeconds)}</p>
             {#if selectedGeneration.status === 'failed'}
+              <div class="mt-2 flex flex-wrap justify-end gap-1.5">
+                <button
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-ember-500/40 px-3 py-1.5 text-[11.5px] font-medium text-ember-300 transition hover:bg-ember-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  onclick={retrySelectedProgram}
+                  disabled={creating || connection !== 'connected'}
+                >
+                  <Icon name="refresh" size={13} />
+                  Reintentar
+                </button>
+                <button
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
+                  onclick={clearEpisodeGeneration}
+                >
+                  Abandonar
+                </button>
+              </div>
+            {:else if selectedGeneration.status === 'running'}
               <button
-                class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ember-500/40 px-3 py-1.5 text-[11.5px] font-medium text-ember-300 transition hover:bg-ember-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                onclick={retrySelectedProgram}
-                disabled={creating || connection !== 'connected'}
+                class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
+                onclick={clearEpisodeGeneration}
+                title="Solo limpia el indicador local. Si el backend sigue corriendo, mátalo con Get-Process kronara-sidecar."
               >
-                <Icon name="refresh" size={13} />
-                Reintentar
+                Ocultar indicador
               </button>
             {/if}
           </div>
@@ -1252,6 +1269,14 @@
             <div class="text-right">
               <p class="font-mono text-xl font-semibold text-ink">{percent}%</p>
               <p class="text-[10.5px] text-ink-tertiary">{formatElapsed(listGeneration.elapsedSeconds)}</p>
+              {#if listGeneration.status === 'failed' || listGeneration.status === 'running'}
+                <button
+                  class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
+                  onclick={clearEpisodeGeneration}
+                >
+                  Abandonar
+                </button>
+              {/if}
             </div>
           </div>
           <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-line">

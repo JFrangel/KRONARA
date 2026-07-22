@@ -109,16 +109,31 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
             from kronara.asset_library import AssetLibraryStore
             from kronara.visual_style import VisualStyleRegistry, default_registry_path
 
-            # Diagnostic affordance: KRONARA_IMAGE_PROVIDER=placeholder swaps
-            # in the Pillow placeholder generator so the full compose->render
-            # ->MP4 transport can be exercised in seconds instead of minutes
-            # of SDXL. Real SDXL (the default) is separately covered by the
-            # GPU test suite; this only changes which image tier a diagnostic
-            # run uses, never production behaviour.
-            if os.environ.get("KRONARA_IMAGE_PROVIDER") == "placeholder":
+            # KRONARA_IMAGE_PROVIDER selects the backend:
+            #   pollinations (default when the token env var is set) -- free
+            #     hosted Flux via pollinations.ai, ~5-10s per image, works
+            #     without SDXL weights or a beefy GPU. Preferred once the
+            #     ~7min/image SDXL slowdown on 8GB VRAM was measured
+            #     (docs/BUGS_CONOCIDOS.md).
+            #   sdxl -- local SDXL/Diffusers (slow on 8GB but full control,
+            #     supports IP-Adapter). Kept for the cover-image premium tier.
+            #   placeholder -- Pillow-drawn stand-in, no network/GPU (fast
+            #     iteration for composition/render debugging).
+            provider_choice = os.environ.get("KRONARA_IMAGE_PROVIDER", "").lower().strip()
+            has_pollinations_token = bool(
+                os.environ.get("KRONARA_POLLINATION_API_KEY")
+                or os.environ.get("KNORA_POLLINATION_API_KEY")
+            )
+            if not provider_choice:
+                provider_choice = "pollinations" if has_pollinations_token else "sdxl"
+            if provider_choice == "placeholder":
                 from kronara.image_gen import PlaceholderImageProvider
 
                 image_provider = PlaceholderImageProvider(output_dir=str(data_dir / "images"))
+            elif provider_choice == "pollinations":
+                from kronara.image_gen import PollinationsImageProvider
+
+                image_provider = PollinationsImageProvider(output_dir=str(data_dir / "images"))
             else:
                 from kronara.image_gen import DiffusersImageProvider
 

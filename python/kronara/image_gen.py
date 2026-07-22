@@ -107,6 +107,96 @@ def find_lightning_lora_dir() -> str:
     return LIGHTNING_LORA_REPO
 
 
+class PollinationsImageProvider:
+    """Free hosted image generation via pollinations.ai.
+
+    No API key REQUIRED (public endpoint works anonymously), but honors a
+    token if configured (either ``KRONARA_POLLINATION_API_KEY`` or the
+    user's original spelling ``KNORA_POLLINATION_API_KEY``, both accepted)
+    to lift rate limits. Uses Flux under the hood -- much higher quality
+    than the placeholder, ~5-10s per image versus the 7min/image SDXL
+    slowdown measured locally on 8GB VRAM (see docs/BUGS_CONOCIDOS.md).
+
+    Same ImageGenerationProvider protocol as DiffusersImageProvider, so
+    ProductionContentPipeline can swap between them freely via
+    KRONARA_IMAGE_PROVIDER=pollinations in the sidecar.
+
+    The remote host has occasional saturation; wrap with FallbackImage-
+    Provider if you want an automatic cascade down to a local backup.
+    """
+
+    ENDPOINT = "https://image.pollinations.ai/prompt/{prompt}"
+
+    def __init__(self, *, output_dir: str, token: str | None = None):
+        self.output_dir = output_dir
+        self.token = token or (
+            os.environ.get("KRONARA_POLLINATION_API_KEY")
+            or os.environ.get("KNORA_POLLINATION_API_KEY")
+            or None
+        )
+
+    def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
+        import time
+        import urllib.parse
+        import urllib.request
+        import urllib.error
+
+        started = time.monotonic()
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        # Prompt-native negative prompting since pollinations doesn't accept a
+        # dedicated negative field over its public endpoint (it appends the
+        # tail into the composed prompt).
+        prompt = request.prompt.strip()
+        if request.negative_prompt.strip():
+            prompt = f"{prompt} --no {request.negative_prompt.strip()}"
+
+        params = {
+            "seed": str(request.seed or 1),
+            "width": str(request.width),
+            "height": str(request.height),
+            "nologo": "true",
+            # Flux is the default; explicit for reproducibility.
+            "model": "flux",
+        }
+        # Different-strength "steps" between fast and premium tiers. Public
+        # endpoint accepts up to ~50 steps; anything above 30 rarely helps.
+        params["enhance"] = "true" if request.quality_tier == "premium" else "false"
+
+        url = self.ENDPOINT.format(prompt=urllib.parse.quote(prompt)) + "?" + urllib.parse.urlencode(params)
+        headers = {"User-Agent": "Kronara/0.5 (local editorial factory)"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=60) as response:
+                body = response.read()
+        except (urllib.error.URLError, TimeoutError) as error:
+            raise RuntimeError(f"pollinations.ai request failed: {error}") from error
+        if not body or len(body) < 512:
+            # A near-empty response means either the prompt was rejected or
+            # the remote service returned an inline HTML error page instead
+            # of a PNG -- don't save that as if it were a generated image.
+            raise RuntimeError(
+                f"pollinations.ai returned {len(body)} bytes (expected a PNG image)"
+            )
+
+        path = os.path.join(self.output_dir, f"{request.cache_key()[:16]}_poll.png")
+        with open(path, "wb") as fp:
+            fp.write(body)
+
+        return ImageGenerationResult(
+            image_path=path,
+            seed=request.seed or 1,
+            width=request.width,
+            height=request.height,
+            quality_tier=request.quality_tier,
+            generation_ms=int((time.monotonic() - started) * 1000),
+            degraded=False,
+        )
+
+
 class PlaceholderImageProvider:
     """No-GPU stand-in: a deterministic illustrated storyboard frame.
 

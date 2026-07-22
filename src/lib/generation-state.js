@@ -10,6 +10,15 @@ export const GENERATION_STAGES = [
   { key: 'guardando', label: 'Guardando', detail: 'Registrando guion, video, portada, música, SFX, evidencia y diagnóstico en la biblioteca local.', icon: 'folder', at: 1800 },
 ];
 
+// Hard ceiling: no real content.run has ever taken more than ~12min end to end
+// even with real SDXL (the 7min/image slowdown documented in BUGS_CONOCIDOS.md
+// applies to one image, not the full run -- the pipeline reuses cached models
+// across shots after the first). If the frontend hasn't seen a completion or
+// a failure reply after this, the sidecar/backend crashed silently and the
+// timer must stop pretending progress -- otherwise the UI shows "94% Guardando"
+// forever, which is exactly the bug this ceiling exists to prevent.
+const GENERATION_TIMEOUT_SECONDS = 20 * 60;
+
 const STAGE_INDEX_BY_KEY = Object.fromEntries(GENERATION_STAGES.map((stage, index) => [stage.key, index]));
 const LIVE_STAGE_DETAILS = {
   investigacion: [
@@ -249,6 +258,18 @@ function startGenerationTimer() {
     episodeGeneration.update((run) => {
       if (!run || run.status !== 'running') return run;
       const elapsedSeconds = Math.floor((Date.now() - run.startedAt) / 1000);
+      if (elapsedSeconds >= GENERATION_TIMEOUT_SECONDS) {
+        // See GENERATION_TIMEOUT_SECONDS: no completion signal in this long
+        // means the backend crashed silently. Stop pretending progress.
+        stopGenerationTimer();
+        return {
+          ...run,
+          elapsedSeconds,
+          status: 'failed',
+          message: `Sin respuesta del backend después de ${Math.round(elapsedSeconds / 60)} minutos. La generación probablemente se colgó (revisa los sidecars con Get-Process kronara-sidecar). Usa "Abandonar" para reintentar.`,
+          diagnostics: run.diagnostics,
+        };
+      }
       return { ...run, elapsedSeconds, stageIndex: stageIndexForElapsed(elapsedSeconds) };
     });
   }, 1000);

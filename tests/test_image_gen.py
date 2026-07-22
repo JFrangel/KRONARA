@@ -6,6 +6,7 @@ from kronara.image_gen import (
     DiffusersImageProvider,
     ImageGenerationRequest,
     PlaceholderImageProvider,
+    PollinationsImageProvider,
     SDXL_BUCKET_9x16,
 )
 
@@ -78,6 +79,87 @@ def test_placeholder_provider_creates_composed_preview_not_flat_fill(tmp_path):
     assert image.getpixel((image.width // 2, image.height // 4)) != image.getpixel(
         (image.width // 2, image.height * 3 // 4)
     )
+
+
+# ---- PollinationsImageProvider (free hosted, no GPU) ----------------------
+
+
+def test_pollinations_provider_writes_response_bytes_and_honors_env_token(monkeypatch, tmp_path):
+    """Mocks urllib.request.urlopen so the test is offline and deterministic.
+    Verifies: (1) the endpoint URL includes the escaped prompt + query
+    params, (2) the Authorization header carries a token when configured,
+    (3) the returned bytes are written verbatim to a .png next to the other
+    generated frames. If the remote were down, the real end-to-end run
+    would surface via the smoke test in scripts/, not this unit test."""
+    import io
+    import urllib.request
+
+    monkeypatch.setenv("KRONARA_POLLINATION_API_KEY", "test-token")
+    captured = {}
+    fake_png = b"\x89PNG\r\n\x1a\n" + b"0" * 2048  # >512 bytes so the size check passes
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["headers"] = dict(request.header_items())
+        captured["timeout"] = timeout
+        return FakeResponse(fake_png)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    provider = PollinationsImageProvider(output_dir=str(tmp_path))
+    result = provider.generate(
+        ImageGenerationRequest(prompt="a moonlit house", seed=42, quality_tier="premium")
+    )
+
+    with open(result.image_path, "rb") as fp:
+        assert fp.read() == fake_png
+    assert result.width == SDXL_BUCKET_9x16[0]
+    assert result.seed == 42
+    assert result.quality_tier == "premium"
+    assert "image.pollinations.ai/prompt" in captured["url"]
+    assert "seed=42" in captured["url"]
+    assert "enhance=true" in captured["url"]  # premium tier
+    # header keys are lower-case in urllib.request
+    assert captured["headers"].get("Authorization") == "Bearer test-token"
+
+
+def test_pollinations_provider_rejects_empty_response_as_generation_failure(monkeypatch, tmp_path):
+    """A near-empty body means an inline HTML error page or a rejected
+    prompt, not a PNG. Saving it as if it were an image would corrupt the
+    downstream render silently."""
+    import urllib.request
+
+    monkeypatch.delenv("KRONARA_POLLINATION_API_KEY", raising=False)
+    monkeypatch.delenv("KNORA_POLLINATION_API_KEY", raising=False)
+
+    class FakeResponse:
+        def read(self):
+            return b"<html>oops</html>"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: FakeResponse())
+
+    provider = PollinationsImageProvider(output_dir=str(tmp_path))
+    with pytest.raises(RuntimeError, match="pollinations.ai returned"):
+        provider.generate(ImageGenerationRequest(prompt="x", seed=1))
 
 
 # ---- DiffusersImageProvider orchestration (fake pipe, no real GPU/weights) --
