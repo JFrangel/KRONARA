@@ -1,5 +1,21 @@
 # Bugs conocidos y estado real (actualizado 2026-07-21)
 
+## Arreglado en fuente: `PROGRAM_QUALITY_FAILED` se mostraba como Guardando
+
+Hallazgo en la web local: un run de Viernes Paranormal quedo bloqueado por
+`PROGRAM_QUALITY_FAILED`, pero el panel lo pintaba en la fase **Guardando** y
+el diagnostico decia que no habia bloqueo de calidad. La causa era que
+`run.diagnostics` solo leia `story.quality_failed` y no estaba leyendo
+`story.program_quality_failed`.
+
+Arreglo:
+
+- `run.diagnostics` ahora devuelve `program_quality_failure`.
+- La fase fallida es **Critica**, no Guardando.
+- La UI traduce los `findings` de plantilla, por ejemplo amenaza paranormal
+  faltante, anclas visuales faltantes o conflicto abstracto.
+- El siguiente paso correcto es **Reintentar**, no aprobar/publicar el fallo.
+
 ## 🔴 Nuevo hallazgo real: SDXL tier premium ~25-35x más lento de lo esperado
 
 Una generación fresca de UNA sola imagen tier `premium` (34 pasos, sin LoRA,

@@ -34,6 +34,14 @@ test('failed local generation can be retried instead of force-approved', () => {
   assert.match(source, /videoNeedsRetry/);
 });
 
+test('program resources expose RAG story templates in the UI', () => {
+  const source = fs.readFileSync('src/lib/views/Programas.svelte', 'utf8');
+
+  assert.match(source, /Plantillas RAG del programa/);
+  assert.match(source, /La Entidad de la Esquina/);
+  assert.match(source, /PROGRAM_RESOURCE_TEMPLATES/);
+});
+
 test('frontend uses only the local web operations bridge', () => {
   const source = fs.readFileSync('src/lib/local-operations.js', 'utf8');
 

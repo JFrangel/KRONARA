@@ -80,6 +80,17 @@ La etapa más larga, con su propio sub-pipeline:
 Solo si TODO pasa se llega a `result.status == "completed"`. Si no, el run
 completo aborta sin publicar nada (`error_code` explica por qué).
 
+Fallo de plantilla del programa:
+
+- `PROGRAM_QUALITY_FAILED` se emite como `story.program_quality_failed`.
+- Ocurre en la etapa de **Crítica**, aunque la voz ya se haya medido.
+- `run.diagnostics` debe mostrarlo como Crítica fallida, no como Guardando.
+- El payload trae `program_id` y `findings`, por ejemplo
+  `missing_clear_paranormal_threat`, `missing_haunted_place_anchors`,
+  `weak_story_question` o `abstract_bargain_not_paranormal`.
+- La UI traduce esos hallazgos para indicar qué debe corregir el agente antes
+  de reintentar.
+
 ## 5. Voz: duración real medida
 
 **Código:** `SceneDurationMeasurer` (usa el `voice_provider` inyectado en
@@ -142,6 +153,14 @@ estado/ruta del video, ruta de portada, LUFS, número de escenas/tomas,
 mezcla de fuentes visuales, música, SFX detectados/resueltos/faltantes,
 issues de QC de video. `episodes.get` lee esto
 mismo para mostrar el guion completo en la UI.
+
+Plantillas y recursos visibles:
+
+- `python/kronara/program_narrative.py` define las reglas duras por programa.
+- `knowledge/narrative/program-story-templates.md` guarda moldes de historias
+  propios para RAG.
+- Programas > Recursos muestra esos moldes para que el operador vea qué
+  estructura está consultando el agente.
 
 ## Variables de entorno relevantes a generación
 

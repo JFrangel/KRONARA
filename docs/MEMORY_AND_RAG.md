@@ -27,3 +27,19 @@ filtros de derechos/vigencia/idioma/ámbito
 ## Historias propias y aprendizaje
 
 Una historia solo puede alimentar RAG cuando es `owned_original`, conserva el hash del artefacto, supera derechos, narrativa, originalidad, seguridad y golden set, y sus métricas comparables alcanzan muestra e intervalo de confianza suficientes. `promote_owned_story` crea una versión `promoted_learning` con evidencia; un tombstone la revierte sin borrar la auditoría. Historias externas de Reddit son rechazadas por esa compuerta y nunca se reutilizan como ejemplo creativo.
+
+## Plantillas visibles por programa
+
+`knowledge/narrative/program-story-templates.md` contiene moldes propios para
+cada programa: decisiones morales, confesiones, justicia, mentes ocultas,
+paranormal, medianoche y caso premium. Estos documentos entran al RAG como
+`owned_original` con `document_id=program_story_templates_v1`.
+
+La UI los muestra en **Programas > Recursos** para que el operador pueda ver
+qué estructura está disponible para los agentes. No son textos para copiar:
+son patrones de arranque, nudos, escalada, cierre, anclas visuales y criterios
+de fallo.
+
+Cuando un guion no cumple esas reglas, el motor emite
+`PROGRAM_QUALITY_FAILED`; el diagnóstico debe atribuirlo a **Crítica** y
+mostrar los `findings` para que el siguiente reintento sepa qué reparar.

@@ -59,6 +59,43 @@
     monday: 'lunes', tuesday: 'martes', wednesday: 'miércoles', thursday: 'jueves',
     friday: 'viernes', saturday: 'sábado', sunday: 'domingo',
   };
+  const PROGRAM_RESOURCE_TEMPLATES = {
+    'viernes-paranormal': [
+      { title: 'La Entidad de la Esquina', length: 'larga', focus: 'casa antigua, esquina oscura, aparicion repetida, investigacion de la casa y huida final' },
+      { title: 'La Casa que No Queria Dejar', length: 'larga', focus: 'casa de campo, entidad familiar en el atico, puertas que bloquean salida y apego sobrenatural' },
+      { title: 'El Espejo del Bano', length: 'larga', focus: 'espejo viejo, figura que se acerca por reflejo, golpes desde dentro y salida al mundo real' },
+    ],
+    'decisiones-dificiles': [
+      { title: 'La Decision de mi Madre Enferma', length: 'larga', focus: 'promesa imposible, dolor terminal, ley contra compasion y culpa familiar' },
+      { title: 'Denunciar a Alguien Querido', length: 'mediana', focus: 'pruebas contra alguien cercano, denuncia y costo social' },
+      { title: 'Perdon Negado', length: 'corta', focus: 'despedida, dano pasado, no perdonar y duda moral final' },
+    ],
+    'confesiones-anonimas': [
+      { title: 'Accidente Oculto', length: 'larga', focus: 'culpa escondida, mentira sostenida y confesion imposible' },
+      { title: 'Vida Falsa en Redes', length: 'mediana', focus: 'identidad inventada, engano emocional y miedo a revelar la verdad' },
+      { title: 'Traicion Privada', length: 'corta', focus: 'secreto intimo, dano a una amiga y culpa que no se apaga' },
+    ],
+    'cronicas-de-justicia': [
+      { title: 'La Venganza de 7 Anos', length: 'muy larga', focus: 'traicion, investigacion privada, pruebas, abogados y consecuencias' },
+      { title: 'Cumplimiento Literal', length: 'mediana', focus: 'jefe abusivo, orden escrita, evidencia y justicia laboral' },
+      { title: 'La Traicion de mi Socio', length: 'larga', focus: 'fraude, auditoria, abogado y recuperacion con costo personal' },
+    ],
+    'mentes-ocultas': [
+      { title: 'Gaslighting Durante 4 Anos', length: 'muy larga', focus: 'manipulacion, aislamiento, duda de memoria y terapia' },
+      { title: 'Jefe Destructor', length: 'larga', focus: 'abuso psicologico laboral, patron repetido y denuncia colectiva' },
+      { title: 'Identidad Robada', length: 'larga', focus: 'deudas falsas, familia que minimiza y ruptura necesaria' },
+    ],
+    'historias-medianoche': [
+      { title: 'El Pueblo que no Aparece en los Mapas', length: 'larga', focus: 'carretera nocturna, pueblo imposible, regla de retorno y fuego final' },
+      { title: 'La Habitacion que Cambia de Tamano', length: 'larga', focus: 'cuarto que se encoge, casero evasivo y desaparicion previa' },
+      { title: 'El Amigo Imaginario que Crecio Conmigo', length: 'larga', focus: 'presencia de infancia, apariciones adultas y giro final' },
+    ],
+    'caso-de-la-semana': [
+      { title: 'El Secreto de mi Familia', length: 'muy larga', focus: 'verdad familiar, busqueda, confrontacion y reflexion seria' },
+      { title: 'Denuncia que Cuesta Familia', length: 'larga', focus: 'abuso, pruebas, proceso legal y perdida de apoyo' },
+      { title: 'Encubrimiento que se Rompe', length: 'larga', focus: 'crimen oculto, amenaza, confesion tardia y condena moral' },
+    ],
+  };
   onMount(async () => {
     try {
       const [programsResponse, episodesResponse] = await Promise.all([
@@ -173,6 +210,10 @@
 
   function generationFailureMessage(code, diagnostics = null) {
     const quality = diagnostics?.quality_failure;
+    const programQuality = diagnostics?.program_quality_failure;
+    if (code === 'PROGRAM_QUALITY_FAILED' && programQuality) {
+      return `No paso la plantilla del programa: ${formatProgramFindings(programQuality.findings)}.`;
+    }
     if (code === 'QUALITY_FAILED' && quality) {
       return `No pasó Crítica: calidad ${quality.quality_total}/110 tras ${quality.revision_count} revisiones. Fallan ${formatDimensions(quality.blocking_dimensions)}.`;
     }
@@ -197,6 +238,17 @@
       production_fit: 'producción',
     };
     return (dimensions ?? []).map((item) => labels[item] ?? item).join(', ') || 'dimensiones sin detalle';
+  }
+
+  function formatProgramFindings(findings = []) {
+    const labels = {
+      missing_clear_paranormal_threat: 'falto una amenaza paranormal clara',
+      missing_haunted_place_anchors: 'faltaron anclas visuales del lugar embrujado',
+      weak_story_question: 'falto una pregunta dramatica clara',
+      abstract_bargain_not_paranormal: 'el conflicto quedo abstracto y no paranormal',
+      fragmented_articles: 'quedaron frases cortadas o fragmentos sueltos',
+    };
+    return (findings ?? []).map((item) => labels[item] ?? item).join(', ') || 'reglas sin detalle';
   }
 
   function videoNeedsRetry(detail) {
@@ -575,11 +627,20 @@
             <div class="rounded-lg border border-line bg-surface-inset p-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-tertiary">Diagnóstico real del run</p>
-                {#if selectedGeneration.diagnostics.quality_failure}
+                {#if selectedGeneration.diagnostics.program_quality_failure}
+                  <Badge tone="error">Plantilla del programa</Badge>
+                {:else if selectedGeneration.diagnostics.quality_failure}
                   <Badge tone="error">Calidad {selectedGeneration.diagnostics.quality_failure.quality_total}/110</Badge>
                 {/if}
               </div>
-              {#if selectedGeneration.diagnostics.quality_failure}
+              {#if selectedGeneration.diagnostics.program_quality_failure}
+                {@const programQuality = selectedGeneration.diagnostics.program_quality_failure}
+                <div class="mt-3 rounded-lg border border-error/30 bg-error/10 px-3 py-2">
+                  <p class="text-[10px] uppercase tracking-wide text-error">Reglas del programa que no pasaron</p>
+                  <p class="mt-1 text-[12px] leading-relaxed text-ink">{formatProgramFindings(programQuality.findings)}</p>
+                  <p class="mt-1 text-[11px] text-ink-tertiary">Este bloqueo ocurre en Critica: el guion puede tener voz medida, pero todavia no respeta la plantilla narrativa del programa.</p>
+                </div>
+              {:else if selectedGeneration.diagnostics.quality_failure}
                 {@const quality = selectedGeneration.diagnostics.quality_failure}
                 <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div class="rounded-lg border border-line bg-surface px-3 py-2">
@@ -902,7 +963,27 @@
         {:else if activeTab === 'analiticas'}
           <p class="text-[13px] text-ink-secondary">Reproducciones, retención y suscriptores de {selected.name} aparecerán aquí en cuanto Kronara Pulse pueda leer métricas reales de las plataformas conectadas. Hoy no hay ninguna cuenta de YouTube/Spotify/Meta enlazada, así que no hay nada real que mostrar todavía.</p>
         {:else if activeTab === 'recursos'}
-          <p class="text-[13px] text-ink-secondary">Música y SFX se muestran cuando el episodio trae voz por escena, storyboard, biblioteca de recursos y mezcla final; si falta algo, el detalle del episodio enseña las etiquetas pedidas y las que no se resolvieron.</p>
+          <div class="space-y-4">
+            <div>
+              <p class="font-display text-[14px] font-semibold text-ink">Plantillas RAG del programa</p>
+              <p class="mt-1 text-[12px] text-ink-secondary">Estos son los moldes visibles que los agentes consultan como referencia de estructura. Sirven para aprender forma, tono y anclas visuales; no para copiar texto literal.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-2">
+              {#each PROGRAM_RESOURCE_TEMPLATES[selected.program_id] ?? [] as template}
+                <article class="rounded-lg border border-line bg-surface-inset p-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-[12.5px] font-semibold text-ink">{template.title}</p>
+                    <Badge tone="neutral">{template.length}</Badge>
+                  </div>
+                  <p class="mt-1 text-[11.5px] leading-relaxed text-ink-secondary">{template.focus}</p>
+                </article>
+              {/each}
+            </div>
+            <div class="rounded-lg border border-line bg-surface-inset p-3">
+              <p class="font-medium text-[12px] text-ink">Musica y SFX</p>
+              <p class="mt-1 text-[12px] text-ink-secondary">Se muestran cuando el episodio trae voz por escena, storyboard, biblioteca de recursos y mezcla final; si falta algo, el detalle del episodio enseña las etiquetas pedidas y las que no se resolvieron.</p>
+            </div>
+          </div>
         {/if}
       </Card>
       <div class="space-y-4">

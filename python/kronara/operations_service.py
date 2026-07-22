@@ -881,7 +881,11 @@ class OperationsService:
             (event.payload for event in reversed(workflow) if event.kind == "story.quality_failed"),
             None,
         )
-        phases = self._diagnostic_phases(workflow, quality_failure)
+        program_quality_failure = next(
+            (event.payload for event in reversed(workflow) if event.kind == "story.program_quality_failed"),
+            None,
+        )
+        phases = self._diagnostic_phases(workflow, quality_failure, program_quality_failure)
         agent_logs = [
             {
                 "agent_id": str(event.payload.get("agent_id", "")),
@@ -909,13 +913,18 @@ class OperationsService:
             "content_run_id": content_run_id,
             "story_run_id": story_run_id,
             "quality_failure": quality_failure,
+            "program_quality_failure": program_quality_failure,
             "phases": phases,
             "agent_logs": agent_logs[-80:],
             "tool_events": tool_events,
         }
 
     @staticmethod
-    def _diagnostic_phases(events: list[Any], quality_failure: dict[str, Any] | None) -> list[dict[str, Any]]:
+    def _diagnostic_phases(
+        events: list[Any],
+        quality_failure: dict[str, Any] | None,
+        program_quality_failure: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         phase_defs = [
             ("investigacion", "Investigación"),
             ("concepto", "Concepto"),
@@ -959,6 +968,10 @@ class OperationsService:
                 mark("produccion", status, detail)
             elif event.kind == "content.video_failed":
                 mark("produccion", "failed", f"Falló video: {payload.get('error', 'error desconocido')}.")
+            elif event.kind == "story.program_quality_failed":
+                findings = ", ".join(str(item) for item in payload.get("findings", ())) or "sin detalle"
+                program_id = payload.get("program_id") or "programa"
+                mark("critica", "failed", f"No pasó la plantilla de {program_id}: {findings}.")
             elif event.kind == "story.node":
                 node = str(payload.get("node", ""))
                 detail = payload.get("detail")
@@ -977,7 +990,7 @@ class OperationsService:
                 elif node == "narration":
                     mark("narracion", "running", "Midiendo voz y duración real del guion.")
                 elif node == "guardian" and status in {"blocked", "failed"}:
-                    failed_key = "critica" if detail == "QUALITY_FAILED" else "guardando"
+                    failed_key = "critica" if detail in {"QUALITY_FAILED", "PROGRAM_QUALITY_FAILED"} else "guardando"
                     mark(failed_key, "failed", f"Bloqueado por {detail}.")
 
         if quality_failure:
@@ -992,6 +1005,18 @@ class OperationsService:
             if phases["narracion"]["status"] == "running":
                 phases["narracion"]["status"] = "completed"
                 phases["narracion"]["detail"] = "Voz/duración medidas; el bloqueo real fue Crítica."
+
+        if program_quality_failure:
+            findings = ", ".join(str(item) for item in program_quality_failure.get("findings", ())) or "sin detalle"
+            program_id = program_quality_failure.get("program_id") or "programa"
+            mark(
+                "critica",
+                "failed",
+                f"No pasó la plantilla de {program_id}: {findings}.",
+            )
+            if phases["narracion"]["status"] == "running":
+                phases["narracion"]["status"] = "completed"
+                phases["narracion"]["detail"] = "Voz/duración medidas; el bloqueo real fue Crítica del programa."
 
         return [phases[key] for key, _ in phase_defs]
 

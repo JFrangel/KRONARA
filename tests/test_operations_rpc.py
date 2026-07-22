@@ -273,6 +273,36 @@ def test_run_diagnostics_exposes_quality_blocker_and_real_failed_phase(tmp_path)
     service.close()
 
 
+def test_run_diagnostics_exposes_program_quality_blocker_as_critique(tmp_path):
+    server, service = _server(tmp_path)
+    story_id = "owned_diag_program_quality"
+    story_run_id = f"story:{story_id}"
+    content_run_id = f"content:{story_id}"
+    service.store.append_event(content_run_id, "content.reddit_fallback_rss", {"signal_count": 1})
+    service.store.append_event(story_run_id, "story.node", {"node": "script_assembly", "detail": 338, "status": "running"})
+    service.store.append_event(story_run_id, "story.node", {"node": "narration", "status": "running"})
+    service.store.append_event(
+        story_run_id,
+        "story.program_quality_failed",
+        {
+            "program_id": "viernes-paranormal",
+            "findings": ["missing_clear_paranormal_threat", "missing_haunted_place_anchors"],
+        },
+    )
+    service.store.append_event(story_run_id, "story.node", {"node": "guardian", "detail": "PROGRAM_QUALITY_FAILED", "status": "blocked"})
+
+    response = server.handle(_request("run.diagnostics", {"run_id": content_run_id}))
+
+    result = response["result"]
+    phases = {phase["key"]: phase for phase in result["phases"]}
+    assert result["program_quality_failure"]["program_id"] == "viernes-paranormal"
+    assert phases["critica"]["status"] == "failed"
+    assert "missing_clear_paranormal_threat" in phases["critica"]["detail"]
+    assert phases["guardando"]["status"] == "pending"
+    assert phases["narracion"]["status"] == "completed"
+    service.close()
+
+
 def test_episodes_list_respects_limit_param(tmp_path):
     server, service = _server(tmp_path)
     for i in range(3):

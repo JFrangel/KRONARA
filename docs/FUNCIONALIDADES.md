@@ -9,20 +9,20 @@
 Kronara es **una sola app con dos planos y dos modos**:
 
 ```text
-Svelte/Tauri UI  ──comandos Tauri──>  Rust (plano de autoridad)  ──JSON-RPC local autenticado──>  Python (plano cognitivo)
+Svelte web local  ──__kronara_rpc/__kronara_asset──>  Python sidecar local
      UI                                  secretos, red host-pinned,                                  agentes, narrativa,
      muestra/observa                     pausa global, gates,                                        RAG, memoria, voz,
      no guarda secretos                  herramientas de efecto                                      scheduler
 ```
 
-- **Plano de autoridad (Rust):** guarda secretos, hace la red (modelos, Reddit, Meta, voz), aplica la pausa global y expone una **lista cerrada** de métodos y herramientas.
-- **Plano cognitivo (Python):** planifica, investiga, escribe, evalúa y recuerda. **No** ve secretos ni ejecuta red/publicación por su cuenta; solicita efectos a Rust.
+- **Web local:** interfaz Svelte servida por Vite. No usa la maqueta Tauri para crear episodios.
+- **Sidecar Python:** planifica, investiga, escribe, evalúa, recuerda, genera voz/video y guarda episodios locales. Las herramientas externas siguen allowlistadas y redactadas.
 - **Modo Tarea (Agente A):** flujo lineal bajo demanda (`content.run`): una historia, un tipo de contenido.
 - **Modo Red (Agente B) [fases futuras]:** una historia maestra → variantes multiplataforma, parrilla semanal, Kronara Pulse.
 
 ## 2. Métodos RPC (UI → Python, vía Rust)
 
-Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_METHODS`). La UI llama estos por el puente Tauri.
+Lista cerrada en la web local (`vite.config.js: ALLOWED_RPC_METHODS`) y espejada en Rust para compatibilidad. La UI llama estos por `__kronara_rpc`.
 
 | Método | Propósito | Entrada (clave) | Salida (clave) |
 |---|---|---|---|
@@ -43,6 +43,8 @@ El chat operativo utiliza un prompt stack con capas separadas para política bas
 | `programs.template.save` | Guardar plantilla narrativa manual de un programa | `program_id`, `directives` | plantilla guardada |
 | `programs.template.reset` | Restaurar plantilla narrativa base de un programa | `program_id` | plantilla base |
 | `episodes.list` / `episodes.get` | Biblioteca local de episodios y detalle | `program_id?`, `story_id` | guion, video, música, SFX, QC |
+
+La pestaña **Programas > Recursos** muestra las plantillas RAG visibles por programa (`knowledge/narrative/program-story-templates.md`). La pestaña **Programas > Configuración** permite editar reglas operativas que se guardan en runtime local.
 
 **Eventos hacia la UI (para observar sin intervenir):** cada herramienta emite `started` y un evento final con argumentos redactados, evidencia y resumen; los runs emiten progreso. La UI se suscribe para dibujar el timeline y el panel de "runs automáticos".
 
@@ -132,12 +134,14 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 
 ## 5. Cómo conectar el frontend (resumen)
 
-1. **Iniciar un run:** llamar `content.run` (o `story.test`) por el puente Tauri; recibir `run_id`.
+1. **Iniciar un run:** llamar `content.run` (o `story.test`) por `__kronara_rpc`; recibir `run_id`.
 2. **Observar:** suscribirse a los eventos de progreso y a `tools.timeline` para dibujar el timeline (herramientas, evidencia, modelo usado).
 3. **Cancelar/reanudar:** `run.cancel` / el run se reanuda solo desde checkpoint tras reabrir la app.
 4. **Chat operativo:** `operations.chat` para preguntar por el estado con contexto citado.
 5. **Autonomía:** un panel de "runs automáticos" (programados/en curso/bloqueados) refleja el `Scheduler` + `AutonomyGuard`; los gates bloqueados se muestran con su razón.
-6. **Nunca** exponer secretos en la UI: todo llega redactado desde Rust.
+6. **Nunca** exponer secretos en la UI: todo llega redactado desde el puente local.
+
+Si `run.diagnostics` devuelve `PROGRAM_QUALITY_FAILED`, la fase correcta es **Crítica**. No es un error de Guardando: el guion no cumplió una regla del programa, por ejemplo amenaza paranormal clara o anclas visuales de lugar en Viernes Paranormal.
 
 ## 6. Estado por fase (v0.6)
 
@@ -147,7 +151,7 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 ### Nota de auditoría visual 2026-07-21
 
 El pipeline local ya genera el MP4 9:16 y la UI lo reproduce mediante el
-protocolo de assets de Tauri. En la previsualización Vite, `assetSrc()` usa
+protocolo local de assets. En Vite, `assetSrc()` usa
 `/__kronara_asset`, restringido a `.kronara/runtime/**` y compatible con
 rangos HTTP. Lo que sigue pendiente es el render host-controlado desde Rust y
 la publicación remota real, no la creación ni la reproducción local del MP4.
