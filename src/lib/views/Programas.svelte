@@ -109,10 +109,12 @@
     return $episodeGeneration?.programId === programId ? 'episodios' : 'resumen';
   }
 
-  async function createEpisode() {
+  async function createEpisode(options = {}) {
     if (creating || connection !== 'connected' || !selected) return;
     creating = true;
-    createNotice = '';
+    createNotice = options.retry
+      ? 'Reintentando desde agentes: se volvera a validar investigacion, guion, critica, narracion, produccion y guardado.'
+      : '';
     const programId = selected.program_id;
     const storyId = `owned_ui_${Date.now()}`;
     startEpisodeGeneration({ programId, programName: selected.name, storyId });
@@ -145,6 +147,11 @@
     } finally {
       creating = false;
     }
+  }
+
+  async function retrySelectedProgram() {
+    if (creating || connection !== 'connected' || !selected) return;
+    await createEpisode({ retry: true });
   }
 
   function episodesFor(programId) {
@@ -190,6 +197,14 @@
       production_fit: 'producción',
     };
     return (dimensions ?? []).map((item) => labels[item] ?? item).join(', ') || 'dimensiones sin detalle';
+  }
+
+  function videoNeedsRetry(detail) {
+    return detail && (
+      detail.video_status === 'failed'
+      || detail.video_status === 'qc_failed'
+      || detail.video_qc_passed === false
+    );
   }
 
   function phaseForGeneration(run, stage) {
@@ -495,7 +510,7 @@
       </button>
       <button
         class="flex items-center gap-1.5 rounded-full bg-purple-500 px-4 py-2 text-[12.5px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
-        onclick={createEpisode}
+        onclick={() => createEpisode()}
         disabled={creating || connection !== 'connected'}
       >
         <Icon name="plus" size={14} />
@@ -523,6 +538,16 @@
           <div class="text-right">
             <p class="font-mono text-lg font-semibold text-ink">{percent}%</p>
             <p class="text-[10.5px] text-ink-tertiary">{formatElapsed(selectedGeneration.elapsedSeconds)}</p>
+            {#if selectedGeneration.status === 'failed'}
+              <button
+                class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ember-500/40 px-3 py-1.5 text-[11.5px] font-medium text-ember-300 transition hover:bg-ember-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                onclick={retrySelectedProgram}
+                disabled={creating || connection !== 'connected'}
+              >
+                <Icon name="refresh" size={13} />
+                Reintentar
+              </button>
+            {/if}
           </div>
         </div>
         <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-line">
@@ -997,6 +1022,20 @@
                         <li class="text-[11px] text-error">{issue}</li>
                       {/each}
                     </ul>
+                  {/if}
+                  {#if videoNeedsRetry(selectedEpisodeDetail)}
+                    <div class="mt-3 rounded-lg border border-ember-500/30 bg-ember-500/10 p-3">
+                      <p class="text-[12px] font-medium text-ink">El video no queda aprobado para publicar.</p>
+                      <p class="mt-1 text-[11.5px] leading-relaxed text-ink-secondary">Puedes reintentarlo; Kronara volvera a pasar por agentes, validaciones y produccion para crear una version nueva en lugar de aprobar este fallo.</p>
+                      <button
+                        class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-ember-500 px-3 py-2 text-[11.5px] font-semibold text-ink transition hover:bg-ember-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        onclick={retrySelectedProgram}
+                        disabled={creating || connection !== 'connected'}
+                      >
+                        <Icon name="refresh" size={13} />
+                        Reintentar produccion
+                      </button>
+                    </div>
                   {/if}
                 {:else if episodeDetailTab === 'distribucion'}
                   <ul class="space-y-1.5">

@@ -27,6 +27,7 @@
     'chevron-left': 'M15 18l-6-6 6-6',
     'chevron-right': 'M9 18l6-6-6-6',
     plus: 'M12 5v14M5 12h14',
+    refresh: 'M21 12a9 9 0 0 1-15.5 6.3L3 16M3 16v5h5M3 12A9 9 0 0 1 18.5 5.7L21 8M21 8V3h-5',
     'external-link': 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3',
   };
 

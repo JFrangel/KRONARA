@@ -25,6 +25,15 @@ test('episode player exposes browser playback controls and the correct vertical 
   assert.doesNotMatch(source, new RegExp('pre' + 'view'));
 });
 
+test('failed local generation can be retried instead of force-approved', () => {
+  const source = fs.readFileSync('src/lib/views/Programas.svelte', 'utf8');
+
+  assert.match(source, /Reintentar/);
+  assert.match(source, /Reintentar produccion/);
+  assert.match(source, /no queda aprobado para publicar/);
+  assert.match(source, /videoNeedsRetry/);
+});
+
 test('frontend uses only the local web operations bridge', () => {
   const source = fs.readFileSync('src/lib/local-operations.js', 'utf8');
 
