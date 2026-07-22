@@ -1,54 +1,72 @@
 import { writable } from 'svelte/store';
 
 export const GENERATION_STAGES = [
-  { key: 'investigacion', label: 'Investigacion', detail: 'Buscando senales, revisando hilos completos, consultando RAG y descartando lo que no pasa filtros.', icon: 'search', at: 0 },
-  { key: 'concepto', label: 'Concepto', detail: 'Convirtiendo la senal aprobada en una premisa original con plantilla del programa.', icon: 'wand', at: 25 },
-  { key: 'guion', label: 'Guion', detail: 'Armando beats, escenas navegables, gancho, claridad, tension, payoff y anclas visuales.', icon: 'list', at: 70 },
-  { key: 'critica', label: 'Critica', detail: 'Revalidando derechos, originalidad, estructura, duracion, genero del programa y reparaciones necesarias.', icon: 'check', at: 130 },
-  { key: 'narracion', label: 'Narracion', detail: 'Midiendo voz premium por escena, ritmo, pausas, duracion real y marcas para SFX.', icon: 'clock', at: 180 },
-  { key: 'produccion', label: 'Produccion', detail: 'Generando portada obligatoria, imagenes consistentes con la historia, musica/SFX, video vertical y QC.', icon: 'film', at: 260 },
-  { key: 'guardando', label: 'Guardando', detail: 'Registrando guion, video, portada, musica, SFX, evidencia y diagnostico en la biblioteca local.', icon: 'folder', at: 1800 },
+  { key: 'investigacion', label: 'Investigación', detail: 'Buscando señales, revisando hilos completos, consultando RAG y descartando lo que no pasa filtros.', icon: 'search', at: 0 },
+  { key: 'concepto', label: 'Concepto', detail: 'Convirtiendo la señal aprobada en una premisa original con plantilla del programa.', icon: 'wand', at: 25 },
+  { key: 'guion', label: 'Guion', detail: 'Armando beats, escenas navegables, gancho, claridad, tensión, payoff y anclas visuales.', icon: 'list', at: 70 },
+  { key: 'critica', label: 'Crítica', detail: 'Revalidando derechos, originalidad, estructura, duración, género del programa y reparaciones necesarias.', icon: 'check', at: 130 },
+  { key: 'narracion', label: 'Narración', detail: 'Midiendo voz premium por escena, ritmo, pausas, duración real y marcas para SFX.', icon: 'clock', at: 180 },
+  { key: 'produccion', label: 'Producción', detail: 'Generando portada obligatoria, imágenes consistentes con la historia, música/SFX, video vertical y QC.', icon: 'film', at: 260 },
+  { key: 'guardando', label: 'Guardando', detail: 'Registrando guion, video, portada, música, SFX, evidencia y diagnóstico en la biblioteca local.', icon: 'folder', at: 1800 },
 ];
 
 const STAGE_INDEX_BY_KEY = Object.fromEntries(GENERATION_STAGES.map((stage, index) => [stage.key, index]));
 const LIVE_STAGE_DETAILS = {
   investigacion: [
-    [0, 'Investigacion: consultando fuentes publicas, hilos completos, memoria RAG y oportunidades recientes.'],
-    [10, 'Investigacion: separando senales utiles, continuaciones de historias y material que no sirve.'],
-    [20, 'Investigacion: registrando evidencia y preparando la mejor senal para Concepto.'],
+    [0, 'Investigación: consultando fuentes públicas, hilos completos, memoria RAG y oportunidades recientes.'],
+    [10, 'Investigación: separando señales útiles, continuaciones de historias y material que no sirve.'],
+    [20, 'Investigación: registrando evidencia y preparando la mejor señal para Concepto.'],
   ],
   concepto: [
-    [0, 'Concepto: convirtiendo la senal elegida en una premisa propia del programa.'],
-    [18, 'Concepto: comparando plantillas RAG, tono del dia y conflicto central.'],
+    [0, 'Concepto: convirtiendo la señal elegida en una premisa propia del programa.'],
+    [18, 'Concepto: comparando plantillas RAG, tono del día y conflicto central.'],
     [35, 'Concepto: dejando claro protagonista, deseo, amenaza, costo y promesa del episodio.'],
   ],
   guion: [
     [0, 'Guion: armando beats, escenas separadas, gancho inicial y payoff final.'],
-    [25, 'Guion: reforzando claridad, escalada, pregunta dramatica y anclas visuales por escena.'],
-    [50, 'Guion: preparando marcas para voz, storyboard, musica y SFX.'],
+    [25, 'Guion: reforzando claridad, escalada, pregunta dramática y anclas visuales por escena.'],
+    [50, 'Guion: preparando marcas para voz, storyboard, música y SFX.'],
   ],
   critica: [
-    [0, 'Critica: revisando originalidad, derechos, plantilla del programa y claridad narrativa.'],
-    [20, 'Critica: si encuentra fallos, pide reparaciones concretas antes de producir.'],
-    [40, 'Critica: revalidando estructura, duracion, genero y consistencia visual.'],
+    [0, 'Crítica: revisando originalidad, derechos, plantilla del programa y claridad narrativa.'],
+    [20, 'Crítica: si encuentra fallos, pide reparaciones concretas antes de producir.'],
+    [40, 'Crítica: revalidando estructura, duración, género y consistencia visual.'],
   ],
   narracion: [
-    [0, 'Narracion: midiendo voz premium, pausas y duracion real del guion.'],
-    [45, 'Narracion: marcando escenas navegables, respiraciones, silencios y puntos de SFX.'],
-    [90, 'Narracion: comparando duracion real contra el objetivo del programa.'],
+    [0, 'Narración: midiendo voz premium, pausas y duración real del guion.'],
+    [45, 'Narración: marcando escenas navegables, respiraciones, silencios y puntos de SFX.'],
+    [90, 'Narración: comparando duración real contra el objetivo del programa.'],
   ],
   produccion: [
-    [0, 'Produccion: generando portada obligatoria y fijando personaje, lugar, paleta y amenaza.'],
-    [90, 'Produccion: preparando tandas de imagenes consistentes con la historia completa.'],
-    [180, 'Produccion: revisando recursos visuales, musica, SFX y composicion vertical.'],
-    [360, 'Produccion: ensamblando video 9:16 y comprobando que las escenas no pierdan contexto.'],
-    [720, 'Produccion: ejecutando QC visual/audio antes de permitir que pase a Guardando.'],
+    [0, 'Producción: generando portada obligatoria y fijando personaje, lugar, paleta y amenaza.'],
+    [90, 'Producción: preparando tandas de imágenes consistentes con la historia completa.'],
+    [180, 'Producción: revisando recursos visuales, música, SFX y composición vertical.'],
+    [360, 'Producción: ensamblando video 9:16 y comprobando que las escenas no pierdan contexto.'],
+    [720, 'Producción: ejecutando QC visual/audio antes de permitir que pase a Guardando.'],
   ],
   guardando: [
-    [0, 'Guardando: registrando guion, portada, video, musica, SFX, evidencias y diagnostico local.'],
+    [0, 'Guardando: registrando guion, portada, video, música, SFX, evidencias y diagnóstico local.'],
     [45, 'Guardando: verificando archivos finales y actualizando la biblioteca del programa.'],
     [90, 'Guardando: cerrando metadatos para que el episodio aparezca en Programas y Biblioteca.'],
   ],
+};
+const TOOL_LABELS = {
+  'model.complete': 'Modelo',
+  'model.health': 'Salud de modelos',
+  'reddit.list_signals': 'Investigación en Reddit',
+  'knowledge.retrieve': 'RAG',
+  'voice.synthesize': 'Voz',
+  'pexels.search_videos': 'Video de apoyo',
+  'publication.publish': 'Publicación',
+  'meta.metrics.read': 'Métricas',
+};
+const AGENT_LABELS = {
+  writer_room: 'Guionista',
+  automated_qc: 'Crítica automática',
+  voice_director: 'Director de voz',
+  visual_director: 'Director visual',
+  story_critic: 'Crítico narrativo',
+  'story.critic': 'Crítico narrativo',
 };
 const STORAGE_KEY = 'kronara.episodeGeneration.v1';
 const RESTORED_GENERATION = loadStoredGeneration();
@@ -81,7 +99,7 @@ export function startEpisodeGeneration({ programId, programName, storyId }) {
     stageIndex: 0,
     status: 'running',
     title: 'Generando episodio',
-    message: 'El backend local esta trabajando.',
+    message: 'El backend local está trabajando.',
     diagnostics: null,
   });
   startGenerationTimer();
@@ -202,12 +220,20 @@ function latestDiagnosticText(run) {
   const tool = [...(run?.diagnostics?.tool_events ?? [])]
     .reverse()
     .find((event) => event.summary);
-  if (tool?.summary) return `Herramienta ${tool.tool_id}: ${tool.summary}`;
+  if (tool?.summary) return `${friendlyToolLabel(tool.tool_id)}: ${tool.summary}`;
   const agent = [...(run?.diagnostics?.agent_logs ?? [])]
     .reverse()
     .find((event) => event.detail);
-  if (agent?.detail) return `${agent.agent_id || 'Agente'}: ${agent.detail}`;
+  if (agent?.detail) return `${friendlyAgentLabel(agent.agent_id)}: ${agent.detail}`;
   return null;
+}
+
+function friendlyToolLabel(toolId) {
+  return TOOL_LABELS[toolId] ?? 'Herramienta';
+}
+
+function friendlyAgentLabel(agentId) {
+  return AGENT_LABELS[agentId] ?? 'Agente';
 }
 
 function stopGenerationTimer() {

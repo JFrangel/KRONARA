@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,12 +10,12 @@ from typing import Any
 
 
 PROGRAM_RESOURCE_LABELS: dict[str, str] = {
-    "decisiones-dificiles": "Lunes - Decisiones Dificiles",
-    "confesiones-anonimas": "Martes - Confesiones Anonimas",
-    "cronicas-de-justicia": "Miercoles - Cronicas de Justicia",
+    "decisiones-dificiles": "Lunes - Decisiones Difíciles",
+    "confesiones-anonimas": "Martes - Confesiones Anónimas",
+    "cronicas-de-justicia": "Miércoles - Crónicas de Justicia",
     "mentes-ocultas": "Jueves - Mentes Ocultas",
     "viernes-paranormal": "Viernes - Paranormal",
-    "historias-medianoche": "Sabado - Historias de Medianoche",
+    "historias-medianoche": "Sábado - Historias de Medianoche",
     "caso-de-la-semana": "Domingo - El Caso de la Semana",
 }
 
@@ -53,10 +54,9 @@ def story_resource_items(text: str) -> list[dict[str, str]]:
         end = blocks[index + 1].start() if index + 1 < len(blocks) else len(text)
         heading = match.group(1).strip()
         body = text[start:end].strip()
-        title = _clean_title(heading)
         items.append(
             {
-                "title": title,
+                "title": _clean_title(heading),
                 "length": _length_label(heading),
                 "focus": _focus_line(body),
             }
@@ -99,7 +99,10 @@ def reset_story_resource_override(
     programs = dict(payload.get("programs", {}))
     programs.pop(program_id, None)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"schema_version": 1, "programs": programs}, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps({"schema_version": 1, "programs": programs}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return _base_section(program_id, resource_root)
 
 
@@ -117,9 +120,10 @@ def combined_story_resources_markdown(
         label = PROGRAM_RESOURCE_LABELS.get(program_id)
         if not label:
             continue
+        heading = _matching_heading(parsed["order"], label) or label
         text = str(raw_value.get("text", "")) if isinstance(raw_value, dict) else str(raw_value)
         if text.strip():
-            sections[label] = _clean_resource_text(text)
+            sections[heading] = _clean_resource_text(text)
     lines = [parsed["intro"].rstrip()]
     for heading in parsed["order"]:
         body = sections.get(heading, "").strip()
@@ -135,7 +139,8 @@ def _base_section(program_id: str, resource_root: Path) -> str:
     if not source.exists():
         return ""
     parsed = _parse_markdown(source.read_text(encoding="utf-8"))
-    return parsed["sections"].get(label, "").strip()
+    heading = _matching_heading(parsed["order"], label)
+    return parsed["sections"].get(heading or label, "").strip()
 
 
 def _parse_markdown(text: str) -> dict[str, Any]:
@@ -159,6 +164,20 @@ def _parse_markdown(text: str) -> dict[str, Any]:
         "order": order,
         "sections": {key: "\n".join(value).strip() for key, value in sections.items()},
     }
+
+
+def _matching_heading(headings: list[str], label: str) -> str | None:
+    wanted = _label_key(label)
+    for heading in headings:
+        if _label_key(heading) == wanted:
+            return heading
+    return None
+
+
+def _label_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    without_marks = "".join(char for char in normalized if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", without_marks).strip().casefold()
 
 
 def _override_text(program_id: str, override_path: Path | str | None = None) -> str:
@@ -198,9 +217,14 @@ def _clean_resource_text(text: str) -> str:
 
 def _clean_title(heading: str) -> str:
     title = re.sub(r"^\d+\.\s*", "", heading)
-    title = re.sub(r"^Historia\s+(?:muy\s+)?(?:larga|mediana|corta|cinematografica|cinematográfica)\s*(?:\d+)?:?\s*", "", title, flags=re.I)
+    title = re.sub(
+        r"^Historia\s+(?:muy\s+)?(?:larga|mediana|corta|cinematografica|cinematográfica)\s*(?:\d+)?:?\s*",
+        "",
+        title,
+        flags=re.I,
+    )
     title = title.strip(" -–:")
-    quoted = re.search(r"[\"“](.+?)[\"”]", title)
+    quoted = re.search(r'["“](.+?)["”]', title)
     return quoted.group(1).strip() if quoted else title.strip()
 
 

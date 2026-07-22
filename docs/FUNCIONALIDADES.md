@@ -15,14 +15,14 @@ Svelte web local  ──__kronara_rpc/__kronara_asset──>  Python sidecar loc
      no guarda secretos                  herramientas de efecto                                      scheduler
 ```
 
-- **Web local:** interfaz Svelte servida por Vite. No usa la maqueta Tauri para crear episodios.
+- **Web local:** interfaz Svelte servida por Vite. Es la ruta activa para crear episodios.
 - **Sidecar Python:** planifica, investiga, escribe, evalúa, recuerda, genera voz/video y guarda episodios locales. Las herramientas externas siguen allowlistadas y redactadas.
 - **Modo Tarea (Agente A):** flujo lineal bajo demanda (`content.run`): una historia, un tipo de contenido.
 - **Modo Red (Agente B) [fases futuras]:** una historia maestra → variantes multiplataforma, parrilla semanal, Kronara Pulse.
 
-## 2. Métodos RPC (UI → Python, vía Rust)
+## 2. Métodos RPC (UI → Python, vía web local)
 
-Lista cerrada en la web local (`vite.config.js: ALLOWED_RPC_METHODS`) y espejada en Rust para compatibilidad. La UI llama estos por `__kronara_rpc`.
+Lista cerrada en la web local (`vite.config.js: ALLOWED_RPC_METHODS`). La UI llama estos por `__kronara_rpc`.
 
 | Método | Propósito | Entrada (clave) | Salida (clave) |
 |---|---|---|---|
@@ -48,9 +48,9 @@ La pestaña **Programas > Recursos** muestra las plantillas RAG visibles por pro
 
 **Eventos hacia la UI (para observar sin intervenir):** cada herramienta emite `started` y un evento final con argumentos redactados, evidencia y resumen; los runs emiten progreso. La UI se suscribe para dibujar el timeline y el panel de "runs automáticos".
 
-## 3. Herramientas de autoridad (Python → Rust)
+## 3. Herramientas externas gobernadas
 
-Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada en Python (`authority_client.py`). Python solo puede pedir estas.
+Lista cerrada de herramientas que el sidecar puede pedir. El resultado se muestra como logs resumidos, sin secretos ni razonamiento privado.
 
 | Herramienta | Propósito | Entrada | Salida |
 |---|---|---|---|
@@ -119,7 +119,7 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 - **`AuthorityMetaTransport(authority)`** — enruta upload/reconcile por `publication.publish`. `MetaPublisher` maneja timeout→reconciliación. *(La publicación EN VIVO requiere una Página Meta autorizada.)*
 
 ### 4.10 Scheduler y autonomía — `schedule.py` (nuevo v0.6) + `policy.py`
-- **`Scheduler(rules).due(now, last_fired) -> tuple[DueRun,...]`** — qué runs programados tocan ahora (cadencia interval/daily/weekly = parrilla). Lógica pura; Rust posee el reloj y hace el tick.
+- **`Scheduler(rules).due(now, last_fired) -> tuple[DueRun,...]`** — qué runs programados tocan ahora (cadencia interval/daily/weekly = parrilla). Lógica pura; la web local entrega el momento actual.
 - **`AutonomousRunAuthorizer(policy)`** — instancia el `AutonomyGuard`: pausa global, temas prohibidos y riesgo crítico detienen el run desatendido.
 - **`AutonomyGuard(policy).authorize(action, risk) -> AuthorizationDecision`** — gate por modo (`manual`/`supervised_auto`/`full_auto`) y códigos no-anulables.
 
@@ -153,5 +153,5 @@ Si `run.diagnostics` devuelve `PROGRAM_QUALITY_FAILED`, la fase correcta es **Cr
 El pipeline local ya genera el MP4 9:16 y la UI lo reproduce mediante el
 protocolo local de assets. En Vite, `assetSrc()` usa
 `/__kronara_asset`, restringido a `.kronara/runtime/**` y compatible con
-rangos HTTP. Lo que sigue pendiente es el render host-controlado desde Rust y
-la publicación remota real, no la creación ni la reproducción local del MP4.
+rangos HTTP. Lo que sigue pendiente es la publicación remota real, no la
+creación ni la reproducción local del MP4.

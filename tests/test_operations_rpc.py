@@ -101,8 +101,10 @@ def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_
     assert viernes["narrative_template"]
     assert viernes["narrative_template_source"] == "base"
     assert "La Casa que Respiraba" in viernes["story_resource_text"]
+    assert "La Niña del Espejo" in viernes["story_resource_text"]
     assert viernes["story_resource_source"] == "base"
     assert any(item["title"] == "La Casa que Respiraba" for item in viernes["story_resource_items"])
+    assert any(item["title"] == "La Niña del Espejo" for item in viernes["story_resource_items"])
     service.close()
 
 
@@ -426,7 +428,7 @@ def test_static_program_story_templates_are_available_to_rag(tmp_path):
     retrieval = server.handle(
         _request(
             "rag.retrieve_v3",
-            {"query": "plantilla viernes paranormal casa respiraba imagenes consistentes", "limit": 5},
+            {"query": "plantilla viernes paranormal niña espejo imágenes consistentes", "limit": 5},
             5,
         )
     )["result"]

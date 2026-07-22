@@ -4,7 +4,7 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 
 **Novedades v0.6 (cerebro):** motor narrativo a nivel literario (oficio: mostrar-no-contar, sensorial, subtexto, ritmo), Nemotron 3 **Ultra** (1M contexto) + alias `critic`, **memoria de grafo bitemporal** con continuidad de **series multi-parte**, **voz real (edge-tts)** que mide la **duración real** de la narración, y **scheduler + autonomía** para que los agentes trabajen solos. Contrato para el frontend en [`docs/FUNCIONALIDADES.md`](docs/FUNCIONALIDADES.md).
 
-**Integración verificada en vivo:** narración real con edge-tts, **render de video FFmpeg** (Reel 9:16 con subtítulos quemados, QC aprobado de punta a punta), **embeddings semánticos reales** (fastembed ONNX, sin torch) y **publicación gobernada e idempotente** (la publicación en vivo requiere una Página Meta autorizada). Detalle en [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md).
+**Integración verificada en vivo:** narración real con edge-tts, **render de video FFmpeg** (Reel 9:16 con subtítulos quemados, QC aprobado de punta a punta), **embeddings semánticos reales** (fastembed ONNX, sin torch) y **publicación gobernada e idempotente** (la publicación en vivo requiere una Página Meta autorizada). El estado práctico está resumido abajo para la web local.
 
 ## Estado real
 
@@ -24,8 +24,8 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 | Scheduler + autonomía (agentes desatendidos) | Implementado | `tests/test_schedule.py` |
 | BGE-M3 y reranker BGE | Carga local productiva; degradación explícita si faltan pesos | `tests/test_production_embeddings.py` |
 | Métricas Meta y aprendizaje | Lectura versionada y promoción prudente implementadas | `tests/test_performance_learning.py` |
-| Voz real y FFmpeg local | Integrado; el sidecar empaquetado debe reconstruirse | `docs/INTEGRATIONS.md`, `docs/BUGS_CONOCIDOS.md` |
-| Whisper y publicación Meta Reels | Pendiente | `docs/INTEGRATIONS.md` |
+| Voz real y FFmpeg local | Integrado en web local; requiere binarios en `PATH` | `tests/test_voice_duration.py`, `tests/test_visual_production.py` |
+| Whisper y publicación Meta Reels | Pendiente | README, sección de fallos |
 | Fine-tuning automático | Bloqueado por diseño | `tests/test_story_reuse.py` |
 
 `full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. Kronara ya crea historias propias desde señales abstractas y puede generar/reproducir un Reel local; la primera publicación real en Facebook todavía requiere una Página sandbox autorizada, upload y reconciliación remota.
@@ -85,16 +85,6 @@ Vite levanta el sidecar Python en desarrollo, carga `.env` localmente y mantiene
 
 - [Funcionalidades por función (para el frontend)](docs/FUNCIONALIDADES.md)
 - [Proceso de generación de contenido, paso a paso](docs/PROCESO_GENERACION_CONTENIDO.md)
-- [Bugs conocidos y estado real](docs/BUGS_CONOCIDOS.md)
-- [Fases futuras](docs/roadmap/FASES-FUTURAS.md)
-- [Arquitectura](docs/ARCHITECTURE.md)
-- [Runtime y modelos](docs/AGENT_RUNTIME.md)
-- [Catálogo de agentes](docs/AGENTS.md)
 - [Memoria y RAG](docs/MEMORY_AND_RAG.md)
-- [Integraciones](docs/INTEGRATIONS.md)
 - [Entorno](docs/ENVIRONMENT.md)
 - [Colaborar / instalación de desarrollo](CONTRIBUTING.md)
-- [Fases y criterios](docs/IMPLEMENTATION_PHASES.md)
-- [Brechas comprobables](docs/GAP_ANALYSIS.md)
-- [Plan v0.4 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.4-agent-operations-implementation.md)
-- [Plan v0.5 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.5-production-intelligence-implementation.md)

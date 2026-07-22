@@ -47,9 +47,10 @@ test('generation banner can show live agent and production substeps', () => {
   const source = fs.readFileSync('src/lib/generation-state.js', 'utf8');
 
   assert.match(source, /LIVE_STAGE_DETAILS/);
-  assert.match(source, /Produccion: generando portada obligatoria/);
-  assert.match(source, /tandas de imagenes consistentes/);
-  assert.match(source, /Herramienta/);
+  assert.match(source, /Producción: generando portada obligatoria/);
+  assert.match(source, /tandas de imágenes consistentes/);
+  assert.match(source, /Director visual/);
+  assert.match(source, /Investigación en Reddit/);
 });
 
 test('frontend uses only the local web operations bridge', () => {

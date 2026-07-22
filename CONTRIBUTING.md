@@ -1,7 +1,7 @@
 # Colaborar en Kronara
 
 Esta guia deja el proyecto listo para correr la web local, generar episodios,
-depurar fallos y subir cambios sin depender de la maqueta Tauri.
+depurar fallos y subir cambios desde el flujo actual.
 
 ## Instalacion rapida
 
@@ -130,7 +130,6 @@ python -m pytest tests/test_production_content_vertical.py tests/test_reddit_rss
 - No copies cuerpos completos de posts externos a memoria promocionada.
 - Si agregas un metodo RPC, actualiza:
   - `vite.config.js`
-  - `src-tauri/src/sidecar_bridge.rs` si aplica
   - `docs/FUNCIONALIDADES.md`
   - pruebas de contrato.
 - Si agregas un agente o skill, actualiza `config/agents`,
@@ -142,8 +141,8 @@ python -m pytest tests/test_production_content_vertical.py tests/test_reddit_rss
 
 - `Failed to fetch`: la web local no pudo hablar con el backend. Revisa que
   `npm.cmd run dev:web` siga vivo.
-- Vite cayendo por archivos bloqueados: `src-tauri/target/**` debe estar
-  ignorado por el watcher.
+- Vite cayendo por archivos bloqueados: revisa que carpetas de build, caches y
+  runtime local esten ignorados por el watcher.
 - No aparece un episodio: si fallo antes de guardar, mira el run activo y
   usa Reintentar.
 - Se ve `PROGRAM_QUALITY_FAILED`: no es guardado; es Critica del programa.
