@@ -143,8 +143,6 @@ listo para cuando alguien tenga cuenta.
 1. La tabla `.env` tiene un typo del usuario (`KNORA_POLLINATION_API_KEY`
    en lugar de `KRONARA_`). El código acepta ambos, pero convendría
    normalizar en algún momento.
-2. Los tokens de Cloudflare y Pollinations fueron pegados en chat en
-   texto plano. **Rotarlos** al inicio de la próxima sesión.
 3. `content.run` sync sigue funcionando (backward compat con tests y
    `produce_episode.rs`); async es opt-in con `wait:false`. Considerar
    invertir el default eventualmente.
