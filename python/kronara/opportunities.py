@@ -51,12 +51,27 @@ class Opportunity:
     link: str
     harvested_at: int
     status: str
+    body: str = ""
     # "entertainment" | "real_experience_serious" — see knowledge/reddit-sources/.
     sensitivity: str = "entertainment"
 
 
 def _opportunity_id(subreddit: str, title: str) -> str:
     return hashlib.sha256(f"{subreddit}|{title}".encode("utf-8")).hexdigest()[:16]
+
+
+_REJECTED_OPPORTUNITY_TITLE_PATTERNS = (
+    r"(?i)\b(community updates?|rule\s*\d+|rules?|resources?|support resources?)\b",
+    r"(?i)\b(megathread|moderator|mod post|announcement|read before posting)\b",
+    r"(?i)\b(suicide|suicide notes?|ending my own life|kill myself|self[-\s]?harm)\b",
+    r"(?i)\b(cut myself|sexual assault|consent and support|sa['’]?d)\b",
+)
+
+
+def is_usable_opportunity_title(title: str) -> bool:
+    if not title.strip():
+        return False
+    return not any(re.search(pattern, title) for pattern in _REJECTED_OPPORTUNITY_TITLE_PATTERNS)
 
 
 class OpportunityStore:
@@ -76,6 +91,7 @@ class OpportunityStore:
                 link TEXT NOT NULL,
                 harvested_at INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'new',
+                body TEXT NOT NULL DEFAULT '',
                 sensitivity TEXT NOT NULL DEFAULT 'entertainment'
             );
             CREATE INDEX IF NOT EXISTS idx_oppo_status ON opportunities(status);
@@ -84,6 +100,12 @@ class OpportunityStore:
         try:  # migration for a pre-existing local db created before this column
             self._conn().execute(
                 "ALTER TABLE opportunities ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'entertainment'"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already present
+        try:
+            self._conn().execute(
+                "ALTER TABLE opportunities ADD COLUMN body TEXT NOT NULL DEFAULT ''"
             )
         except sqlite3.OperationalError:
             pass  # column already present
@@ -98,17 +120,18 @@ class OpportunityStore:
             subreddit = getattr(post, "subreddit", "")
             title = getattr(post, "title", "")
             link = getattr(post, "link", "")
+            body = getattr(post, "body", "") or ""
             sensitivity = getattr(post, "sensitivity", "entertainment") or "entertainment"
-            if not title:
+            if not is_usable_opportunity_title(title):
                 continue
             oid = _opportunity_id(subreddit, title)
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO opportunities
-                    (opportunity_id, subreddit, theme_hint, link, harvested_at, status, sensitivity)
-                VALUES (?, ?, ?, ?, ?, 'new', ?)
+                    (opportunity_id, subreddit, theme_hint, link, harvested_at, status, body, sensitivity)
+                VALUES (?, ?, ?, ?, ?, 'new', ?, ?)
                 """,
-                (oid, subreddit, title, link, now, sensitivity),
+                (oid, subreddit, title, link, now, str(body)[:8000], sensitivity),
             )
             added += cursor.rowcount
         connection.commit()
@@ -162,6 +185,21 @@ class OpportunityStore:
         used["status"] = "used"
         return self._row(used)
 
+    def release(self, opportunity_id: str) -> None:
+        """Return a consumed opportunity to the queue after a failed run.
+
+        A failed quality/duration revalidation should not burn the investigation:
+        the next retry should reuse the same abstract seed instead of going back
+        to Reddit for a new one.
+        """
+        if not opportunity_id:
+            return
+        self._conn().execute(
+            "UPDATE opportunities SET status='new' WHERE opportunity_id=? AND status='used'",
+            (opportunity_id,),
+        )
+        self._conn().commit()
+
     def count(self, status: str | None = None) -> int:
         if status is None:
             row = self._conn().execute("SELECT COUNT(*) AS n FROM opportunities").fetchone()
@@ -193,6 +231,7 @@ class OpportunityStore:
             link=row["link"],
             harvested_at=row["harvested_at"],
             status=row["status"],
+            body=row["body"] if "body" in keys else "",
             sensitivity=row["sensitivity"] if "sensitivity" in keys else "entertainment",
         )
 

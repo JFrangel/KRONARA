@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2
@@ -100,6 +101,26 @@ class FakeAuthority:
         }
 
 
+class SpanishScoreAuthority(FakeAuthority):
+    def invoke(self, tool_id, arguments):
+        result = super().invoke(tool_id, arguments)
+        if tool_id == "model.complete" and arguments["task"] == "story.critique":
+            result["payload"]["scores"] = {
+                "gancho": 8.5,
+                "claridad": 8.4,
+                "conflicto": 8.3,
+                "escalada": 8.2,
+                "agencia": 8.1,
+                "coherencia": 8.0,
+                "credibilidad": 7.9,
+                "originalidad": 7.8,
+                "retención": 7.7,
+                "remate": 7.6,
+                "ajuste de producción": 7.5,
+            }
+        return result
+
+
 def brief():
     return StoryBrief(
         story_id="owned-routed-1",
@@ -113,21 +134,35 @@ def brief():
     )
 
 
+def program_brief(program_id):
+    base = brief()
+    return StoryBrief(
+        story_id=base.story_id,
+        title=base.title,
+        premise=base.premise,
+        theme=base.theme,
+        target_duration_seconds=base.target_duration_seconds,
+        rights_mode=base.rights_mode,
+        source_uri=base.source_uri,
+        evidence_refs=base.evidence_refs,
+        program_id=program_id,
+    )
+
+
 def router(authority):
     registry = ModelCapabilityRegistryV2.load(
-        ROOT / "config" / "models" / "registry.v2.json"
+        ROOT / "config" / "models" / "registry.v2.json",
+        now=lambda: date(2026, 7, 22),
     )
     return AuthorityModelRouter(authority=authority, registry=registry)
 
 
-def test_story_provider_uses_hy3_inspiration_then_groq_first_with_qwen_fallback():
-    """Groq's gpt-oss-120b leads creative_primary now, not qwen: a real run
-    showed qwen (via OpenRouter) doesn't reliably honor strict structured
-    output for this task, producing valid-but-wrong-shaped JSON repeatedly,
-    while Groq is both faster and (being OpenAI's own architecture, the
-    originator of structured outputs) more likely to comply. qwen stays in
-    the chain -- when it does comply, its prose quality was excellent -- just
-    no longer first."""
+def test_story_provider_skips_expired_hy3_and_uses_groq_first_with_qwen_fallback():
+    """HY3 expired in the registry on 2026-07-21, so the inspiration route
+    falls through to Groq's gpt-oss-120b. Groq also leads creative_primary:
+    a real run showed qwen (via OpenRouter) doesn't reliably honor strict
+    structured output for this task, while Groq is both faster and more
+    likely to comply. qwen stays in the chain as a fallback."""
     authority = FakeAuthority()
     provider = RoutedStoryProvider(router(authority))
 
@@ -135,7 +170,8 @@ def test_story_provider_uses_hy3_inspiration_then_groq_first_with_qwen_fallback(
 
     completion_calls = [args for tool, args in authority.calls if tool == "model.complete"]
     assert len(concepts) == 3
-    assert completion_calls[0]["candidates"][0]["model_id"] == "tencent/hy3:free"
+    assert completion_calls[0]["task"] == "story.inspiration"
+    assert completion_calls[0]["candidates"][0]["model_id"] == "openai/gpt-oss-120b"
     assert completion_calls[1]["candidates"][0]["model_id"] == "openai/gpt-oss-120b"
     assert completion_calls[1]["candidates"][0]["provider"] == "groq"
     assert any(
@@ -147,6 +183,21 @@ def test_story_provider_uses_hy3_inspiration_then_groq_first_with_qwen_fallback(
         for item in completion_calls[1]["candidates"]
     )
     assert provider.family == "groq-routed"
+
+
+def test_story_provider_sends_program_template_to_concept_agent():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(program_brief("decisiones-dificiles"))
+
+    concept_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    contract = concept_call["input"]["program_contract"]
+    assert any("dos opciones malas" in item for item in contract)
+    assert any("pregunta final sin respuesta facil" in item for item in contract)
 
 
 def test_independent_critic_routes_to_kimi_and_returns_structured_scores():
@@ -165,6 +216,29 @@ def test_independent_critic_routes_to_kimi_and_returns_structured_scores():
     assert result.passed
     assert result.scores["originality"] == 8.5
     assert critic.family == "kimi-routed"
+
+
+def test_independent_critic_normalizes_spanish_score_keys_and_constrains_schema():
+    authority = SpanishScoreAuthority()
+    critic = RoutedIndependentCritic(router(authority))
+
+    result = critic.review(
+        brief(),
+        StoryConcept("concept_1", "Una logline suficientemente original.", "promesa", "hook", 0.9),
+        (),
+        StoryScript("Guion propio verificable.", 3, 1.2),
+    )
+
+    call = [args for tool, args in authority.calls if tool == "model.complete"][-1]
+    score_schema = call["response_schema"]["properties"]["scores"]
+    assert set(score_schema["required"]) == {
+        "hook", "clarity", "conflict", "escalation", "agency",
+        "coherence", "credibility", "originality", "retention",
+        "payoff", "production_fit",
+    }
+    assert result.scores["hook"] == 8.5
+    assert result.scores["retention"] == 7.7
+    assert result.scores["production_fit"] == 7.5
 
 
 def test_critic_excludes_the_actual_generator_fallback_family():

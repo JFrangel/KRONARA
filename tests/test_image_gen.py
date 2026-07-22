@@ -67,6 +67,19 @@ def test_placeholder_provider_different_seeds_produce_different_colors(tmp_path)
     assert color_a != color_b
 
 
+def test_placeholder_provider_creates_composed_preview_not_flat_fill(tmp_path):
+    from PIL import Image
+
+    provider = PlaceholderImageProvider(output_dir=str(tmp_path))
+    result = provider.generate(ImageGenerationRequest(prompt="a moonlit house", seed=9))
+    image = Image.open(result.image_path).convert("RGB")
+
+    assert image.getpixel((0, 0)) != image.getpixel((image.width - 1, image.height - 1))
+    assert image.getpixel((image.width // 2, image.height // 4)) != image.getpixel(
+        (image.width // 2, image.height * 3 // 4)
+    )
+
+
 # ---- DiffusersImageProvider orchestration (fake pipe, no real GPU/weights) --
 
 

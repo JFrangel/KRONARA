@@ -18,6 +18,38 @@ def test_harvest_saves_and_dedupes():
     store.close()
 
 
+def test_harvest_preserves_body_as_private_research_context():
+    store = OpportunityStore(":memory:").initialize()
+    store.harvest(
+        [RssPost("nosleep", "The figure in my room", "l-body", "t", body="Full haunted thread body.")],
+        now=100,
+    )
+
+    opportunity = store.take_next_for_subreddits(["nosleep"], now=101)
+
+    assert opportunity is not None
+    assert opportunity.body == "Full haunted thread body."
+    store.close()
+
+
+def test_harvest_skips_moderation_and_crisis_posts():
+    store = OpportunityStore(":memory:").initialize()
+    added = store.harvest(
+        [
+            RssPost("confession", "Community Updates", "l1", "t"),
+            RssPost("TrueOffMyChest", "Sexual Assault, Consent, and Support Resources", "l2", "t"),
+            RssPost("confession", "I stole groceries from a charity food drive", "l3", "t"),
+        ],
+        now=100,
+    )
+
+    assert added == 1
+    opportunity = store.take_next(now=101)
+    assert opportunity is not None
+    assert opportunity.theme_hint == "I stole groceries from a charity food drive"
+    store.close()
+
+
 def test_harvest_preserves_sensitivity_per_post():
     store = OpportunityStore(":memory:").initialize()
     sensitive_posts = [

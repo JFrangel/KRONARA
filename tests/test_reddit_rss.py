@@ -11,6 +11,7 @@ ATOM_FEED = """<?xml version="1.0" encoding="UTF-8"?>
     <title>My sister sold my late mother's ring behind my back</title>
     <link href="https://reddit.com/r/AITA/x2"/>
     <published>2026-07-19T11:00:00+00:00</published>
+    <content type="html">&lt;p&gt;Full post body with &lt;b&gt;continuation&lt;/b&gt; context.&lt;/p&gt;</content>
   </entry>
 </feed>
 """
@@ -26,6 +27,7 @@ def test_parses_feed_and_skips_meta_posts():
     story_posts = reader.trending(["AmItheAsshole"], max_subs=1)
     assert all("Notice:" not in p.title for p in story_posts)
     assert len(story_posts) == 1
+    assert story_posts[0].body == "Full post body with continuation context."
 
 
 def test_backoff_retries_on_429_then_succeeds():

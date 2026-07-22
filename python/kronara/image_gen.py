@@ -96,10 +96,24 @@ def find_sd_model_dir() -> str | None:
     return str(default) if default.exists() else None
 
 
+def find_lightning_lora_dir() -> str:
+    """Use the local D: model cache when the fast-tier LoRA is installed."""
+    override = os.environ.get("KRONARA_SD_LORA_DIR")
+    if override and (Path(override) / LIGHTNING_LORA_WEIGHT).exists():
+        return override
+    default = Path(".kronara") / "models" / "sdxl-lightning"
+    if (default / LIGHTNING_LORA_WEIGHT).exists():
+        return str(default)
+    return LIGHTNING_LORA_REPO
+
+
 class PlaceholderImageProvider:
-    """No-GPU stand-in: a Pillow-drawn gradient PNG at the requested size, with
-    the prompt text overlaid for visual debugging. Exists so the
-    composition/audio/QC pipeline is fully testable without a GPU or weights."""
+    """No-GPU stand-in: a deterministic illustrated storyboard frame.
+
+    This is intentionally not presented as AI output. It keeps the visual
+    pipeline reviewable when SDXL is unavailable, while avoiding the old flat
+    colour frame with the raw prompt printed across the image.
+    """
 
     def __init__(self, *, output_dir: str):
         self.output_dir = output_dir
@@ -107,22 +121,141 @@ class PlaceholderImageProvider:
     def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
         import time
 
-        from PIL import Image, ImageDraw
+        import random
+
+        from PIL import Image, ImageDraw, ImageFilter
 
         started = time.monotonic()
         os.makedirs(self.output_dir, exist_ok=True)
-        # Deterministic color derived from the seed so repeated seeds are
-        # visually distinguishable in manual review without being random.
+        # Deterministic palette derived from the seed so repeated seeds are
+        # visually distinguishable while keeping a dark editorial language.
         rng_seed = request.seed or 1
-        r = (rng_seed * 47) % 200 + 20
-        g = (rng_seed * 89) % 200 + 20
-        b = (rng_seed * 131) % 200 + 20
-        image = Image.new("RGB", (request.width, request.height), (r, g, b))
+        rng = random.Random(rng_seed)
+        r = 7 + (rng_seed * 13) % 18
+        g = 12 + (rng_seed * 17) % 22
+        b = 30 + (rng_seed * 29) % 34
+        width, height = request.width, request.height
+        image = Image.new("RGB", (width, height))
+        pixels = image.load()
+        for y in range(height):
+            progress = y / max(height - 1, 1)
+            shade = 0.82 + progress * 0.18
+            for x in range(width):
+                horizontal = 0.88 + 0.12 * (x / max(width - 1, 1))
+                pixels[x, y] = (
+                    min(255, int(r * shade * horizontal)),
+                    min(255, int(g * shade * horizontal)),
+                    min(255, int(b * shade * horizontal)),
+                )
+
+        glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow)
+        glow_draw.ellipse(
+            (width * 0.5, height * 0.06, width * 0.99, height * 0.4),
+            fill=(148, 95, 255, 80),
+        )
+        glow = glow.filter(ImageFilter.GaussianBlur(max(12, width // 16)))
+        image = Image.alpha_composite(image.convert("RGBA"), glow)
+
         draw = ImageDraw.Draw(image)
-        draw.text((40, request.height // 2), request.prompt[:60], fill=(255, 255, 255))
-        draw.text((40, request.height // 2 + 30), f"tier={request.quality_tier}", fill=(220, 220, 220))
+        # Depth cues: stars, distant cloud bands and a layered skyline.
+        for _ in range(58):
+            star_x = rng.randint(int(width * 0.06), int(width * 0.94))
+            star_y = rng.randint(int(height * 0.06), int(height * 0.48))
+            radius = rng.choice((1, 1, 2, 3))
+            alpha = rng.randint(90, 210)
+            draw.ellipse((star_x - radius, star_y - radius, star_x + radius, star_y + radius), fill=(210, 220, 255, alpha))
+
+        horizon = int(height * 0.66)
+        draw.ellipse(
+            (width * 0.64, height * 0.14, width * 0.88, height * 0.38),
+            fill=(245, 232, 211, 236),
+            outline=(255, 247, 231, 245),
+            width=max(1, width // 220),
+        )
+        moon_craters = ((0.71, 0.21, 0.035), (0.81, 0.29, 0.02), (0.76, 0.33, 0.026))
+        for crater_x, crater_y, crater_size in moon_craters:
+            cx, cy = int(width * crater_x), int(height * crater_y)
+            radius = int(width * crater_size)
+            draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=(214, 198, 184, 120))
+
+        for index in range(9):
+            left = int(index * width / 9 + rng.randint(-width // 30, width // 30))
+            building_width = rng.randint(max(35, width // 14), max(60, width // 7))
+            building_height = rng.randint(int(height * 0.09), int(height * 0.2))
+            top = horizon - building_height
+            draw.rectangle((left, top, left + building_width, horizon), fill=(12, 14, 28, 220))
+            for window in range(max(1, building_width // 35)):
+                wx = left + 12 + window * 28
+                wy = top + 24
+                draw.rectangle((wx, wy, wx + 8, wy + 14), fill=(191, 119, 70, 130))
+
+        draw.polygon(
+            [(0, horizon), (width * 0.22, height * 0.48), (width * 0.42, horizon),
+             (width * 0.64, height * 0.5), (width, horizon), (width, height), (0, height)],
+            fill=(8, 10, 20, 220),
+        )
+        building_left = width * 0.28
+        building_right = width * 0.7
+        building_top = height * 0.41
+        draw.rectangle((building_left, building_top, building_right, horizon), fill=(10, 12, 24, 245))
+        draw.polygon(
+            [(building_left - width * 0.05, building_top),
+             (width * 0.49, height * 0.31),
+             (building_right + width * 0.05, building_top)],
+            fill=(7, 9, 18, 250),
+        )
+        draw.polygon(
+            [(building_left + width * 0.06, building_top), (width * 0.49, height * 0.35),
+             (building_right - width * 0.05, building_top)],
+            outline=(64, 44, 93, 220), width=max(2, width // 160),
+        )
+        draw.rectangle((building_right - width * 0.08, height * 0.48, building_right + width * 0.02, horizon), fill=(7, 9, 18, 245))
+        draw.rectangle((width * 0.43, height * 0.54, width * 0.55, horizon), fill=(5, 7, 16, 250))
+        draw.polygon([(width * 0.4, height * 0.54), (width * 0.49, height * 0.47), (width * 0.58, height * 0.54)], fill=(7, 9, 18, 250))
+        for row in range(2):
+            for column in range(3):
+                x = int(building_left + width * 0.08 + column * width * 0.11)
+                y = int(building_top + height * 0.08 + row * height * 0.11)
+                draw.rounded_rectangle(
+                    (x, y, x + max(8, width // 18), y + max(12, height // 34)),
+                    radius=max(1, width // 80),
+                    fill=(255, 184, 94, 205),
+                )
+        draw.rectangle((width * 0.46, height * 0.62, width * 0.52, horizon), fill=(67, 42, 68, 255))
+        draw.ellipse((width * 0.49, height * 0.72, width * 0.5, height * 0.73), fill=(244, 177, 87, 220))
+
+        # Match a few visual nouns from the prompt without pretending this is
+        # diffusion: an audio/phone motif makes a generated cover relevant.
+        prompt = request.prompt.casefold()
+        if any(token in prompt for token in ("audio", "llamada", "teléfono", "phone")):
+            phone_left, phone_top = int(width * 0.12), int(height * 0.62)
+            phone_right, phone_bottom = int(width * 0.32), int(height * 0.88)
+            draw.rounded_rectangle((phone_left, phone_top, phone_right, phone_bottom), radius=width // 28, fill=(12, 15, 30, 250), outline=(151, 102, 227, 220), width=max(2, width // 120))
+            draw.rounded_rectangle((phone_left + width * 0.025, phone_top + height * 0.035, phone_right - width * 0.025, phone_bottom - height * 0.05), radius=width // 45, fill=(24, 30, 58, 255))
+            for bar in range(7):
+                bar_x = phone_left + width * (0.055 + bar * 0.024)
+                bar_height = height * (0.025 + (bar % 3) * 0.018)
+                draw.rounded_rectangle((bar_x, height * 0.75 - bar_height, bar_x + width * 0.012, height * 0.75 + bar_height), radius=3, fill=(184, 108, 255, 230))
+
+        # Soft foreground mist prevents the geometry from reading as a flat
+        # icon and helps separate the subject from the background.
+        mist = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        mist_draw = ImageDraw.Draw(mist)
+        mist_draw.ellipse((width * -0.2, height * 0.57, width * 0.75, height * 0.83), fill=(170, 183, 230, 32))
+        mist_draw.ellipse((width * 0.35, height * 0.62, width * 1.2, height * 0.9), fill=(200, 153, 230, 24))
+        image = Image.alpha_composite(image, mist.filter(ImageFilter.GaussianBlur(max(10, width // 22))))
+        draw = ImageDraw.Draw(image)
+        draw.line((width * 0.08, horizon, width * 0.92, horizon), fill=(242, 164, 110, 130), width=max(1, width // 180))
+        draw.rounded_rectangle(
+            (width * 0.06, height * 0.06, width * 0.94, height * 0.94),
+            radius=max(4, width // 30),
+            outline=(255, 255, 255, 70),
+            width=max(1, width // 250),
+        )
+        draw.text((width * 0.08, height * 0.91), "KRONARA · VISTA LOCAL", fill=(225, 214, 232, 180))
         path = os.path.join(self.output_dir, f"{request.cache_key()[:16]}.png")
-        image.save(path)
+        image.convert("RGB").save(path)
         return ImageGenerationResult(
             image_path=path,
             seed=request.seed,
@@ -143,7 +276,7 @@ class DiffusersImageProvider:
         self,
         *,
         model_dir: str | None = None,
-        lightning_lora_repo: str = LIGHTNING_LORA_REPO,
+        lightning_lora_repo: str | None = None,
         lightning_lora_weight: str = LIGHTNING_LORA_WEIGHT,
         ip_adapter_repo: str | None = IP_ADAPTER_REPO,
         output_dir: str,
@@ -151,7 +284,7 @@ class DiffusersImageProvider:
         device: str | None = None,
     ):
         self.model_dir = model_dir or find_sd_model_dir()
-        self.lightning_lora_repo = lightning_lora_repo
+        self.lightning_lora_repo = lightning_lora_repo or find_lightning_lora_dir()
         self.lightning_lora_weight = lightning_lora_weight
         self.ip_adapter_repo = ip_adapter_repo
         self.output_dir = output_dir

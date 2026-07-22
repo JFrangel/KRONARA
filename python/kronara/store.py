@@ -435,6 +435,22 @@ class KronaraStore:
             "program_id": row[5],
         }
 
+    def delete_owned_story_artifact(self, story_id: str) -> dict[str, Any]:
+        """Remove one owned episode record and return it for file cleanup.
+
+        File removal is deliberately handled by OperationsService, where the
+        runtime root is known and paths can be checked before touching disk.
+        """
+        artifact = self.load_owned_story_artifact(story_id)
+        self._db().execute(
+            "DELETE FROM owned_story_artifacts WHERE story_id = ?", (story_id,)
+        )
+        self._db().execute(
+            "DELETE FROM owned_story_reuse_decisions WHERE story_id = ?", (story_id,)
+        )
+        self._db().commit()
+        return artifact
+
     def list_owned_story_artifacts(
         self, *, limit: int = 50, program_id: str | None = None
     ) -> list[dict[str, Any]]:

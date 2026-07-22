@@ -10,16 +10,100 @@ from __future__ import annotations
 import subprocess
 
 import pytest
+from pathlib import Path
 
 from kronara.asset_library import AssetLibraryStore, LibraryAsset
-from kronara.image_gen import PlaceholderImageProvider
+from kronara.image_gen import ImageGenerationResult, PlaceholderImageProvider
 from kronara.render import FfmpegRenderer, find_ffmpeg
 from kronara.story_engine import StoryScene
+from kronara.visual_production import build_shot_prompt
+from kronara.visual_production import _resolve_scene_asset
 from kronara.visual_production import produce_episode_video
+from kronara.visual_production import render_graphic_overlay_card
+from kronara.visual_director import ShotAssignment
 from kronara.visual_style import VisualStyleDescriptor
 from kronara.voice import MeasuredDuration, WordBoundary
 
 FFMPEG_MISSING = find_ffmpeg("ffmpeg") is None
+
+
+def test_visual_prompt_adds_literal_anchors_and_contradiction_negatives_for_water_scene():
+    prompt, negative = build_shot_prompt(
+        "La marea baja deja al descubierto el muelle y las redes mojadas.",
+        "",
+        None,
+    )
+
+    assert "wet wooden dock" in prompt
+    assert "low tide" in prompt
+    assert "desert" in negative
+    assert "car" in negative
+
+
+def test_visual_prompt_keeps_episode_context_for_short_later_scene():
+    prompt, negative = build_shot_prompt(
+        "La sombra aparece junto al sofa.",
+        "",
+        None,
+        episode_context="old haunted house interior, bedroom corner, closet door, shadow figure",
+        scene_position="scene 4/6",
+    )
+
+    assert "scene 4/6" in prompt
+    assert "old haunted house interior" in prompt
+    assert "shadow figure" in prompt
+    assert "current scene: La sombra aparece" in prompt
+    assert "unrelated desert" in negative
+    assert "random vehicle" in negative
+
+
+def test_scene_ai_image_uses_cover_as_visual_reference(tmp_path):
+    class RecordingProvider:
+        def __init__(self):
+            self.requests = []
+
+        def generate(self, request):
+            self.requests.append(request)
+            path = tmp_path / "scene.png"
+            path.write_bytes(b"png")
+            return ImageGenerationResult(str(path), request.seed, request.width, request.height, request.quality_tier, 1)
+
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"png")
+    provider = RecordingProvider()
+
+    _resolve_scene_asset(
+        scene=StoryScene("scn1", "reveal", "La figura espera junto al armario.", 10, (), (), ()),
+        assignment=ShotAssignment("scn1", "ai_image"),
+        tier="fast",
+        output_dir=str(tmp_path),
+        image_provider=provider,
+        visual_style=None,
+        negative_prompt="",
+        episode_context="old haunted house interior, shadow figure",
+        scene_index=1,
+        total_scenes=3,
+        reference_image_path=str(cover),
+    )
+
+    assert provider.requests[0].reference_image_path == str(cover)
+    assert provider.requests[0].reference_strength == 0.45
+
+
+def test_graphic_overlay_card_matches_dark_visual_language(tmp_path):
+    from PIL import Image
+
+    path = tmp_path / "overlay.png"
+    render_graphic_overlay_card(
+        "Mara escucha una llamada desde un teléfono desconectado",
+        str(path),
+        width=1080,
+        height=1920,
+    )
+    image = Image.open(path).convert("RGB")
+    assert image.size == (1080, 1920)
+    assert image.getpixel((0, 0)) != (245, 244, 240)
+    assert image.getpixel((0, 0)) != image.getpixel((540, 960))
 
 
 def _sine(ffmpeg, path, *, frequency, duration_s):
@@ -119,6 +203,11 @@ def test_produce_episode_video_full_chain(tmp_path):
     assert result.scene_count == 3
     assert sum(result.source_kind_counts.values()) == 3
     assert -19.0 <= result.loudness.integrated_lufs <= -13.0
+    assert result.cover_image_path
+    assert Path(result.cover_image_path).exists()
+    assert result.music_path
+    assert "footsteps" in result.sfx_cue_tags
+    assert result.sfx_resolved_paths["footsteps"] == str(tmp_path / "footsteps.wav")
     library.close()
 
 
@@ -145,6 +234,8 @@ def test_produce_episode_video_without_library_still_renders(tmp_path):
     assert result.qc.passed, result.qc.issues
     assert result.source_kind_counts["video_loop"] == 0
     assert sum(result.source_kind_counts.values()) == 3
+    assert result.cover_image_path
+    assert Path(result.cover_image_path).exists()
 
 
 def test_missing_audio_ref_raises_a_clear_error(tmp_path):

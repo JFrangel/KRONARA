@@ -4,6 +4,11 @@
 > el perfil del programa para ajustar registro, estructura y rúbrica. Patrones abstractos,
 > nunca copia de una fuente.
 
+Las reglas base de cada programa viven en `python/kronara/program_narrative.py`.
+Desde Programas > Configuración se pueden guardar overrides manuales por programa;
+el override se usa en concepto, blueprint, escenas, revisión y crítica sin editar
+el código. Las plantillas son contratos de forma, no guiones para copiar.
+
 ## Decisiones Difíciles — dilemas y conflictos personales
 - Núcleo: un personaje enfrenta una elección sin salida limpia; ambas opciones cuestan.
 - Registro: íntimo, reflexivo, cotidiano creíble.

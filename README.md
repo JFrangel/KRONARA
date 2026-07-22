@@ -15,11 +15,11 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 | Vertical Reddit → historia propia | Implementado y trazable | `tests/test_production_content_vertical.py` |
 | Historia propia con crítica, originalidad, duración y recuperación | Implementado | `tests/test_story_duration_qc.py` |
 | RAG v3: FTS5, vectores, grafo, filtros y promoción reversible | Implementado | `tests/test_story_learning_pipeline.py` |
-| Reddit OAuth oficial y filtros | Implementado; activación sujeta a credenciales y términos | `src-tauri/tests/reddit.rs` |
-| Qwen, Kimi, Groq, Nemotron Super/**Ultra** y Hy3 | Inferencia gobernada por Rust con fallback; alias `critic` | `src-tauri/tests/model_gateway.rs` |
+| Reddit RSS/OAuth y filtros | Implementado; activación sujeta a credenciales y términos | `tests/test_production_content_vertical.py` |
+| Qwen, Kimi, Groq, Nemotron Super/**Ultra** y Hy3 | Inferencia por puente web local con fallback; alias `critic` | `frontend-tests/local-web.test.js` |
 | Motor narrativo literario (oficio + rúbrica) | Implementado | `tests/test_narrative_craft.py` |
 | Memoria de grafo bitemporal + series multi-parte | Implementado | `tests/test_graph_memory.py`, `tests/test_series.py` |
-| Voz real (edge-tts) y **duración medida** | Herramienta de autoridad + medición; síntesis en vivo requiere binario edge-tts | `tests/test_voice_duration.py`, `src-tauri/src/voice.rs` |
+| Voz real (edge-tts) y **duración medida** | Medición integrada; síntesis en vivo requiere binario edge-tts | `tests/test_voice_duration.py` |
 | Scheduler + autonomía (agentes desatendidos) | Implementado | `tests/test_schedule.py` |
 | BGE-M3 y reranker BGE | Carga local productiva; degradación explícita si faltan pesos | `tests/test_production_embeddings.py` |
 | Métricas Meta y aprendizaje | Lectura versionada y promoción prudente implementadas | `tests/test_performance_learning.py` |
@@ -29,23 +29,36 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 
 `full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. Kronara ya crea historias propias desde señales abstractas y puede generar/reproducir un Reel local; la primera publicación real en Facebook todavía requiere una Página sandbox autorizada, upload y reconciliación remota.
 
-## Uso local
+## Uso local web
+
+Requisitos recomendados en Windows:
+
+- Node.js 20+ y npm.
+- Python 3.12+ con `pip`.
+- FFmpeg/ffprobe en `PATH` para render, mezcla, QC y video.
+- `edge-tts` para voz neural real; sin esto el sistema puede degradar a medición estimada.
+- Pesos locales SDXL si se quiere imagen real con Diffusers; sin pesos se puede usar el proveedor placeholder para pruebas.
+- Claves de modelos en `.env` para generación real; Reddit OAuth es opcional porque existe fallback RSS gobernado.
 
 ```powershell
 npm.cmd install
+python -m pip install -e ".[dev]"
+python -m pip install edge-tts
+npm.cmd run dev:web
+```
+
+Abre `http://127.0.0.1:5173/`. Esa es la ruta recomendada: la interfaz web llama al sidecar Python por `__kronara_rpc` y sirve medios locales por `__kronara_asset`. No hay datos falsos; si Python o las claves no responden, la app muestra el fallo.
+
+En Programas > Configuración cada programa expone su plantilla narrativa. Si se guarda manualmente, queda en el runtime local y las siguientes generaciones usan esa versión. La producción visual usa la portada premium como referencia de continuidad para las imágenes de escena, además del contexto completo del episodio. En Episodios > Recursos se muestran visuales, música y SFX resueltos o faltantes.
+
+Para validar cambios:
+
+```powershell
 npm.cmd test
 npm.cmd run build
 
 python -m pip install -e ".[dev]"
 python -m pytest -q --basetemp=.test-tmp
-
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-Para empaquetar el sidecar:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-sidecar.ps1
 ```
 
 Copie `.env.example` a `.env`; ese archivo no se versiona. No pegue claves en el chat, documentación ni commits.
@@ -53,15 +66,12 @@ Copie `.env.example` a `.env`; ese archivo no se versiona. No pegue claves en el
 ## Arquitectura
 
 ```text
-Svelte UI ── comandos Tauri ──> Rust authority
-                                 │ secretos, red, pausa, efectos
-                                 │ RPC autenticado, allowlist
-                                 ▼
-                           Python cognitive sidecar
-                           agentes, RAG, memoria, Guardian
+Svelte web local ── __kronara_rpc / __kronara_asset ──> Python cognitive sidecar
+                                                        agentes, modelos, RAG,
+                                                        memoria, render y episodios
 ```
 
-Rust crea un token de sesión, limpia el entorno heredado del sidecar y solo permite métodos cognitivos acotados. Python no recibe las claves del proveedor ni ejecuta shell o publicación. La UI muestra resúmenes y argumentos redactados, nunca razonamiento privado ni secretos.
+Vite levanta el sidecar Python en desarrollo, carga `.env` localmente y mantiene una lista cerrada de métodos permitidos. La UI muestra resúmenes y argumentos redactados, nunca razonamiento privado ni secretos.
 
 ## Documentación
 
@@ -75,8 +85,8 @@ Rust crea un token de sesión, limpia el entorno heredado del sidecar y solo per
 - [Memoria y RAG](docs/MEMORY_AND_RAG.md)
 - [Integraciones](docs/INTEGRATIONS.md)
 - [Entorno](docs/ENVIRONMENT.md)
+- [Colaborar / instalación de desarrollo](CONTRIBUTING.md)
 - [Fases y criterios](docs/IMPLEMENTATION_PHASES.md)
 - [Brechas comprobables](docs/GAP_ANALYSIS.md)
-- [ADR de autoridad Rust/Python](docs/adr/002-rust-python-authority.md)
 - [Plan v0.4 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.4-agent-operations-implementation.md)
 - [Plan v0.5 con checks](docs/superpowers/plans/2026-07-19-kronara-v0.5-production-intelligence-implementation.md)

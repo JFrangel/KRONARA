@@ -18,10 +18,13 @@ const ALLOWED_METHODS: &[&str] = &[
     "story.test",
     "content.run",
     "performance.learn",
+    "run.diagnostics",
     "run.cancel",
     "run.progress",
     "agent.capabilities",
     "programs.list",
+    "programs.template.save",
+    "programs.template.reset",
     "episodes.list",
     "episodes.get",
     "episodes.delete",
@@ -423,7 +426,14 @@ pub fn is_allowed_method(method: &str) -> bool {
 pub fn is_effectful_method(method: &str) -> bool {
     matches!(
         method,
-        "story.test" | "content.run" | "performance.learn" | "schedule.tick" | "action.approve" | "episodes.delete"
+        "story.test"
+            | "content.run"
+            | "performance.learn"
+            | "schedule.tick"
+            | "action.approve"
+            | "episodes.delete"
+            | "programs.template.save"
+            | "programs.template.reset"
     )
 }
 
@@ -493,7 +503,10 @@ mod tests {
         assert!(is_allowed_method("action.approve"));
         assert!(is_allowed_method("episodes.get"));
         assert!(is_allowed_method("episodes.delete"));
+        assert!(is_allowed_method("programs.template.save"));
+        assert!(is_allowed_method("programs.template.reset"));
         assert!(is_effectful_method("episodes.delete"));
+        assert!(is_effectful_method("programs.template.save"));
         assert!(!is_allowed_method("shell.execute"));
         assert!(!is_allowed_method("publication.publish"));
     }

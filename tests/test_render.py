@@ -41,6 +41,7 @@ def test_render_args_have_expected_flags():
     assert "libx264" in args
     assert "color=c=black:s=1080x1920:r=30" in args
     assert any(a.startswith("subtitles=") for a in args)
+    assert "FontSize=10" in next(a for a in args if a.startswith("subtitles="))
     assert args[-1] == "out.mp4"
 
 

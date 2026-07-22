@@ -1,14 +1,15 @@
 <script>
   import Icon from './Icon.svelte';
+  import Logo from './Logo.svelte';
   import { PRINCIPAL_NAV, CHANNELS } from '../nav.js';
 
-  let { activeView = 'panel', onNavigate = () => {}, collapsed = $bindable(false), systemHealthy = true } = $props();
+  let { activeView = 'panel', onNavigate = () => {}, collapsed = $bindable(false), systemHealthy = true, systemStatus = '' } = $props();
 </script>
 
 <aside class="flex h-full flex-col border-r border-line bg-bg px-3 py-4 transition-[width] duration-200" class:w-64={!collapsed} class:w-[76px]={collapsed}>
   <div class="flex items-center justify-between px-2">
     <div class="flex items-center gap-2 overflow-hidden">
-      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 font-display text-sm font-bold text-ink">K</span>
+      <Logo size={32} class="shrink-0 rounded-lg" />
       {#if !collapsed}
         <div class="leading-tight">
           <p class="font-display text-sm font-bold tracking-wide text-ink">KRONARA</p>
@@ -78,6 +79,6 @@
 
   <div class="mt-3 flex items-center gap-2 px-2 pt-2 text-[11.5px] text-ink-tertiary">
     <span class="h-1.5 w-1.5 shrink-0 rounded-full" class:bg-success={systemHealthy} class:bg-error={!systemHealthy}></span>
-    {#if !collapsed}<span class="truncate">{systemHealthy ? 'Todos los sistemas operativos' : 'Sistema degradado'}</span>{/if}
+    {#if !collapsed}<span class="truncate">{systemStatus || (systemHealthy ? 'Todos los sistemas operativos' : 'Sistema degradado')}</span>{/if}
   </div>
 </aside>

@@ -8,7 +8,7 @@
   const isLive = $derived(!!activeRun && !TERMINAL_STATES.includes(activeRun.status));
 </script>
 
-<header class="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg px-6">
+<header class="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg/90 px-4 backdrop-blur-xl sm:px-6">
   <div class="flex min-w-0 items-center gap-3">
     <h1 class="truncate font-display text-lg font-semibold text-ink">{title}</h1>
     {#if isLive}

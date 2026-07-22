@@ -15,6 +15,8 @@ from __future__ import annotations
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from html import unescape
+import re
 
 import httpx
 
@@ -45,6 +47,7 @@ class RssPost:
     title: str
     link: str
     published: str
+    body: str = ""
     # "entertainment" | "real_experience_serious" — see knowledge/reddit-sources/.
     sensitivity: str = "entertainment"
 
@@ -118,9 +121,19 @@ class RedditRssReader:
             title_el = entry.find("a:title", ATOM)
             link_el = entry.find("a:link", ATOM)
             published_el = entry.find("a:published", ATOM)
+            content_el = entry.find("a:content", ATOM)
+            if content_el is None:
+                content_el = entry.find("a:summary", ATOM)
             title = (title_el.text or "").strip() if title_el is not None else ""
             link = link_el.get("href", "") if link_el is not None else ""
             published = (published_el.text or "") if published_el is not None else ""
+            body = _plain_text(content_el.text or "") if content_el is not None else ""
             if title:
-                posts.append(RssPost(subreddit, title, link, published))
+                posts.append(RssPost(subreddit, title, link, published, body=body))
         return posts
+
+
+def _plain_text(value: str, *, max_chars: int = 8000) -> str:
+    text = re.sub(r"<[^>]+>", " ", unescape(value))
+    text = re.sub(r"https?://\S+", " ", text)
+    return " ".join(text.split())[:max_chars]

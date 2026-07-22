@@ -50,13 +50,45 @@ class UncompressibleProvider(DeterministicStoryProvider):
         return super().revise(scenes, revision)
 
 
-def test_story_engine_blocks_when_provider_cannot_fit_duration(tmp_path):
+def test_story_engine_recovers_when_provider_ignores_duration_revision(tmp_path):
     story_engine, store = engine(tmp_path, UncompressibleProvider())
 
-    result = story_engine.run(brief("duration_blocked"))
+    result = story_engine.run(brief("duration_recovered"))
 
-    assert result.status == "blocked"
-    assert result.error_code == "DURATION_OUT_OF_RANGE"
+    assert result.status == "completed"
+    assert result.error_code is None
+    assert result.duration_qc.passed
+    assert 81 <= result.script.estimated_seconds <= 99
+    store.close()
+
+
+class TooShortAfterRevisionProvider(DeterministicStoryProvider):
+    def scenes(self, brief, concept, blueprint):
+        return tuple(
+            type(scene)(
+                scene_id=scene.scene_id,
+                purpose=scene.purpose,
+                narration="Mara guarda la prueba.",
+                target_seconds=scene.target_seconds,
+                characters=scene.characters,
+                seed_ids=scene.seed_ids,
+                payoff_ids=scene.payoff_ids,
+            )
+            for scene in super().scenes(brief, concept, blueprint)
+        )
+
+    def revise(self, scenes, revision):
+        return scenes
+
+
+def test_story_engine_extends_short_revision_into_duration_window(tmp_path):
+    story_engine, store = engine(tmp_path, TooShortAfterRevisionProvider())
+
+    result = story_engine.run(brief("duration_extended"))
+
+    assert result.status == "completed"
+    assert result.duration_qc.passed
+    assert 81 <= result.script.estimated_seconds <= 99
     store.close()
 
 

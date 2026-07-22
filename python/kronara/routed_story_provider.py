@@ -8,6 +8,7 @@ from kronara.model_registry_v2 import (
     ModelCapabilityRegistryV2,
     ModelRequirements,
 )
+from kronara.program_narrative import narrative_contract
 from kronara.story_engine import (
     CausalBeat,
     StoryBrief,
@@ -64,8 +65,11 @@ en dos planos:
 
 Señala problemas concretos con ejemplos del texto y propone una revisión localizada
 (qué escena y qué cambiar), no una reescritura total. Distingue hechos de estimaciones.
-Devuelve únicamente JSON válido con puntuaciones de 0 a 10, problemas concretos y la
-revisión localizada cuando falle.
+Devuelve únicamente JSON válido. Dentro de `scores`, usa exactamente estas llaves
+en inglés, aunque razones en español: hook, clarity, conflict, escalation, agency,
+coherence, credibility, originality, retention, payoff, production_fit. Todas las
+puntuaciones van de 0 a 10. Incluye problemas concretos y la revisión localizada
+cuando falle.
 """.strip()
 
 # Appended when brief.source_sensitivity == "real_experience_serious" — the
@@ -173,6 +177,74 @@ _SCENE_CRAFT_DIRECTIVES = [
     "Evita clichés, cadenas de adverbios en -mente y verbos-filtro (vio que, sintió que).",
     "Cada escena hace al menos una cosa nueva: sube el riesgo, revela, decide o paga una pista.",
 ]
+
+_CONCEPT_AGENT_CONTRACT = [
+    "Transforma la senal externa en una premisa original; no reutilices secuencia, identidad ni fraseo.",
+    "Dale a la protagonista una decision activa en el gancho o en la promesa.",
+    "Cada concepto debe prometer una revelacion preparada por pistas, no por sorpresa gratuita.",
+]
+
+_BLUEPRINT_AGENT_CONTRACT = [
+    "Cada beat debe tener causa, efecto y costo visible para la protagonista.",
+    "Marca que pista se siembra y que payoff paga; evita beats decorativos.",
+    "Mantiene una progresion de riesgo: intimidad, amenaza, decision, consecuencia, revelacion.",
+    "Incluye continuidad de temporada cuando el canon tenga preguntas abiertas.",
+]
+
+_SCENE_AGENT_CONTRACT = [
+    *_SCENE_CRAFT_DIRECTIVES,
+    "Preserva continuidad de temporada si existe canon: no cierres preguntas abiertas sin sembrarlas.",
+    "Escribe pensando en produccion vertical: cada escena debe tener una imagen concreta posible.",
+]
+
+_REVISION_AGENT_CONTRACT = [
+    "Corrige exactamente los fallos reportados por critica o duracion sin romper el blueprint.",
+    "Si bajas duracion, compacta frases repetidas antes de borrar pistas o agencia.",
+    "Si subes calidad, agrega acciones concretas, subtexto y detalles sensoriales medibles.",
+]
+
+_CRITIC_AGENT_CONTRACT = [
+    "Si falla, identifica la fase real culpable: concepto, guion, critica, narracion o produccion.",
+    "Devuelve problemas accionables: escena afectada, dimension fallida y cambio local pedido.",
+    "No apruebes por promedio si hay un bloqueo de derechos, originalidad, agencia o produccion.",
+]
+
+
+_CRITIC_SCORE_DIMENSIONS = (
+    "hook",
+    "clarity",
+    "conflict",
+    "escalation",
+    "agency",
+    "coherence",
+    "credibility",
+    "originality",
+    "retention",
+    "payoff",
+    "production_fit",
+)
+
+_CRITIC_SCORE_KEY_ALIASES = {
+    "gancho": "hook",
+    "claridad": "clarity",
+    "conflicto": "conflict",
+    "escalada": "escalation",
+    "agencia": "agency",
+    "coherencia": "coherence",
+    "credibilidad": "credibility",
+    "originalidad": "originality",
+    "retencion": "retention",
+    "retención": "retention",
+    "pago": "payoff",
+    "remate": "payoff",
+    "ajuste_produccion": "production_fit",
+    "ajuste_producción": "production_fit",
+    "ajuste_de_produccion": "production_fit",
+    "ajuste_de_producción": "production_fit",
+    "ajuste de produccion": "production_fit",
+    "ajuste de producción": "production_fit",
+    "production fit": "production_fit",
+}
 
 
 def _object_schema(properties: dict[str, Any], required: tuple[str, ...] | None = None) -> dict[str, Any]:
@@ -290,6 +362,7 @@ class RoutedStoryProvider:
         # StoryGenerator Protocol method with no brief parameter) can still
         # apply the sensitive-source directive.
         self._sensitivity: str = "entertainment"
+        self._program_id: str | None = None
 
     @property
     def family(self) -> str:
@@ -307,6 +380,7 @@ class RoutedStoryProvider:
 
     def concepts(self, brief: StoryBrief) -> tuple[StoryConcept, ...]:
         self._sensitivity = brief.source_sensitivity
+        self._program_id = brief.program_id
         inspiration = self.router.complete(
             alias="experimental_hy3",
             requirements=ModelRequirements(frozenset({"creative"})),
@@ -334,6 +408,8 @@ class RoutedStoryProvider:
                 "brief": asdict(brief),
                 "abstract_angles": list(self._inspiration),
                 "count": 3,
+                "agent_contract": _CONCEPT_AGENT_CONTRACT,
+                "program_contract": narrative_contract(brief.program_id),
             },
             response_schema=_object_schema({
                 "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},
@@ -365,7 +441,12 @@ class RoutedStoryProvider:
             ),
             task="story.blueprint",
             system=_creative_system(brief.source_sensitivity),
-            input_payload={"brief": asdict(brief), "concept": asdict(concept)},
+            input_payload={
+                "brief": asdict(brief),
+                "concept": asdict(concept),
+                "agent_contract": _BLUEPRINT_AGENT_CONTRACT,
+                "program_contract": narrative_contract(brief.program_id),
+            },
             response_schema=_object_schema({
                 "beats": {"type": "array", "items": _BEAT_ITEM_SCHEMA, "minItems": 6},
             }),
@@ -413,6 +494,8 @@ class RoutedStoryProvider:
                 "blueprint": [asdict(item) for item in blueprint],
                 "target_word_count": target_word_count,
                 "craft_directives": _SCENE_CRAFT_DIRECTIVES,
+                "agent_contract": _SCENE_AGENT_CONTRACT,
+                "program_contract": narrative_contract(brief.program_id),
                 "series_canon": brief.series_context,
                 "series_instruction": (
                     "Si hay canon de la serie, respétalo: no contradigas personajes ni "
@@ -443,6 +526,8 @@ class RoutedStoryProvider:
             input_payload={
                 "scenes": [asdict(item) for item in scenes],
                 "revision": revision,
+                "agent_contract": _REVISION_AGENT_CONTRACT,
+                "program_contract": narrative_contract(self._program_id),
             },
             response_schema=_SCENES_SCHEMA,
             max_tokens=_scene_max_tokens(int(target_word_count)),
@@ -503,13 +588,20 @@ class RoutedIndependentCritic:
                 "concept": asdict(concept),
                 "scenes": [asdict(item) for item in scenes],
                 "script": asdict(script),
+                "agent_contract": _CRITIC_AGENT_CONTRACT,
+                "program_contract": narrative_contract(brief.program_id),
             },
             response_schema=_object_schema({
                 "passed": {"type": "boolean"},
-                # Dynamic keys (score dimension name -> 0-10 float, e.g.
-                # "hook"/"clarity"/"agency"/...) -- left as an open object
-                # rather than enumerated, the dimension set isn't fixed here.
-                "scores": {"type": "object"},
+                "scores": {
+                    "type": "object",
+                    "properties": {
+                        key: {"type": "number", "minimum": 0, "maximum": 10}
+                        for key in _CRITIC_SCORE_DIMENSIONS
+                    },
+                    "required": list(_CRITIC_SCORE_DIMENSIONS),
+                    "additionalProperties": False,
+                },
                 "issues": {"type": "array", "items": {"type": "string"}},
                 # Open shape: a localized revision instruction (e.g.
                 # {"target_word_count": ...}), not a fixed record.
@@ -519,13 +611,21 @@ class RoutedIndependentCritic:
             max_tokens=1536,
         )
         self._family = _model_family(self.router.last_model_id)
-        scores = {str(key): float(value) for key, value in dict(payload["scores"]).items()}
+        scores = self._normalized_scores(dict(payload["scores"]))
         return StoryCritique(
             passed=bool(payload["passed"]),
             scores=scores,
             issues=tuple(str(item) for item in payload.get("issues", ())),
             revision=dict(payload.get("revision", {})),
         )
+
+    @staticmethod
+    def _normalized_scores(raw_scores: dict[str, Any]) -> dict[str, float]:
+        scores: dict[str, float] = {}
+        for key, value in raw_scores.items():
+            normalized_key = _CRITIC_SCORE_KEY_ALIASES.get(str(key).strip().casefold(), str(key))
+            scores[normalized_key] = float(value)
+        return scores
 
 
 def _model_family(model_id: str) -> str:

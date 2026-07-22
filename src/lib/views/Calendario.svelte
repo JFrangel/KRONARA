@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
-  import { callOperations } from '../tauri-operations.js';
+  import { callOperations } from '../local-operations.js';
 
   const WEEKDAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
   const WEEKDAY_LABELS = {
@@ -30,7 +30,7 @@
 
 <Card title="Calendario editorial" subtitle="Parrilla semanal por programa">
   {#if loadError}
-    <p class="text-[13px] text-ink-secondary">No se pudo cargar la parrilla. Abre Kronara desde la aplicación de escritorio.</p>
+    <p class="text-[13px] text-ink-secondary">No se pudo cargar la parrilla. Inicia la web local y verifica que Python esté conectado.</p>
   {:else}
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
       {#each WEEKDAYS as weekday}

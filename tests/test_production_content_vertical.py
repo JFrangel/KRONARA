@@ -135,10 +135,10 @@ class FakeProductionAuthority:
             }
         elif task == "story.scenes":
             narration = (
-                "Mara escucha una anomalía concreta y conserva la copia verificable. "
-                "Compara la hora, descarta una explicación cómoda y toma una decisión "
-                "que aumenta el costo familiar. La pista abre una pregunta nueva mientras "
-                "la consecuencia anterior impide retroceder sin perder la evidencia."
+                "Yo nunca confese el secreto que rompio a mi familia. Guarde la copia "
+                "verificable, menti cuando me preguntaron y cargue con la culpa cada noche. "
+                "Mi decision aumento el costo familiar; la verdad seguia ahi, esperando "
+                "que alguien descubriera lo que yo habia escondido."
             )
             payload = {
                 "scenes": [
@@ -227,6 +227,11 @@ def test_reddit_to_owned_story_vertical_is_cited_recoverable_and_body_free(tmp_p
 
     serialized = json.dumps(result, ensure_ascii=False)
     assert result["status"] == "completed"
+    editorial_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "editorial.brief"
+    ][0]
+    assert editorial_call["input"]["source_context"] == "ESTE CUERPO EXTERNO NO DEBE CRUZAR NI PERSISTIR"
     assert result["selected_signal"]["source_id"] == "trend-safe-1"
     assert result["rejected_signals"] == {"nsfw": 1}
     assert result["reddit_receipt_id"] == "rr-safe-1"
@@ -289,16 +294,16 @@ def test_content_run_program_id_flows_into_the_saved_artifact(tmp_path):
             "sort": "hot",
             "limit": 25,
             "target_duration_seconds": 90,
-            "program_id": "viernes-paranormal",
+            "program_id": "confesiones-anonimas",
         }
     )
 
     assert result["status"] == "completed"
     artifact = store.load_owned_story_artifact("owned-program-tagged-1")
-    assert artifact["program_id"] == "viernes-paranormal"
+    assert artifact["program_id"] == "confesiones-anonimas"
     listed = store.list_owned_story_artifacts(limit=10)
     assert any(
-        item["story_id"] == "owned-program-tagged-1" and item["program_id"] == "viernes-paranormal"
+        item["story_id"] == "owned-program-tagged-1" and item["program_id"] == "confesiones-anonimas"
         for item in listed
     )
     store.close()
@@ -317,6 +322,89 @@ class RedditDisabledAuthority(FakeProductionAuthority):
             self.calls.append((tool_id, arguments))
             raise AuthorityInvocationError("reddit_disabled_by_policy")
         return super().invoke(tool_id, arguments)
+
+
+class FailingQualityAuthority(RedditDisabledAuthority):
+    def invoke(self, tool_id, arguments):
+        if tool_id == "model.complete" and arguments["task"] == "story.critique":
+            selected = arguments["candidates"][0]
+            return {
+                "payload": {
+                    "passed": False,
+                    "scores": {
+                        key: 5.0
+                        for key in (
+                            "hook", "clarity", "conflict", "escalation", "agency",
+                            "coherence", "credibility", "originality", "retention",
+                            "payoff", "production_fit",
+                        )
+                    },
+                    "issues": ["Calidad insuficiente para publicar."],
+                    "revision": {"scene_index": 0, "instruction": "reescribir con conflicto verificable"},
+                },
+                "provider": selected["provider"],
+                "model": selected["model_id"],
+                "fallback_used": False,
+                "usage": {"total_tokens": 100},
+            }
+        return super().invoke(tool_id, arguments)
+
+
+def test_failed_quality_revalidation_releases_cached_opportunity_for_retry(tmp_path, monkeypatch):
+    from kronara.opportunities import OpportunityStore
+    from kronara.reddit_rss import RedditRssReader, RssPost
+
+    def _must_not_be_called(self, *a, **k):
+        raise AssertionError("cached opportunity should avoid a fresh Reddit RSS fetch")
+
+    monkeypatch.setattr(RedditRssReader, "trending", _must_not_be_called)
+
+    opportunity_store = OpportunityStore(":memory:").initialize()
+    opportunity_store.harvest(
+        [RssPost("Historias", "Una historia familiar revela una verdad", "https://www.reddit.com/r/Historias/comments/retry/", "2026-07-19T12:00:00+00:00")],
+        now=1_784_000_000,
+    )
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    rag = RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64))
+    rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-1",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas, evidencia y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+    pipeline = ProductionContentPipeline(
+        authority=FailingQualityAuthority(),
+        store=store,
+        rag=rag,
+        model_registry=ModelCapabilityRegistryV2.load(ROOT / "config" / "models" / "registry.v2.json"),
+        artifact_root=tmp_path / "artifacts",
+        opportunity_store=opportunity_store,
+    )
+
+    result = pipeline.run(
+        {
+            "story_id": "owned-quality-retry-release",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "max_age_hours": 1000,
+            "target_duration_seconds": 90,
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["error_code"] == "QUALITY_FAILED"
+    assert opportunity_store.count("new") == 1
+    assert opportunity_store.count("used") == 0
+    store.close()
+    rag.close()
 
 
 def test_reddit_oauth_unavailable_falls_back_to_public_rss_and_still_produces_a_story(tmp_path, monkeypatch):

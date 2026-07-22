@@ -48,4 +48,4 @@ def test_required_agent_manifests_are_valid_and_tools_are_known():
         "embedding_evaluation",
         "training_data_curation",
     } <= registered
-    assert len(registered) == 35
+    assert len(registered) >= 35

@@ -9,6 +9,7 @@ from kronara.context import ContextBuilder
 from kronara.narrative_craft import CraftReport, LiteraryCraftEvaluator
 from kronara.narrative_quality import NarrativeQualityEvaluator, NarrativeQualityReport
 from kronara.observable_tools import ObservableToolRegistry, ToolExecutionContext
+from kronara.program_narrative import program_quality_findings
 from kronara.speech_rate import DEFAULT_WORDS_PER_SECOND
 from kronara.store import KronaraStore
 from kronara.tools import ToolRegistry, ToolResult, ToolSpec
@@ -429,6 +430,7 @@ class StoryEngineFailure(RuntimeError):
 
 
 class StoryEngine:
+    QUALITY_REVISION_LIMIT = 6
     TOOLS = (
         "story.concept",
         "story.blueprint",
@@ -477,6 +479,17 @@ class StoryEngine:
             selected = max(concepts, key=lambda item: item.projected_retention)
             runtime.update({"concepts": concepts, "selected": selected})
             self._checkpoint(run_id, "concept_selection", "running", selected.concept_id)
+            self._agent_log(
+                run_id,
+                "concept_architect",
+                "concept_selected",
+                f"Generó {len(concepts)} conceptos y seleccionó {selected.concept_id}.",
+                {
+                    "selected_concept_id": selected.concept_id,
+                    "projected_retention": selected.projected_retention,
+                    "concepts": [asdict(concept) for concept in concepts],
+                },
+            )
 
             self._ensure_active()
             blueprint = self._invoke(
@@ -484,6 +497,17 @@ class StoryEngine:
             )
             runtime["blueprint"] = blueprint
             self._checkpoint(run_id, "causal_blueprint", "running", len(blueprint))
+            self._agent_log(
+                run_id,
+                "narrative_planner",
+                "blueprint_created",
+                f"Armó {len(blueprint)} beats causales para {brief.target_duration_seconds}s.",
+                {
+                    "beat_count": len(blueprint),
+                    "target_duration_seconds": brief.target_duration_seconds,
+                    "beats": [asdict(beat) for beat in blueprint],
+                },
+            )
 
             self._ensure_active()
             scenes = self._invoke(
@@ -493,7 +517,31 @@ class StoryEngine:
             script = self._script(scenes)
             continuity = self._continuity(scenes)
             duration_revision_applied = False
+            self._checkpoint(run_id, "script_assembly", "running", script.word_count)
+            self._agent_log(
+                run_id,
+                "writer_room",
+                "draft_created",
+                f"Redactó {len(scenes)} escenas y {script.word_count} palabras.",
+                {
+                    "scene_count": len(scenes),
+                    "word_count": script.word_count,
+                    "estimated_seconds": script.estimated_seconds,
+                },
+            )
+            self._checkpoint(run_id, "narration", "running", "measuring_voice")
             measured_seconds, voice_duration = self._measured_seconds(scenes, script)
+            self._agent_log(
+                run_id,
+                "voice_director",
+                "duration_measured",
+                f"Midió voz: {measured_seconds:.1f}s para objetivo {brief.target_duration_seconds}s.",
+                {
+                    "measured_seconds": measured_seconds,
+                    "target_seconds": brief.target_duration_seconds,
+                    "scene_count": len(scenes),
+                },
+            )
             duration_qc = self._duration_qc(
                 brief, script, revision_applied=False, measured_seconds=measured_seconds
             )
@@ -509,12 +557,46 @@ class StoryEngine:
                 script = self._script(scenes)
                 continuity = self._continuity(scenes)
                 duration_revision_applied = True
+                self._checkpoint(run_id, "script_assembly", "running", script.word_count)
+                self._agent_log(
+                    run_id,
+                    "writer_room",
+                    "duration_revision",
+                    f"Ajustó duración a {script.word_count} palabras.",
+                    {
+                        "word_count": script.word_count,
+                        "target_word_count": duration_qc.target_word_count,
+                        "estimated_seconds": script.estimated_seconds,
+                    },
+                )
+                self._checkpoint(run_id, "narration", "running", "measuring_voice")
                 measured_seconds, voice_duration = self._measured_seconds(scenes, script)
+                self._agent_log(
+                    run_id,
+                    "voice_director",
+                    "duration_remeasured",
+                    f"Remidió voz: {measured_seconds:.1f}s.",
+                    {
+                        "measured_seconds": measured_seconds,
+                        "target_seconds": brief.target_duration_seconds,
+                        "revision_applied": True,
+                    },
+                )
                 duration_qc = self._duration_qc(
                     brief, script, revision_applied=True, measured_seconds=measured_seconds
                 )
                 if not duration_qc.passed:
-                    raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
+                    scenes, script, measured_seconds, voice_duration, duration_qc = (
+                        self._deterministic_duration_fit(
+                            brief,
+                            scenes,
+                            measured_seconds=measured_seconds,
+                            revision_applied=True,
+                        )
+                    )
+                    if not duration_qc.passed:
+                        raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
+                    continuity = self._continuity(scenes)
             runtime.update({"script": script, "continuity": continuity})
             self._checkpoint(run_id, "script_assembly", "running", script.word_count)
 
@@ -528,25 +610,92 @@ class StoryEngine:
             if not originality.passed:
                 raise StoryEngineFailure("ORIGINALITY_FAILED")
             self._checkpoint(run_id, "originality", "running", "passed")
+            self._agent_log(
+                run_id,
+                "automated_qc",
+                "originality_passed",
+                "Originalidad aprobada.",
+                asdict(originality),
+            )
 
             self._ensure_active()
+            revision_count = 0
+            quality_evaluator = NarrativeQualityEvaluator()
+            self._checkpoint(run_id, "independent_critique", "running", "initial_review")
             critique = self._invoke(
                 tools, run_id, "story.evaluate", {"phase": "independent_critique"}
             )
-            revision_count = 0
-            if not critique.passed:
-                runtime["revision"] = critique.revision
+            self._agent_log(
+                run_id,
+                "automated_qc",
+                "quality_review",
+                "Crítica inicial ejecutada.",
+                {
+                    "passed": critique.passed,
+                    "scores": dict(critique.scores),
+                    "issues": list(critique.issues),
+                },
+            )
+            while not critique.passed and revision_count < self.QUALITY_REVISION_LIMIT:
+                iteration_quality = quality_evaluator.evaluate(critique.scores)
+                runtime["revision"] = self._revision_with_quality_guidance(
+                    critique, iteration_quality, revision_count + 1
+                )
+                self._checkpoint(
+                    run_id,
+                    "independent_critique",
+                    "running",
+                    f"revision_{revision_count + 1}",
+                )
                 scenes = self._invoke(
-                    tools, run_id, "story.draft", {"phase": "localized_revision"}
+                    tools,
+                    run_id,
+                    "story.draft",
+                    {"phase": "localized_revision", "revision_attempt": revision_count + 1},
                 )
                 runtime["scenes"] = scenes
                 script = self._script(scenes)
                 runtime["script"] = script
-                revision_count = 1
-                critique = self._invoke(
-                    tools, run_id, "story.evaluate", {"phase": "post_revision"}
+                revision_count += 1
+                self._agent_log(
+                    run_id,
+                    "writer_room",
+                    "quality_revision",
+                    f"Aplicó revisión de calidad {revision_count}/{self.QUALITY_REVISION_LIMIT}.",
+                    {
+                        "revision_attempt": revision_count,
+                        "blocking_dimensions": list(iteration_quality.blocking_dimensions),
+                        "word_count": script.word_count,
+                    },
                 )
+                critique = self._invoke(
+                    tools, run_id, "story.evaluate", {"phase": f"post_revision_{revision_count}"}
+                )
+                self._agent_log(
+                    run_id,
+                    "automated_qc",
+                    "quality_recheck",
+                    f"Revalidó calidad tras revisión {revision_count}.",
+                    {
+                        "revision_attempt": revision_count,
+                        "passed": critique.passed,
+                        "scores": dict(critique.scores),
+                        "issues": list(critique.issues),
+                    },
+                )
+            self._checkpoint(run_id, "narration", "running", "measuring_voice")
             measured_seconds, voice_duration = self._measured_seconds(scenes, script)
+            self._agent_log(
+                run_id,
+                "voice_director",
+                "post_quality_duration_measured",
+                f"Midió voz posterior a crítica: {measured_seconds:.1f}s.",
+                {
+                    "measured_seconds": measured_seconds,
+                    "target_seconds": brief.target_duration_seconds,
+                    "revision_count": revision_count,
+                },
+            )
             duration_qc = self._duration_qc(
                 brief,
                 script,
@@ -554,12 +703,82 @@ class StoryEngine:
                 measured_seconds=measured_seconds,
             )
             if not duration_qc.passed:
-                raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
-            quality_evaluator = NarrativeQualityEvaluator()
+                scenes, script, measured_seconds, voice_duration, duration_qc = (
+                    self._deterministic_duration_fit(
+                        brief,
+                        scenes,
+                        measured_seconds=measured_seconds,
+                        revision_applied=True,
+                    )
+                )
+                runtime["scenes"] = scenes
+                runtime["script"] = script
+                duration_revision_applied = True
+                self._checkpoint(run_id, "narration", "running", "measuring_voice")
+                if not duration_qc.passed:
+                    raise StoryEngineFailure("DURATION_OUT_OF_RANGE")
             if quality_evaluator.detect_antipatterns(script.text):
                 raise StoryEngineFailure("NARRATIVE_ANTIPATTERN")
             quality = quality_evaluator.evaluate(critique.scores)
-            if not critique.passed or not quality.passed:
+            program_findings = self._program_quality_findings(brief, script, scenes)
+            if program_findings:
+                self.store.append_event(
+                    run_id,
+                    "story.program_quality_failed",
+                    {
+                        "program_id": brief.program_id,
+                        "findings": list(program_findings),
+                    },
+                )
+                raise StoryEngineFailure("PROGRAM_QUALITY_FAILED")
+            critique_exhausted = revision_count >= self.QUALITY_REVISION_LIMIT
+            if not critique.passed and critique_exhausted and quality.passed:
+                self.store.append_event(
+                    run_id,
+                    "story.quality_model_limit_reached",
+                    {
+                        "revision_count": revision_count,
+                        "issues": list(critique.issues),
+                        "accepted_by_numeric_quality_gate": True,
+                    },
+                )
+                self._agent_log(
+                    run_id,
+                    "automated_qc",
+                    "quality_limit_accepted",
+                    "Crítica subjetiva agotó revisiones, pero la compuerta numérica aprobó.",
+                    {
+                        "revision_count": revision_count,
+                        "quality_total": quality.total,
+                        "blocking_dimensions": list(quality.blocking_dimensions),
+                    },
+                )
+            if (not critique.passed and not critique_exhausted) or not quality.passed:
+                self.store.append_event(
+                    run_id,
+                    "story.quality_failed",
+                    {
+                        "revision_count": revision_count,
+                        "critique_passed": critique.passed,
+                        "issues": list(critique.issues),
+                        "scores": dict(critique.scores),
+                        "quality_total": quality.total,
+                        "blocking_dimensions": list(quality.blocking_dimensions),
+                    },
+                )
+                self._agent_log(
+                    run_id,
+                    "automated_qc",
+                    "quality_blocked",
+                    f"Bloqueó calidad con total {quality.total}/110.",
+                    {
+                        "revision_count": revision_count,
+                        "critique_passed": critique.passed,
+                        "quality_total": quality.total,
+                        "blocking_dimensions": list(quality.blocking_dimensions),
+                        "scores": dict(critique.scores),
+                    },
+                )
                 raise StoryEngineFailure("QUALITY_FAILED")
             craft = LiteraryCraftEvaluator().assess(script.text)
             if craft.blocking:
@@ -570,6 +789,20 @@ class StoryEngine:
             retention = self._invoke(tools, run_id, "hook.plan", {"duration": brief.target_duration_seconds})
             packaging = self._invoke(tools, run_id, "story.package", {"platform": "facebook_reels"})
             memory = self._invoke(tools, run_id, "memory.propose", {"scope": "story_run"})
+            self._agent_log(
+                run_id,
+                "hook_retention",
+                "retention_planned",
+                "Plan de gancho y retención creado.",
+                asdict(retention) if hasattr(retention, "__dataclass_fields__") else {},
+            )
+            self._agent_log(
+                run_id,
+                "packaging",
+                "package_created",
+                "Paquete de distribución creado.",
+                asdict(packaging) if hasattr(packaging, "__dataclass_fields__") else {},
+            )
             final_events = [
                 event
                 for event in self.store.list_tool_traces(run_id)
@@ -675,10 +908,15 @@ class StoryEngine:
 
         def packaging(_: dict) -> StoryPackaging:
             return StoryPackaging(
-                facebook_reels_title="El audio que obligó a Mara a elegir",
+                # The local deterministic registry is also used by the
+                # offline production harness. Never leak a fixed fixture title
+                # into a newly generated story; the brief is the source of
+                # truth for the package title unless a routed provider returns
+                # an explicit platform variant.
+                facebook_reels_title=brief.title,
                 description=(
-                    "Una historia original sobre la verdad que una familia intentó "
-                    "guardar en tres segundos de silencio."
+                    f"Una historia original sobre {brief.theme} y las decisiones "
+                    "que cambian lo que el protagonista creía saber."
                 ),
                 hashtags=("#HistoriaOriginal", "#Misterio", "#FacebookReels"),
                 call_to_action="¿Tú habrías publicado el audio?",
@@ -810,6 +1048,186 @@ class StoryEngine:
         )
 
     @staticmethod
+    def _revision_with_quality_guidance(
+        critique: StoryCritique,
+        quality: NarrativeQualityReport,
+        attempt: int,
+    ) -> dict[str, Any]:
+        revision = dict(critique.revision or {})
+        blocking = list(quality.blocking_dimensions)
+        if not blocking and not critique.passed:
+            blocking = ["agency", "escalation", "payoff"]
+        guidance = {
+            "hook": "Abrir con una anomalía concreta antes de la explicación.",
+            "clarity": "Aclarar quién decide, qué quiere y qué evidencia sostiene la escena.",
+            "conflict": "Hacer que cada escena tenga oposición visible, no solo recuerdo o explicación.",
+            "escalation": "Cada escena debe subir el riesgo o cerrar una puerta anterior.",
+            "agency": "La protagonista debe tomar una decisión irreversible con costo concreto.",
+            "coherence": "Conectar causa y efecto entre escenas sin saltos ni casualidades.",
+            "credibility": "Anclar la revelación en prueba verificable, objeto, fecha, audio o testigo.",
+            "originality": "Separarse de la semilla: cambiar situación, personajes, orden y resolución.",
+            "retention": "Mantener una pregunta abierta por escena y una micro-revelación antes del corte.",
+            "payoff": "Pagar las pistas sembradas con una decisión final, no solo una explicación.",
+            "production_fit": "Escribir frases narrables, visuales y cortas para video vertical.",
+        }
+        revision["quality_attempt"] = attempt
+        revision["scores"] = dict(critique.scores)
+        revision["blocking_dimensions"] = blocking
+        revision["issues"] = list(critique.issues)
+        revision["instruction"] = " ".join(
+            [str(revision.get("instruction", "")).strip()]
+            + [guidance[item] for item in blocking if item in guidance]
+        ).strip()
+        revision["must_preserve"] = (
+            "Mantén derechos owned_original, no copies la semilla externa, conserva causalidad y duración objetivo."
+        )
+        return revision
+
+    @staticmethod
+    def _program_quality_findings(
+        brief: StoryBrief, script: StoryScript, scenes: tuple[StoryScene, ...]
+    ) -> tuple[str, ...]:
+        shared_findings = program_quality_findings(
+            brief.program_id,
+            script.text,
+            tuple(scene.narration for scene in scenes),
+        )
+        if shared_findings:
+            return shared_findings
+        text = script.text.casefold()
+        findings: list[str] = []
+        if brief.program_id == "viernes-paranormal":
+            if re.search(r"(^|\s)(el|la|un|una)\.\s*($|\n)", text):
+                findings.append("fragmented_articles")
+            paranormal_terms = (
+                "fantasma", "aparicion", "aparición", "entidad", "sombra",
+                "figura", "casa embrujada", "embrujad", "pasos", "puerta",
+                "armario", "esquina", "habitacion", "habitación", "pasillo",
+                "respiracion", "respiración", "voz", "3:00", "3 de la mañana",
+                "sobrenatural", "paranormal", "pose", "presencia",
+            )
+            concrete_places = (
+                "casa", "habitacion", "habitación", "cuarto", "sala",
+                "pasillo", "armario", "esquina", "sofa", "sofá", "puerta",
+                "escalera", "ventana",
+            )
+            if sum(1 for term in paranormal_terms if term in text) < 3:
+                findings.append("missing_clear_paranormal_threat")
+            if sum(1 for term in concrete_places if term in text) < 2:
+                findings.append("missing_haunted_place_anchors")
+            if not any("?" in scene.narration or "quiere" in scene.narration.casefold() for scene in scenes):
+                findings.append("weak_story_question")
+            if "contrato" in text and not any(term in text for term in ("entidad", "fantasma", "sombra", "aparicion", "aparición")):
+                findings.append("abstract_bargain_not_paranormal")
+        return tuple(dict.fromkeys(findings))
+
+    def _deterministic_duration_fit(
+        self,
+        brief: StoryBrief,
+        scenes: tuple[StoryScene, ...],
+        *,
+        measured_seconds: float | None,
+        revision_applied: bool,
+    ) -> tuple[tuple[StoryScene, ...], StoryScript, float, MeasuredDuration | None, DurationQCReport]:
+        if not scenes:
+            script = self._script(scenes)
+            duration_qc = self._duration_qc(
+                brief, script, revision_applied=revision_applied, measured_seconds=measured_seconds
+            )
+            return scenes, script, measured_seconds or script.estimated_seconds, None, duration_qc
+
+        script = self._script(scenes)
+        current_seconds = measured_seconds if measured_seconds and measured_seconds > 0 else script.estimated_seconds
+        if current_seconds > 0:
+            target_words = round(script.word_count * (brief.target_duration_seconds / current_seconds))
+        else:
+            target_words = round(brief.target_duration_seconds * self._words_per_second())
+        target_words = max(len(scenes), target_words)
+        fitted = self._fit_scenes_to_word_budget(scenes, target_words)
+        fitted_script = self._script(fitted)
+        fitted_seconds, fitted_voice_duration = self._measured_seconds(fitted, fitted_script)
+        fitted_qc = self._duration_qc(
+            brief,
+            fitted_script,
+            revision_applied=revision_applied,
+            measured_seconds=fitted_seconds,
+        )
+        return fitted, fitted_script, fitted_seconds, fitted_voice_duration, fitted_qc
+
+    @classmethod
+    def _fit_scenes_to_word_budget(
+        cls, scenes: tuple[StoryScene, ...], target_word_count: int
+    ) -> tuple[StoryScene, ...]:
+        if not scenes:
+            return scenes
+        weights = [max(1, int(scene.target_seconds or len(scene.narration.split()) or 1)) for scene in scenes]
+        total_weight = sum(weights)
+        budgets = [max(1, round(target_word_count * weight / total_weight)) for weight in weights]
+        delta = target_word_count - sum(budgets)
+        index = 0
+        while delta != 0 and budgets:
+            slot = index % len(budgets)
+            if delta > 0:
+                budgets[slot] += 1
+                delta -= 1
+            elif budgets[slot] > 1:
+                budgets[slot] -= 1
+                delta += 1
+            index += 1
+            if index > len(budgets) * max(2, abs(delta) + 2):
+                break
+
+        fitted: list[StoryScene] = []
+        for index, (scene, budget) in enumerate(zip(scenes, budgets, strict=True)):
+            fitted.append(
+                StoryScene(
+                    scene_id=scene.scene_id,
+                    purpose=scene.purpose,
+                    narration=cls._fit_narration_to_words(scene, budget, index),
+                    target_seconds=scene.target_seconds,
+                    characters=scene.characters,
+                    seed_ids=scene.seed_ids,
+                    payoff_ids=scene.payoff_ids,
+                )
+            )
+        return tuple(fitted)
+
+    @classmethod
+    def _fit_narration_to_words(cls, scene: StoryScene, target_words: int, index: int) -> str:
+        words = scene.narration.split()
+        if len(words) >= target_words:
+            return cls._words_to_sentence(words[:target_words])
+
+        expanded = list(words)
+        extensions = cls._duration_extension_sentences(scene, index)
+        extension_index = 0
+        while len(expanded) < target_words:
+            expanded.extend(extensions[extension_index % len(extensions)].split())
+            extension_index += 1
+        return cls._words_to_sentence(expanded[:target_words])
+
+    @staticmethod
+    def _words_to_sentence(words: list[str]) -> str:
+        text = " ".join(words).strip()
+        text = text.rstrip(" ,;:")
+        if not text:
+            return "."
+        if text[-1] not in ".!?":
+            text += "."
+        return text
+
+    @staticmethod
+    def _duration_extension_sentences(scene: StoryScene, index: int) -> tuple[str, ...]:
+        lead = scene.characters[0] if scene.characters else "la protagonista"
+        purpose = scene.purpose.replace("_", " ")
+        return (
+            f"El detalle de {purpose} queda visible en la luz baja, y {lead} conserva la prueba antes de avanzar.",
+            f"{lead} compara fechas, voces y silencios; cada marca confirma que retroceder ya tiene un costo.",
+            "La decisión deja una grieta concreta: una hora escrita, una llave fría y un nombre que nadie quiere repetir.",
+            f"En el margen de la escena {index + 1}, el polvo, el brillo y el ruido sostienen la misma pregunta.",
+        )
+
+    @staticmethod
     def _continuity(scenes: tuple[StoryScene, ...]) -> ContinuityLedger:
         seeds = tuple(dict.fromkeys(seed for scene in scenes for seed in scene.seed_ids))
         payoffs = tuple(
@@ -887,3 +1305,22 @@ class StoryEngine:
         safe_payload = {"node": node, "status": status, "detail": detail}
         self.store.append_event(run_id, "story.node", safe_payload)
         self.store.save_checkpoint(run_id, node, {"status": status, "detail": detail})
+
+    def _agent_log(
+        self,
+        run_id: str,
+        agent_id: str,
+        action: str,
+        detail: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self.store.append_event(
+            run_id,
+            "agent.log",
+            {
+                "agent_id": agent_id,
+                "action": action,
+                "detail": detail,
+                "payload": payload,
+            },
+        )

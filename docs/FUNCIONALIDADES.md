@@ -39,6 +39,10 @@ El chat operativo utiliza un prompt stack con capas separadas para política bas
 | `run.cancel` | Cancelar cooperativamente un run | `run_id` | estado |
 | `run.progress` | Progreso de un run en curso | `run_id` | fase, estado, porcentaje |
 | `agent.capabilities` | Lista de agentes/herramientas (sin ejecución) | — | agentes, skills, herramientas |
+| `programs.list` | Programas, calendario, plataformas y plantilla narrativa vigente | — | programas + `narrative_template` |
+| `programs.template.save` | Guardar plantilla narrativa manual de un programa | `program_id`, `directives` | plantilla guardada |
+| `programs.template.reset` | Restaurar plantilla narrativa base de un programa | `program_id` | plantilla base |
+| `episodes.list` / `episodes.get` | Biblioteca local de episodios y detalle | `program_id?`, `story_id` | guion, video, música, SFX, QC |
 
 **Eventos hacia la UI (para observar sin intervenir):** cada herramienta emite `started` y un evento final con argumentos redactados, evidencia y resumen; los runs emiten progreso. La UI se suscribe para dibujar el timeline y el panel de "runs automáticos".
 
@@ -139,3 +143,11 @@ Lista cerrada en Rust (`sidecar_bridge.rs: ALLOWED_AUTHORITY_TOOLS`) y espejada 
 
 - **Hecho (esta ronda):** motor narrativo literario (R2), Nemotron Ultra + alias critic (R5), memoria de grafo bitemporal + series multi-parte (R3), voz real + duración medida (R4), scheduler + autonomía (R6).
 - **Siguiente (post-visual):** render real de video (F1), publicación autónoma en vivo — Facebook Reels primero (F2), Agente B de red editorial (F3), multi-cuenta (F4), Kronara Pulse completo (F5). Ver `docs/roadmap/`.
+
+### Nota de auditoría visual 2026-07-21
+
+El pipeline local ya genera el MP4 9:16 y la UI lo reproduce mediante el
+protocolo de assets de Tauri. En la previsualización Vite, `assetSrc()` usa
+`/__kronara_asset`, restringido a `.kronara/runtime/**` y compatible con
+rangos HTTP. Lo que sigue pendiente es el render host-controlado desde Rust y
+la publicación remota real, no la creación ni la reproducción local del MP4.

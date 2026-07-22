@@ -24,7 +24,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 from kronara.asset_library import AssetLibraryStore, LibraryAsset, sfx_paths_from_library
 from kronara.audio_mix import DEFAULT_KEYWORD_SFX, match_sfx_cues
@@ -37,6 +37,7 @@ from kronara.composition import (
     tier_for_scene,
 )
 from kronara.image_gen import SDXL_BUCKET_9x16, ImageGenerationRequest
+from kronara.image_gen import FAST_STEPS, PREMIUM_STEPS
 from kronara.render import REEL_9x16, FfmpegRenderer, LoudnessReport, QCReport, RenderPreset, build_srt, cues_from_word_boundaries
 from kronara.visual_director import assign_visual_sources
 from kronara.visual_style import VisualStyleDescriptor, apply_style
@@ -57,6 +58,10 @@ class VisualProductionResult:
     shot_count: int
     source_kind_counts: dict
     cover_image_path: str = ""
+    music_path: str = ""
+    sfx_cue_tags: tuple[str, ...] = ()
+    sfx_resolved_paths: dict[str, str] | None = None
+    sfx_missing_tags: tuple[str, ...] = ()
 
 
 def concatenate_audio(ffmpeg: str, paths: Sequence[str], output_path: str, *, timeout: int = 300) -> None:
@@ -86,29 +91,151 @@ def concatenate_audio(ffmpeg: str, paths: Sequence[str], output_path: str, *, ti
 
 
 def build_shot_prompt(
-    narration: str, negative_prompt: str, style: VisualStyleDescriptor | None
+    narration: str,
+    negative_prompt: str,
+    style: VisualStyleDescriptor | None,
+    *,
+    episode_context: str = "",
+    scene_position: str = "",
 ) -> tuple[str, str]:
     base = " ".join(narration.split())  # collapse whitespace; CLIP truncates long prompts itself
-    base_prompt = f"cinematic photograph, vertical composition, {base}" if base else "cinematic photograph"
-    return apply_style(base_prompt, negative_prompt, style)
+    context = " ".join(episode_context.split())
+    anchors, contradictions = _visual_anchors_for(f"{context} {base}")
+    visual_text = " ".join(base.split()[:70])
+    parts = [
+        "cinematic photograph",
+        "vertical composition",
+        "scene-matched literal visual",
+        "consistent episode setting and recurring characters",
+    ]
+    if scene_position:
+        parts.append(scene_position)
+    if context:
+        parts.append(f"episode visual context: {context}")
+    if visual_text:
+        parts.append(f"current scene: {visual_text}")
+    if anchors:
+        parts.append(anchors)
+    base_prompt = ", ".join(parts)
+    combined_negative = _join_prompt_parts(
+        negative_prompt,
+        contradictions,
+        "unrelated desert, unrelated car, unrelated highway, random vehicle, random landscape, mismatched location, inconsistent setting",
+    )
+    return apply_style(base_prompt, combined_negative, style)
+
+
+def _join_prompt_parts(*values: str) -> str:
+    parts: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for part in str(value or "").split(","):
+            clean = part.strip()
+            key = clean.casefold()
+            if clean and key not in seen:
+                seen.add(key)
+                parts.append(clean)
+    return ", ".join(parts)
+
+
+def _visual_anchors_for(text: str) -> tuple[str, str]:
+    low = text.casefold()
+    anchors: list[str] = []
+    negatives: list[str] = []
+    if any(term in low for term in ("marea", "agua", "muelle", "mar", "redes", "ostiones")):
+        anchors.append("wet wooden dock, low tide, ocean water, fishing nets, damp night air")
+        negatives.append("desert, dry road, car, highway, sand dunes")
+    if any(term in low for term in ("figura", "sombra", "entidad", "fantasma", "aparicion", "aparición")):
+        anchors.append("dark humanlike silhouette, shadow figure, supernatural presence, deep corner darkness")
+        negatives.append("ordinary person posing, smiling face, clean studio portrait")
+    if any(term in low for term in ("habitacion", "habitación", "armario", "pasillo", "sofa", "sofá", "puerta", "esquina")):
+        anchors.append("old haunted house interior, bedroom corner, closet door, narrow hallway, practical lamp")
+        negatives.append("open desert landscape, city street, car interior")
+    return ", ".join(dict.fromkeys(anchors)), ", ".join(dict.fromkeys(negatives))
+
+
+def _episode_visual_context(
+    scenes: Sequence,
+    visual_style: VisualStyleDescriptor | None,
+    *,
+    max_words: int = 44,
+) -> str:
+    narrations = " ".join(
+        " ".join(str(getattr(scene, "narration", "")).split())
+        for scene in scenes
+    )
+    anchors, _ = _visual_anchors_for(narrations)
+    story_world = " ".join(narrations.split()[:max_words])
+    parts: list[str] = []
+    if visual_style is not None:
+        parts.append(f"{visual_style.display_name} visual identity")
+        if visual_style.program_id == "viernes-paranormal":
+            parts.append("supernatural horror with a visible ghost, entity or shadow presence")
+    if anchors:
+        parts.append(anchors)
+    if story_world:
+        parts.append(f"story world: {story_world}")
+    return ". ".join(dict.fromkeys(parts))
 
 
 def render_graphic_overlay_card(text: str, output_path: str, *, width: int, height: int) -> None:
-    """A recreated document/message card -- Pillow-drawn, not SD-generated
-    (SDXL is not reliable for coherent text/UI, per V6's design)."""
-    from PIL import Image, ImageDraw
+    """Create a cinematic evidence card, not a blank white document.
 
-    image = Image.new("RGB", (width, height), (245, 244, 240))
+    Graphic overlays are deliberately Pillow-drawn because diffusion models
+    are unreliable at rendering legible text. The card still belongs to the
+    visual language of the episode: dark palette, purple accent, readable
+    hierarchy and a restrained waveform instead of a full-frame transcript.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (width, height))
+    pixels = image.load()
+    top = (7, 12, 27)
+    bottom = (38, 14, 60)
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        color = tuple(int(top[channel] * (1 - ratio) + bottom[channel] * ratio) for channel in range(3))
+        for x in range(width):
+            pixels[x, y] = color
+
     draw = ImageDraw.Draw(image)
-    margin = int(width * 0.1)
-    draw.rectangle(
-        [margin // 2, margin, width - margin // 2, height - margin], outline=(60, 60, 60), width=3
+    margin = int(width * 0.08)
+    card = [margin, int(height * 0.18), width - margin, int(height * 0.78)]
+    draw.rounded_rectangle(card, radius=28, fill=(10, 18, 38), outline=(126, 74, 238), width=4)
+    draw.rounded_rectangle(
+        [card[0] + 22, card[1] + 22, card[2] - 22, card[1] + 82],
+        radius=18,
+        fill=(40, 22, 75),
     )
-    wrapped = _wrap_text(" ".join(text.split()), max_chars=28)
-    line_height = 44
-    start_y = height // 2 - (len(wrapped) * line_height) // 2
-    for index, line in enumerate(wrapped[:14]):
-        draw.text((margin, start_y + index * line_height), line, fill=(30, 30, 30))
+
+    def font(size: int):
+        for candidate in ("C:/Windows/Fonts/segoeui.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    draw.text((card[0] + 52, card[1] + 38), "EVIDENCIA DE AUDIO", font=font(28), fill=(232, 218, 255))
+    draw.text((card[0] + 52, card[1] + 116), "Grabación recuperada · 00:03", font=font(24), fill=(145, 155, 187))
+
+    wrapped = _wrap_text(" ".join(text.split()), max_chars=36)
+    line_height = 54
+    start_y = card[1] + 240
+    for index, line in enumerate(wrapped[:12]):
+        draw.text((card[0] + 52, start_y + index * line_height), line, font=font(34), fill=(245, 246, 252))
+
+    waveform_y = card[3] - 120
+    waveform = [18, 36, 26, 56, 30, 70, 38, 48, 24, 64, 34, 52, 20, 44, 28, 58, 22, 40, 30, 48]
+    bar_width = max(8, int((card[2] - card[0] - 104) / len(waveform)))
+    for index, bar in enumerate(waveform):
+        x = card[0] + 52 + index * bar_width
+        draw.rounded_rectangle(
+            [x, waveform_y - bar, x + max(4, bar_width - 8), waveform_y + bar],
+            radius=4,
+            fill=(167, 92, 255),
+        )
+    draw.text((margin, int(height * 0.86)), "KRONARA · RECREACIÓN VISUAL LOCAL", font=font(22), fill=(214, 198, 231))
     os.makedirs(Path(output_path).parent, exist_ok=True)
     image.save(output_path)
 
@@ -153,6 +280,10 @@ def _resolve_scene_asset(
     image_provider,
     visual_style: VisualStyleDescriptor | None,
     negative_prompt: str,
+    episode_context: str = "",
+    scene_index: int = 0,
+    total_scenes: int = 0,
+    reference_image_path: str | None = None,
 ) -> VisualAsset:
     if assignment.source_kind == "video_loop" and assignment.video_loop_asset is not None:
         video = assignment.video_loop_asset
@@ -163,10 +294,18 @@ def _resolve_scene_asset(
         path = os.path.join(output_dir, f"{scene.scene_id}_overlay.png")
         render_graphic_overlay_card(scene.narration, path, width=width, height=height)
         return VisualAsset(f"{scene.scene_id}_overlay", "graphic_overlay", path, width, height)
-    prompt, negative = build_shot_prompt(scene.narration, negative_prompt, visual_style)
+    prompt, negative = build_shot_prompt(
+        scene.narration,
+        negative_prompt,
+        visual_style,
+        episode_context=episode_context,
+        scene_position=f"scene {scene_index}/{total_scenes}" if scene_index and total_scenes else "",
+    )
     request = ImageGenerationRequest(
         prompt=prompt, negative_prompt=negative, seed=_seed_for_shot(scene.scene_id),
         quality_tier=tier,
+        reference_image_path=reference_image_path,
+        reference_strength=0.45,
     )
     result = image_provider.generate(request)
     return VisualAsset(f"{scene.scene_id}_ai", "ai_image", result.image_path, result.width, result.height)
@@ -180,6 +319,7 @@ def generate_cover_image(
     image_provider,
     visual_style: VisualStyleDescriptor | None = None,
     negative_prompt: str = "",
+    episode_context: str = "",
 ) -> str:
     """One dedicated poster-style image per episode, always premium tier and
     always a real AI image (never a video-loop frame or a text-card graphic)
@@ -190,7 +330,13 @@ def generate_cover_image(
     beat of the story." Reuses the same style/prompt pipeline (build_shot_
     prompt + apply_style) so it stays visually consistent with the episode's
     own scenes and the program's visual identity."""
-    prompt, negative = build_shot_prompt(cover_text, negative_prompt, visual_style)
+    prompt, negative = build_shot_prompt(
+        cover_text,
+        negative_prompt,
+        visual_style,
+        episode_context=episode_context,
+        scene_position="premium episode cover / reusable thumbnail",
+    )
     request = ImageGenerationRequest(
         prompt=prompt, negative_prompt=negative,
         seed=_seed_for_shot(f"{episode_id}_cover"), quality_tier="premium",
@@ -213,6 +359,7 @@ def produce_episode_video(
     negative_prompt: str = "",
     crossfade_ms: int = DEFAULT_CROSSFADE_MS,
     cover_text: str = "",
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> VisualProductionResult:
     if len(voice_duration.per_scene_ms) != len(scenes):
         raise ValueError("voice_duration must have exactly one entry per scene")
@@ -223,19 +370,35 @@ def produce_episode_video(
         )
 
     os.makedirs(output_dir, exist_ok=True)
-    cover_image_path = ""
-    if cover_text.strip():
-        try:
-            cover_image_path = generate_cover_image(
-                cover_text=cover_text, output_dir=output_dir, episode_id=episode_id,
-                image_provider=image_provider, visual_style=visual_style,
-                negative_prompt=negative_prompt,
-            )
-        except Exception:
-            # A missing/broken cover is never worth failing the whole
-            # episode over -- the scenes' own images still carry the video.
-            cover_image_path = ""
+
+    def progress(stage: str, detail: str, **extra) -> None:
+        if progress_callback is not None:
+            progress_callback({"stage": stage, "detail": detail, **extra})
+
+    effective_cover_text = cover_text.strip() or (scenes[0].narration if scenes else episode_id)
+    episode_visual_context = _episode_visual_context(scenes, visual_style)
+    cover_image_path = os.path.join(output_dir, f"{episode_id}_cover.png")
+    try:
+        progress("cover", "Generando portada obligatoria del episodio.")
+        cover_image_path = generate_cover_image(
+            cover_text=effective_cover_text, output_dir=output_dir, episode_id=episode_id,
+            image_provider=image_provider, visual_style=visual_style,
+            negative_prompt=negative_prompt, episode_context=episode_visual_context,
+        )
+    except Exception as error:
+        progress(
+            "cover_fallback",
+            "La portada AI falló; creando miniatura gráfica local de respaldo.",
+            error=type(error).__name__,
+        )
+        render_graphic_overlay_card(
+            effective_cover_text,
+            cover_image_path,
+            width=SDXL_BUCKET_9x16[0],
+            height=SDXL_BUCKET_9x16[1],
+        )
     narration_path = os.path.join(output_dir, f"{episode_id}_narration.mp3")
+    progress("audio", "Uniendo narraciones por escena.")
     concatenate_audio(renderer.ffmpeg, voice_duration.audio_refs, narration_path)
     total_duration_ms = sum(voice_duration.per_scene_ms)
 
@@ -252,6 +415,61 @@ def produce_episode_video(
         )
     }
 
+    total_scenes = len(scenes)
+    cover_images = 1
+    scene_plan = []
+    planned_source_counts = {"ai_image": 0, "video_loop": 0, "graphic_overlay": 0}
+    planned_image_counts = {"fast": 0, "premium": 0}
+    planned_shot_count = 0
+    for index, scene in enumerate(scenes):
+        tier = tier_for_scene(index, voice_duration.per_scene_ms)
+        assignment = assignments[scene.scene_id]
+        planned_source_counts[assignment.source_kind] += 1
+        if assignment.source_kind == "ai_image":
+            planned_image_counts[tier] += 1
+        shots = plan_shots_for_scene(
+            scene.scene_id,
+            voice_duration.per_scene_ms[index],
+            tier,
+            [_SENTINEL_ASSET],
+            motion_bias=visual_style.motion_bias if visual_style else "standard",
+        )
+        planned_shot_count += len(shots)
+        scene_plan.append(
+            {
+                "scene_id": scene.scene_id,
+                "scene_index": index + 1,
+                "tier": tier,
+                "source_kind": assignment.source_kind,
+                "image_steps": (
+                    PREMIUM_STEPS if tier == "premium"
+                    else FAST_STEPS
+                ) if assignment.source_kind == "ai_image" else 0,
+                "shot_count": len(shots),
+                "duration_ms": voice_duration.per_scene_ms[index],
+            }
+        )
+    progress(
+        "plan",
+        (
+            f"Plan visual: {cover_images} portada premium obligatoria, {planned_image_counts['premium']} imagen(es) premium "
+            f"de escena, {planned_image_counts['fast']} imagen(es) rápidas, "
+            f"{planned_source_counts['graphic_overlay']} overlay(s), {planned_source_counts['video_loop']} video-loop(s), "
+            f"{planned_shot_count} toma(s)."
+        ),
+        ordered_by="visual_director+visual_composer",
+        cover_images=cover_images,
+        cover_steps=PREMIUM_STEPS if cover_images else 0,
+        scene_count=total_scenes,
+        total_diffusion_batches=cover_images + planned_image_counts["premium"] + planned_image_counts["fast"],
+        total_diffusion_steps=(cover_images + planned_image_counts["premium"]) * PREMIUM_STEPS + planned_image_counts["fast"] * FAST_STEPS,
+        planned_image_counts=planned_image_counts,
+        planned_source_counts=planned_source_counts,
+        planned_shot_count=planned_shot_count,
+        scene_plan=scene_plan,
+        episode_visual_context=episode_visual_context,
+    )
+
     all_shots: list[Shot] = []
     source_counts = {"ai_image": 0, "video_loop": 0, "graphic_overlay": 0}
     motion_bias = visual_style.motion_bias if visual_style else "standard"
@@ -259,10 +477,25 @@ def produce_episode_video(
         tier = tier_for_scene(index, voice_duration.per_scene_ms)
         assignment = assignments[scene.scene_id]
         source_counts[assignment.source_kind] += 1
+        progress(
+            "scene_asset",
+            f"Generando visual {index + 1}/{total_scenes}.",
+            current=index + 1,
+            total=total_scenes,
+            source_kind=assignment.source_kind,
+            tier=tier,
+            scene_id=scene.scene_id,
+            episode_visual_context=episode_visual_context,
+            reference_image_path=cover_image_path if assignment.source_kind == "ai_image" else "",
+        )
         asset = _resolve_scene_asset(
             scene=scene, assignment=assignment, tier=tier, output_dir=output_dir,
             image_provider=image_provider, visual_style=visual_style,
             negative_prompt=negative_prompt,
+            episode_context=episode_visual_context,
+            scene_index=index + 1,
+            total_scenes=total_scenes,
+            reference_image_path=cover_image_path if Path(cover_image_path).exists() else None,
         )
         all_shots.extend(
             plan_shots_for_scene(
@@ -274,13 +507,18 @@ def produce_episode_video(
     plan = build_visual_track_plan(all_shots, crossfade_ms=crossfade_ms)
 
     srt_path = os.path.join(output_dir, f"{episode_id}.srt")
-    cues = cues_from_word_boundaries(voice_duration.word_boundaries)
+    # The player also appears in a narrow inspector panel; keep caption lines
+    # short enough to remain legible there as well as in fullscreen playback.
+    cues = cues_from_word_boundaries(voice_duration.word_boundaries, max_chars=28)
     Path(srt_path).write_text(build_srt(cues), encoding="utf-8")
 
     sfx_cues = match_sfx_cues(voice_duration.word_boundaries, keyword_map=DEFAULT_KEYWORD_SFX)
     sfx_paths = (
         sfx_paths_from_library(library, {cue.tag for cue in sfx_cues}) if library is not None else {}
     )
+    sfx_tags = tuple(dict.fromkeys(cue.tag for cue in sfx_cues))
+    missing_sfx_tags = tuple(tag for tag in sfx_tags if tag not in sfx_paths)
+    progress("plan", f"Plan visual listo: {len(plan.shots)} tomas.")
 
     music_path = None
     if library is not None and visual_style is not None and visual_style.music_moods:
@@ -288,6 +526,7 @@ def produce_episode_video(
         music_path = music_asset.file_path if music_asset else None
 
     raw_output_path = os.path.join(output_dir, f"{episode_id}_raw.mp4")
+    progress("render", "Renderizando video vertical con FFmpeg.")
     renderer.render_composition(
         visual_plan=plan,
         narration_path=narration_path,
@@ -301,8 +540,11 @@ def produce_episode_video(
     )
 
     output_path = os.path.join(output_dir, f"{episode_id}.mp4")
+    progress("loudness", "Normalizando volumen del episodio.")
     loudness = renderer.normalize_loudness(raw_output_path, output_path)
+    progress("qc", "Revisando formato, audio, duración y cuadros negros.")
     qc = renderer.qc(output_path, preset, max_black_seconds=0.5, loudness_range_lufs=(-19.0, -13.0))
+    progress("completed", "Producción visual completada.", qc_passed=qc.passed)
 
     return VisualProductionResult(
         output_path=output_path,
@@ -312,4 +554,8 @@ def produce_episode_video(
         shot_count=len(plan.shots),
         source_kind_counts=source_counts,
         cover_image_path=cover_image_path,
+        music_path=music_path or "",
+        sfx_cue_tags=sfx_tags,
+        sfx_resolved_paths=dict(sfx_paths),
+        sfx_missing_tags=missing_sfx_tags,
     )

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+import shutil
 import threading
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -60,7 +62,7 @@ class OperationsService:
         embedding_alias: str = "bge_m3",
         reranker_alias: str | None = "bge_reranker_v2_m3",
         voice_provider: "object | None" = None,
-        voice_id: str = "es-BO-SofiaNeural",
+        voice_id: str = "es-CO-GonzaloNeural",
         image_provider: "object | None" = None,
         renderer: "object | None" = None,
         visual_style_registry: "object | None" = None,
@@ -75,6 +77,8 @@ class OperationsService:
         self.embedding_alias = embedding_alias
         self.reranker_alias = reranker_alias
         self.database_path = self.data_dir / "kronara.db"
+        self._program_template_path = self.data_dir / "program_narrative_templates.v1.json"
+        os.environ["KRONARA_PROGRAM_TEMPLATE_OVERRIDES"] = str(self._program_template_path)
         self.store = KronaraStore(self.database_path)
         self.store.initialize()
         self._states: dict[str, dict[str, Any]] = {}
@@ -112,6 +116,7 @@ class OperationsService:
             "operations.chat": self.operations_chat,
             "operations.context": self.operations_context,
             "tools.timeline": self.tool_timeline,
+            "run.diagnostics": self.run_diagnostics,
             "memory.search": self.memory_search,
             "rag.retrieve_v3": self.rag_retrieve,
             "story.test": self.story_test,
@@ -121,8 +126,11 @@ class OperationsService:
             "run.progress": self.progress,
             "operations.control_snapshot": self.control_snapshot,
             "programs.list": self.programs_list,
+            "programs.template.save": self.programs_template_save,
+            "programs.template.reset": self.programs_template_reset,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
+            "episodes.delete": self.episodes_delete,
             "schedule.tick": self.schedule_tick,
             "action.approve": self.action_approve,
         }
@@ -190,6 +198,10 @@ class OperationsService:
                     "video_path": episode["metadata"].get("video_path") or None,
                     "cover_image_path": episode["metadata"].get("cover_image_path") or None,
                     "video_qc_passed": episode["metadata"].get("video_qc_passed"),
+                    "music_path": episode["metadata"].get("music_path") or None,
+                    "sfx_cue_tags": list(episode["metadata"].get("sfx_cue_tags", [])),
+                    "sfx_resolved_paths": dict(episode["metadata"].get("sfx_resolved_paths", {})),
+                    "sfx_missing_tags": list(episode["metadata"].get("sfx_missing_tags", [])),
                 }
                 for episode in episodes
             ],
@@ -229,10 +241,57 @@ class OperationsService:
             "video_scene_count": metadata.get("video_scene_count"),
             "video_shot_count": metadata.get("video_shot_count"),
             "video_source_kind_counts": dict(metadata.get("video_source_kind_counts", {})),
+            "music_path": metadata.get("music_path") or None,
+            "sfx_cue_tags": list(metadata.get("sfx_cue_tags", [])),
+            "sfx_resolved_paths": dict(metadata.get("sfx_resolved_paths", {})),
+            "sfx_missing_tags": list(metadata.get("sfx_missing_tags", [])),
         }
+
+    def episodes_delete(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Delete an owned episode and its runtime media, within data_dir only."""
+        story_id = str(params.get("story_id", "")).strip()
+        if not story_id:
+            raise ValueError("story_id is required")
+        artifact = self.store.load_owned_story_artifact(story_id)
+        metadata = artifact["metadata"]
+        removed_files: list[str] = []
+
+        paths = [artifact["path"], metadata.get("video_path"), metadata.get("cover_image_path")]
+        for raw_path in paths:
+            safe_path = self._safe_runtime_path(raw_path)
+            if safe_path is not None and safe_path.is_file():
+                safe_path.unlink()
+                removed_files.append(str(safe_path))
+
+        video_dir = self._safe_runtime_path(self.data_dir / "artifacts" / "video" / story_id)
+        if video_dir is not None and video_dir.is_dir():
+            shutil.rmtree(video_dir)
+
+        self.store.delete_owned_story_artifact(story_id)
+        return {
+            "schema_version": 1,
+            "status": "deleted",
+            "story_id": story_id,
+            "removed_files": removed_files,
+        }
+
+    def _safe_runtime_path(self, raw_path: Any) -> Path | None:
+        if not raw_path:
+            return None
+        candidate = Path(str(raw_path))
+        if not candidate.is_absolute():
+            candidate = self.data_dir / candidate
+        candidate = candidate.resolve()
+        runtime_root = self.data_dir.resolve()
+        try:
+            candidate.relative_to(runtime_root)
+        except ValueError:
+            return None
+        return candidate
 
     def programs_list(self, _: dict[str, Any]) -> dict[str, Any]:
         from kronara.programs import ProgramRegistry, default_registry_path
+        from kronara.program_narrative import narrative_contract, narrative_contract_source
 
         registry = ProgramRegistry.load(default_registry_path())
         return {
@@ -247,9 +306,57 @@ class OperationsService:
                     "visual_style_id": program.visual_style_id,
                     "target_duration_seconds": program.target_duration_seconds,
                     "platforms": list(program.platforms),
+                    "narrative_template": narrative_contract(
+                        program.program_id, self._program_template_path
+                    ),
+                    "narrative_template_source": narrative_contract_source(
+                        program.program_id, self._program_template_path
+                    ),
                 }
                 for program in (registry.get(pid) for pid in registry.program_ids)
             ],
+        }
+
+    def programs_template_save(self, params: dict[str, Any]) -> dict[str, Any]:
+        from kronara.program_narrative import save_narrative_contract_override
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        program_id = str(params.get("program_id", "")).strip()
+        registry = ProgramRegistry.load(default_registry_path())
+        registry.get(program_id)
+        raw_directives = params.get("directives")
+        if raw_directives is None:
+            template_text = str(params.get("template_text", ""))
+            raw_directives = template_text.splitlines()
+        if not isinstance(raw_directives, list):
+            raise ValueError("directives must be a list of template lines")
+        directives = save_narrative_contract_override(
+            program_id,
+            [str(item) for item in raw_directives],
+            self._program_template_path,
+        )
+        return {
+            "schema_version": 1,
+            "status": "saved",
+            "program_id": program_id,
+            "narrative_template": directives,
+            "narrative_template_source": "manual",
+        }
+
+    def programs_template_reset(self, params: dict[str, Any]) -> dict[str, Any]:
+        from kronara.program_narrative import reset_narrative_contract_override
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        program_id = str(params.get("program_id", "")).strip()
+        registry = ProgramRegistry.load(default_registry_path())
+        registry.get(program_id)
+        directives = reset_narrative_contract_override(program_id, self._program_template_path)
+        return {
+            "schema_version": 1,
+            "status": "reset",
+            "program_id": program_id,
+            "narrative_template": directives,
+            "narrative_template_source": "base",
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -318,6 +425,12 @@ class OperationsService:
             "events": [self._json(asdict(event)) for event in events[-200:]],
         }
 
+    def run_diagnostics(self, params: dict[str, Any]) -> dict[str, Any]:
+        run_id = str(params.get("run_id") or "")
+        if not run_id:
+            raise ValueError("run_id is required")
+        return self._run_diagnostics(run_id)
+
     def memory_search(self, params: dict[str, Any]) -> dict[str, Any]:
         scope = str(params["scope"])
         kind = str(params["kind"]) if params.get("kind") is not None else None
@@ -355,7 +468,7 @@ class OperationsService:
             if self._paused:
                 raise ValueError("global pause blocks content runs")
         params = self._resolve_program_defaults(params)
-        return ProductionContentPipeline(
+        result = ProductionContentPipeline(
             authority=self.authority,
             store=self.store,
             rag=self._rag,
@@ -370,6 +483,10 @@ class OperationsService:
             opportunity_store=self._opportunity_store,
             rate_learner=self._rate_learner,
         ).run(params)
+        if result.get("run_id"):
+            result = dict(result)
+            result["diagnostics"] = self._run_diagnostics(str(result["run_id"]))
+        return result
 
     @staticmethod
     def _resolve_program_defaults(params: dict[str, Any]) -> dict[str, Any]:
@@ -525,6 +642,7 @@ class OperationsService:
                     "concept_selection": 25,
                     "causal_blueprint": 40,
                     "script_assembly": 55,
+                    "narration": 65,
                     "originality": 70,
                     "independent_critique": 85,
                     "guardian": 100,
@@ -674,6 +792,22 @@ class OperationsService:
                 version=1,
             )
         )
+        template_path = self.resource_root / "knowledge" / "narrative" / "program-story-templates.md"
+        if template_path.exists():
+            index.upsert(
+                IngestDocument(
+                    document_id="program_story_templates_v1",
+                    title="Plantillas narrativas por programa",
+                    content=template_path.read_text(encoding="utf-8"),
+                    rights_mode="owned_original",
+                    language="es",
+                    scope="narrative",
+                    valid_from=0,
+                    valid_until=None,
+                    confidence=0.96,
+                    version=1,
+                )
+            )
         return index
 
     @staticmethod
@@ -726,6 +860,140 @@ class OperationsService:
             },
             "budget_status": {"remaining_usd": 5.0, "maximum_usd": 5.0},
         }
+
+    def _run_diagnostics(self, run_id: str) -> dict[str, Any]:
+        story_id = run_id.split(":", 1)[1] if ":" in run_id else run_id
+        content_run_id = f"content:{story_id}"
+        story_run_id = f"story:{story_id}"
+        workflow = []
+        for candidate in (content_run_id, story_run_id):
+            try:
+                workflow.extend(self.store.replay(candidate))
+            except Exception:
+                continue
+        tools = [
+            event
+            for candidate in (content_run_id, story_run_id)
+            for event in self.store.list_tool_traces(candidate)
+            if event.status != "started"
+        ]
+        quality_failure = next(
+            (event.payload for event in reversed(workflow) if event.kind == "story.quality_failed"),
+            None,
+        )
+        phases = self._diagnostic_phases(workflow, quality_failure)
+        agent_logs = [
+            {
+                "agent_id": str(event.payload.get("agent_id", "")),
+                "action": str(event.payload.get("action", "")),
+                "detail": str(event.payload.get("detail", "")),
+                "payload": dict(event.payload.get("payload", {})),
+            }
+            for event in workflow
+            if event.kind == "agent.log"
+        ]
+        tool_events = [
+            {
+                "agent_id": event.agent_id,
+                "tool_id": event.tool_id,
+                "status": event.status,
+                "summary": event.result_summary,
+                "duration_ms": event.duration_ms,
+                "evidence_refs": list(event.evidence_refs),
+            }
+            for event in tools[-24:]
+        ]
+        return {
+            "schema_version": 1,
+            "run_id": run_id,
+            "content_run_id": content_run_id,
+            "story_run_id": story_run_id,
+            "quality_failure": quality_failure,
+            "phases": phases,
+            "agent_logs": agent_logs[-80:],
+            "tool_events": tool_events,
+        }
+
+    @staticmethod
+    def _diagnostic_phases(events: list[Any], quality_failure: dict[str, Any] | None) -> list[dict[str, Any]]:
+        phase_defs = [
+            ("investigacion", "Investigación"),
+            ("concepto", "Concepto"),
+            ("guion", "Guion"),
+            ("critica", "Crítica"),
+            ("narracion", "Narración"),
+            ("produccion", "Producción"),
+            ("guardando", "Guardando"),
+        ]
+        phases = {
+            key: {"key": key, "label": label, "status": "pending", "detail": "", "events": []}
+            for key, label in phase_defs
+        }
+
+        def mark(key: str, status: str, detail: str) -> None:
+            phase = phases[key]
+            phase["status"] = status
+            phase["detail"] = detail
+            phase["events"].append(detail)
+
+        for event in events:
+            payload = event.payload
+            if event.kind == "content.reddit_fallback_rss":
+                count = int(payload.get("signal_count", 0))
+                mark("investigacion", "completed", f"RSS público usado; {count} señal(es) recuperadas.")
+            elif event.kind == "content.completed":
+                video_status = str(payload.get("video_status", "not_configured"))
+                mark("guardando", "completed", "Episodio guardado en la biblioteca local.")
+                if video_status == "not_configured":
+                    mark("produccion", "skipped", "Video no configurado para este stack local.")
+                else:
+                    mark("produccion", "completed", f"Video finalizado con estado {video_status}.")
+            elif event.kind == "content.video_progress":
+                detail = str(payload.get("detail") or "Producción visual en curso.")
+                stage = str(payload.get("stage") or "")
+                current = payload.get("current")
+                total = payload.get("total")
+                if current is not None and total is not None:
+                    detail = f"{detail} ({current}/{total})"
+                status = "completed" if stage == "completed" else "running"
+                mark("produccion", status, detail)
+            elif event.kind == "content.video_failed":
+                mark("produccion", "failed", f"Falló video: {payload.get('error', 'error desconocido')}.")
+            elif event.kind == "story.node":
+                node = str(payload.get("node", ""))
+                detail = payload.get("detail")
+                status = str(payload.get("status", "running"))
+                if node == "concept_selection":
+                    mark("concepto", "completed" if status == "running" else status, f"Concepto seleccionado: {detail}.")
+                elif node == "causal_blueprint":
+                    mark("guion", "running", f"Mapa causal armado con {detail} beats.")
+                elif node == "script_assembly":
+                    mark("guion", "completed", f"Guion ensamblado: {detail} palabras.")
+                elif node == "originality":
+                    mark("critica", "running", f"Originalidad: {detail}.")
+                elif node == "independent_critique":
+                    label = str(detail).replace("_", " ")
+                    mark("critica", "running", f"Crítica/revalidación: {label}.")
+                elif node == "narration":
+                    mark("narracion", "running", "Midiendo voz y duración real del guion.")
+                elif node == "guardian" and status in {"blocked", "failed"}:
+                    failed_key = "critica" if detail == "QUALITY_FAILED" else "guardando"
+                    mark(failed_key, "failed", f"Bloqueado por {detail}.")
+
+        if quality_failure:
+            dimensions = ", ".join(str(item) for item in quality_failure.get("blocking_dimensions", ())) or "sin detalle"
+            total = quality_failure.get("quality_total", "n/d")
+            revision_count = quality_failure.get("revision_count", 0)
+            mark(
+                "critica",
+                "failed",
+                f"Calidad {total}/110 tras {revision_count} revisiones; fallan: {dimensions}.",
+            )
+            if phases["narracion"]["status"] == "running":
+                phases["narracion"]["status"] = "completed"
+                phases["narracion"]["detail"] = "Voz/duración medidas; el bloqueo real fue Crítica."
+
+        return [phases[key] for key, _ in phase_defs]
 
     def _chat_timeline(self, _: dict[str, Any]) -> dict[str, Any]:
         with self._lock:

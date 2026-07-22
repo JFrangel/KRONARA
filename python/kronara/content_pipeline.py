@@ -142,7 +142,7 @@ class ProductionContentPipeline:
         artifact_root: Path,
         graph: "KronaraGraph | None" = None,
         voice_provider: "object | None" = None,
-        voice_id: str = "es-BO-SofiaNeural",
+        voice_id: str = "es-CO-GonzaloNeural",
         image_provider: "object | None" = None,
         renderer: "object | None" = None,
         visual_style_registry: "object | None" = None,
@@ -179,9 +179,11 @@ class ProductionContentPipeline:
         # scheduled program firing repeatedly doesn't re-hit Reddit's live
         # RSS endpoint (and its per-IP rate limit) on every single run.
         self._opportunity_store = opportunity_store
+        self._leased_opportunity_id: str | None = None
         # Loaded once: knowledge/reddit-sources/*.md classify each subreddit as
         # entertainment vs. real_experience_serious (see reddit_source_map.py).
         self._source_map = load_source_map()
+        self._source_context_by_source_id: dict[str, str] = {}
 
     def run(self, params: dict[str, Any]) -> dict[str, Any]:
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
@@ -192,6 +194,7 @@ class ProductionContentPipeline:
             run_id=run_id,
         )
         subreddits = [str(item) for item in params.get("subreddits", ())]
+        self._source_context_by_source_id = {}
         try:
             reddit_page = traced.invoke(
                 "reddit.list_signals",
@@ -212,6 +215,13 @@ class ProductionContentPipeline:
                 for item in reddit_page.get("signals", ())
                 if isinstance(item, dict)
             )
+            for item in reddit_page.get("signals", ()):
+                if isinstance(item, dict) and item.get("source_id"):
+                    context = self._clean_source_context(
+                        item.get("selftext") or item.get("body") or item.get("source_text") or ""
+                    )
+                    if context:
+                        self._source_context_by_source_id[str(item["source_id"])] = context
             signal_filters = RedditSignalFilters(
                 min_score=int(params.get("min_score", 20)),
                 min_comments=int(params.get("min_comments", 3)),
@@ -246,6 +256,7 @@ class ProductionContentPipeline:
             )
         filtered = RedditObservatory().filter(signals, signal_filters)
         if not filtered.signals:
+            self._release_leased_opportunity()
             raise ValueError("no Reddit signal passed the governed filters")
         selected = max(
             filtered.signals,
@@ -254,6 +265,21 @@ class ProductionContentPipeline:
                 item.score,
                 item.source_id,
             ),
+        )
+        selected_context = self._source_context_by_source_id.get(selected.source_id, "")
+        self._agent_log(
+            run_id,
+            "opportunity_intelligence",
+            "signal_selected",
+            f"Seleccionó señal de {self._subreddit_of(selected) or 'Reddit'} tras filtrar {filtered.observed_count}.",
+            {
+                "observed_count": filtered.observed_count,
+                "accepted_count": len(filtered.signals),
+                "rejected_by_reason": filtered.rejected_by_reason,
+                "selected_source_uri": selected.source_uri,
+                "theme_hint": selected.theme_hint,
+                "source_context_words": len(selected_context.split()),
+            },
         )
         packet = self.rag.retrieve(
             RetrievalQueryV3(
@@ -281,6 +307,7 @@ class ProductionContentPipeline:
                     "velocity": selected.velocity,
                     "saturation": selected.saturation,
                 },
+                "source_context": selected_context,
                 "owned_context": [
                     {"content": item.content, "citation": item.citation_uri}
                     for item in packet.results
@@ -298,6 +325,18 @@ class ProductionContentPipeline:
                 "additionalProperties": False,
             },
             max_tokens=1024,
+        )
+        self._agent_log(
+            run_id,
+            "editorial_executive",
+            "brief_created",
+            f"Ordenó historia original: {editorial.get('title', 'sin título')}.",
+            {
+                "title": editorial.get("title"),
+                "premise": editorial.get("premise"),
+                "theme": editorial.get("theme"),
+                "source_sensitivity": sensitivity_for(self._subreddit_of(selected), self._source_map),
+            },
         )
         citations = tuple(item.citation_uri for item in packet.results)
         evidence = tuple(
@@ -330,7 +369,7 @@ class ProductionContentPipeline:
             rights_mode="owned_original",
             source_uri=f"kronara://artifacts/{story_id}",
             evidence_refs=evidence,
-            reference_texts=(selected.theme_hint,),
+            reference_texts=tuple(text for text in (selected.theme_hint, selected_context) if text),
             series_id=str(series_id) if series_id else None,
             part_number=part_number,
             series_context=series_context,
@@ -345,6 +384,7 @@ class ProductionContentPipeline:
             duration_measurer=self._duration_measurer,
         ).run(brief)
         if result.status != "completed" or result.script is None:
+            self._release_leased_opportunity()
             return {
                 "schema_version": 1,
                 "run_id": run_id,
@@ -393,6 +433,10 @@ class ProductionContentPipeline:
                 "video_scene_count": video.get("scene_count") if video else None,
                 "video_shot_count": video.get("shot_count") if video else None,
                 "video_source_kind_counts": video.get("source_kind_counts", {}) if video else {},
+                "music_path": video.get("music_path", "") if video else "",
+                "sfx_cue_tags": video.get("sfx_cue_tags", []) if video else [],
+                "sfx_resolved_paths": video.get("sfx_resolved_paths", {}) if video else {},
+                "sfx_missing_tags": video.get("sfx_missing_tags", []) if video else [],
             },
         )
         self.store.append_event(
@@ -404,6 +448,18 @@ class ProductionContentPipeline:
                 "reddit_receipt_id": receipt.get("receipt_id"),
                 "rag_citation_count": len(citations),
                 "video_status": video["status"] if video else "not_configured",
+            },
+        )
+        self._agent_log(
+            run_id,
+            "video_composer",
+            "episode_saved",
+            "Guardó el episodio, metadatos, portada y estado de video en la biblioteca local.",
+            {
+                "story_id": story_id,
+                "video_status": video["status"] if video else "not_configured",
+                "cover_image_path": video.get("cover_image_path", "") if video else "",
+                "video_path": video.get("output_path", "") if video else "",
             },
         )
         if canon_builder is not None and series_id:
@@ -443,6 +499,33 @@ class ProductionContentPipeline:
             },
         }
 
+    def _release_leased_opportunity(self) -> None:
+        if self._opportunity_store is None or not self._leased_opportunity_id:
+            return
+        release = getattr(self._opportunity_store, "release", None)
+        if release is not None:
+            release(self._leased_opportunity_id)
+        self._leased_opportunity_id = None
+
+    def _agent_log(
+        self,
+        run_id: str,
+        agent_id: str,
+        action: str,
+        detail: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self.store.append_event(
+            run_id,
+            "agent.log",
+            {
+                "agent_id": agent_id,
+                "action": action,
+                "detail": detail,
+                "payload": payload,
+            },
+        )
+
     def _rss_fallback_signals(
         self, subreddits: list[str], params: dict[str, Any]
     ) -> tuple[dict[str, Any], int, tuple[ObservableRedditSignal, ...]]:
@@ -468,10 +551,14 @@ class ProductionContentPipeline:
                 self._harvest_opportunities(subreddits, int(params.get("limit", 25)), now)
                 cached = self._opportunity_store.take_next_for_subreddits(subreddits, now)
             if cached is not None:
+                self._leased_opportunity_id = getattr(cached, "opportunity_id", None)
                 signal = self._signal_from_theme(
                     source_uri=cached.link, theme_hint=cached.theme_hint,
                     age_hours=max(0.25, (now - cached.harvested_at) / 3600),
                 )
+                context = self._clean_source_context(getattr(cached, "body", ""))
+                if context:
+                    self._source_context_by_source_id[signal.source_id] = context
                 receipt = {
                     "receipt_id": f"cache_{now}", "query_hash": "opportunity_cache",
                     "contract_reference": "no_credentials_public_rss", "observed_at": now, "count": 1,
@@ -482,13 +569,17 @@ class ProductionContentPipeline:
         # ran and still found nothing new for these subreddits -- fall back
         # to building signals directly from a fresh, uncached live fetch.
         posts = self._harvest_opportunities(subreddits, int(params.get("limit", 25)), now)
-        signals = tuple(
-            self._signal_from_theme(
+        built_signals = []
+        for post in posts:
+            signal = self._signal_from_theme(
                 source_uri=post.link, theme_hint=post.title,
                 age_hours=self._rss_post_age_hours(post, now),
             )
-            for post in posts
-        )
+            context = self._clean_source_context(getattr(post, "body", ""))
+            if context:
+                self._source_context_by_source_id[signal.source_id] = context
+            built_signals.append(signal)
+        signals = tuple(built_signals)
         receipt = {
             "receipt_id": f"rss_{now}",
             "query_hash": "rss",
@@ -541,6 +632,12 @@ class ProductionContentPipeline:
             rights_mode="reference_only",
         )
 
+    @staticmethod
+    def _clean_source_context(value: Any, *, max_chars: int = 8000) -> str:
+        text = re.sub(r"https?://\S+", " ", str(value or ""))
+        text = re.sub(r"<[^>]+>", " ", text)
+        return " ".join(text.split())[:max_chars]
+
     def _produce_video(
         self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str
     ) -> dict[str, Any] | None:
@@ -579,6 +676,11 @@ class ProductionContentPipeline:
                 visual_style=visual_style,
                 library=self._asset_library,
                 cover_text=cover_text,
+                progress_callback=lambda payload: self.store.append_event(
+                    run_id,
+                    "content.video_progress",
+                    {"story_id": story_id, **payload},
+                ),
             )
         except Exception as error:
             self.store.append_event(
@@ -595,6 +697,10 @@ class ProductionContentPipeline:
             "scene_count": production.scene_count,
             "shot_count": production.shot_count,
             "source_kind_counts": production.source_kind_counts,
+            "music_path": production.music_path,
+            "sfx_cue_tags": list(production.sfx_cue_tags),
+            "sfx_resolved_paths": production.sfx_resolved_paths or {},
+            "sfx_missing_tags": list(production.sfx_missing_tags),
         }
 
     def _trace_retrieval(self, run_id: str, query: str, packet: Any) -> None:

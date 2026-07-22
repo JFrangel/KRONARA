@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
+from kronara.operations_contracts import ToolTraceEvent
 from kronara.operations_service import OperationsService
 from kronara.rpc import JsonRpcServer
 
@@ -96,6 +98,34 @@ def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_
     assert viernes["weekday"] == "viernes"
     assert viernes["visual_style_id"] == "viernes-paranormal"
     assert "youtube" in viernes["platforms"]
+    assert viernes["narrative_template"]
+    assert viernes["narrative_template_source"] == "base"
+    service.close()
+
+
+def test_program_template_can_be_saved_and_restored_from_local_ui(tmp_path):
+    server, service = _server(tmp_path)
+
+    saved = server.handle(_request("programs.template.save", {
+        "program_id": "viernes-paranormal",
+        "directives": [
+            "Terror paranormal claro.",
+            "Entidad visible antes del cierre.",
+            "Residuo final inquietante.",
+        ],
+    }))
+
+    assert saved["result"]["status"] == "saved"
+    response = server.handle(_request("programs.list", {}))
+    viernes = next(p for p in response["result"]["programs"] if p["program_id"] == "viernes-paranormal")
+    assert viernes["narrative_template_source"] == "manual"
+    assert viernes["narrative_template"][1] == "Entidad visible antes del cierre."
+
+    reset = server.handle(_request("programs.template.reset", {"program_id": "viernes-paranormal"}))
+    assert reset["result"]["status"] == "reset"
+    response = server.handle(_request("programs.list", {}))
+    viernes = next(p for p in response["result"]["programs"] if p["program_id"] == "viernes-paranormal")
+    assert viernes["narrative_template_source"] == "base"
     service.close()
 
 
@@ -130,7 +160,15 @@ def test_episodes_get_returns_the_saved_script_text(tmp_path, tmp_path_factory):
     service.store.save_owned_story_artifact(
         story_id="ep_script", artifact_uri="kronara://sha256/s", path=str(script_path), sha256="s",
         created_at=100, program_id="viernes-paranormal",
-        metadata={"title": "La casa vieja", "duration_seconds": 95.0, "generator_family": "groq"},
+        metadata={
+            "title": "La casa vieja",
+            "duration_seconds": 95.0,
+            "generator_family": "groq",
+            "music_path": "/runtime/music.wav",
+            "sfx_cue_tags": ["footsteps", "door_creak"],
+            "sfx_resolved_paths": {"footsteps": "/runtime/footsteps.wav"},
+            "sfx_missing_tags": ["door_creak"],
+        },
     )
 
     response = server.handle(_request("episodes.get", {"story_id": "ep_script"}))
@@ -139,6 +177,10 @@ def test_episodes_get_returns_the_saved_script_text(tmp_path, tmp_path_factory):
     assert response["result"]["title"] == "La casa vieja"
     assert response["result"]["program_id"] == "viernes-paranormal"
     assert response["result"]["generator_family"] == "groq"
+    assert response["result"]["music_path"] == "/runtime/music.wav"
+    assert response["result"]["sfx_cue_tags"] == ["footsteps", "door_creak"]
+    assert response["result"]["sfx_resolved_paths"] == {"footsteps": "/runtime/footsteps.wav"}
+    assert response["result"]["sfx_missing_tags"] == ["door_creak"]
     service.close()
 
 
@@ -148,6 +190,86 @@ def test_episodes_get_rejects_an_unknown_story_id(tmp_path):
     response = server.handle(_request("episodes.get", {"story_id": "does-not-exist"}))
 
     assert response["error"]["code"] == -32602
+    service.close()
+
+
+def test_episodes_delete_removes_record_and_runtime_files(tmp_path):
+    server, service = _server(tmp_path)
+    runtime = tmp_path / "runtime"
+    script_path = runtime / "artifacts" / "script.txt"
+    video_dir = runtime / "artifacts" / "video" / "ep_delete"
+    video_path = video_dir / "ep_delete.mp4"
+    cover_path = runtime / "images" / "ep_delete.png"
+    for path in (script_path, video_path, cover_path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"owned episode file")
+    service.store.save_owned_story_artifact(
+        story_id="ep_delete",
+        artifact_uri="kronara://sha256/delete",
+        path=str(script_path),
+        sha256="delete",
+        created_at=100,
+        metadata={"title": "Borrar", "video_path": str(video_path), "cover_image_path": str(cover_path)},
+    )
+
+    response = server.handle(_request("episodes.delete", {"story_id": "ep_delete"}))
+
+    assert response["result"]["status"] == "deleted"
+    assert not service.store.list_owned_story_artifacts(limit=10)
+    assert not script_path.exists()
+    assert not video_path.exists()
+    assert not video_dir.exists()
+    assert not cover_path.exists()
+    service.close()
+
+
+def test_run_diagnostics_exposes_quality_blocker_and_real_failed_phase(tmp_path):
+    server, service = _server(tmp_path)
+    story_id = "owned_diag_quality"
+    story_run_id = f"story:{story_id}"
+    content_run_id = f"content:{story_id}"
+    service.store.append_event(content_run_id, "content.reddit_fallback_rss", {"signal_count": 1})
+    service.store.append_event(story_run_id, "story.node", {"node": "concept_selection", "detail": "concept_1", "status": "running"})
+    service.store.append_event(story_run_id, "story.node", {"node": "script_assembly", "detail": 247, "status": "running"})
+    service.store.append_event(story_run_id, "story.node", {"node": "narration", "status": "running"})
+    service.store.append_event(
+        story_run_id,
+        "story.quality_failed",
+        {
+            "quality_total": 74.0,
+            "revision_count": 6,
+            "blocking_dimensions": ["agency", "retention", "payoff"],
+            "issues": ["La protagonista observa, pero no decide."],
+            "critique_passed": False,
+        },
+    )
+    service.store.append_event(story_run_id, "story.node", {"node": "guardian", "detail": "QUALITY_FAILED", "status": "blocked"})
+    started = ToolTraceEvent.started(
+        event_id="trace_diag_1",
+        run_id=story_run_id,
+        agent_id="story.critic",
+        tool_id="model.complete",
+        arguments={"task": "story.critique"},
+        started_at=datetime.now(UTC),
+    )
+    service.store.save_tool_trace(
+        started.finish(
+            status="completed",
+            finished_at=datetime.now(UTC),
+            result_summary="Crítica rechazó por agencia y retención.",
+        )
+    )
+
+    response = server.handle(_request("run.diagnostics", {"run_id": content_run_id}))
+
+    result = response["result"]
+    assert result["quality_failure"]["quality_total"] == 74.0
+    phases = {phase["key"]: phase for phase in result["phases"]}
+    assert phases["critica"]["status"] == "failed"
+    assert "74.0/110" in phases["critica"]["detail"]
+    assert phases["narracion"]["status"] == "completed"
+    assert "bloqueo real fue Crítica" in phases["narracion"]["detail"]
+    assert result["tool_events"][0]["tool_id"] == "model.complete"
     service.close()
 
 
@@ -225,6 +347,21 @@ def test_context_memory_and_rag_methods_return_bounded_structured_results(tmp_pa
     assert len(memories["records"]) <= 5
     assert len(retrieval["results"]) <= 3
     assert retrieval["index_id"].startswith("ragv3:")
+    service.close()
+
+
+def test_static_program_story_templates_are_available_to_rag(tmp_path):
+    server, service = _server(tmp_path)
+
+    retrieval = server.handle(
+        _request(
+            "rag.retrieve_v3",
+            {"query": "plantilla viernes paranormal entidad esquina imagenes consistentes", "limit": 5},
+            5,
+        )
+    )["result"]
+
+    assert "program_story_templates_v1" in {item["document_id"] for item in retrieval["results"]}
     service.close()
 
 

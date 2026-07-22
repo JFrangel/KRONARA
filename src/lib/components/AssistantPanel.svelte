@@ -1,7 +1,7 @@
 <script>
   import Icon from './Icon.svelte';
   import { appendChatResponse, appendUserMessage, createOperationsState } from '../operations-state.js';
-  import { callOperations } from '../tauri-operations.js';
+  import { callOperations } from '../local-operations.js';
 
   let { open = $bindable(false), connection = 'disconnected' } = $props();
 
@@ -56,7 +56,7 @@
     } catch (error) {
       state = {
         ...state,
-        messages: [...state.messages, { role: 'assistant', content: 'No pude aprobar la propuesta; la operación de Rust la rechazó.', citations: [] }],
+        messages: [...state.messages, { role: 'assistant', content: 'No pude aprobar la propuesta; la operación local la rechazó.', citations: [] }],
       };
     } finally {
       approving = false;

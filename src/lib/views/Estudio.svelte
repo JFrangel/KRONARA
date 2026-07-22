@@ -3,7 +3,7 @@
   import Badge from '../components/Badge.svelte';
   import StubView from './StubView.svelte';
   import { applyProgressEvent } from '../operations-state.js';
-  import { assetSrc, callOperations } from '../tauri-operations.js';
+  import { assetSrc, callOperations } from '../local-operations.js';
 
   let { operations = $bindable({}), connection = 'disconnected' } = $props();
 

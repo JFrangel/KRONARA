@@ -123,10 +123,13 @@ tiene un archivo real por escena.
      presenta como salida de IA.
 4. **Subtítulos**: `cues_from_word_boundaries()` sobre los `word_boundaries`
    reales de la voz → archivo `.srt`.
-5. **Música/SFX**: si hay `asset_library` configurado, selecciona pistas por
+5. **Continuidad visual**: la portada premium se usa como referencia para
+   escenas AI cuando el proveedor soporta IP-Adapter; cada prompt también
+   lleva contexto del episodio completo y negativos contra ubicaciones ajenas.
+6. **Música/SFX**: si hay `asset_library` configurado, selecciona pistas por
    mood/programa con *ducking* real bajo la narración; si no, se omite (no
    se fabrica silencio de música).
-6. **Composición + render**: `render.py` (FFmpeg real) compone
+7. **Composición + render**: `render.py` (FFmpeg real) compone
    imágenes+Ken Burns+subtítulos quemados+audio mezclado en un MP4 vertical
    9:16, y corre QC (frames negros, loudness EBU R128, duración).
 
@@ -136,7 +139,8 @@ Se guarda UN artefacto de texto (el guion, direccionado por su hash SHA-256)
 + metadata rica en `owned_story_artifacts` (SQLite, `kronara.db`): título,
 hook, duración, familias de modelo generador/crítico, resultados de QC,
 estado/ruta del video, ruta de portada, LUFS, número de escenas/tomas,
-mezcla de fuentes visuales, issues de QC de video. `episodes.get` lee esto
+mezcla de fuentes visuales, música, SFX detectados/resueltos/faltantes,
+issues de QC de video. `episodes.get` lee esto
 mismo para mostrar el guion completo en la UI.
 
 ## Variables de entorno relevantes a generación

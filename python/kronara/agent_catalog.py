@@ -42,6 +42,7 @@ KNOWN_TOOLS = {
     "training.dataset_card",
     "hook.plan",
     "story.package",
+    "reddit.thread.fetch",
 }
 
 

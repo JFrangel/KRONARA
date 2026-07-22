@@ -3,7 +3,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
-  import { callOperations } from '../tauri-operations.js';
+  import { callOperations } from '../local-operations.js';
   import { CHANNELS } from '../nav.js';
 
   let { operations = {}, onNavigate = () => {} } = $props();
@@ -93,7 +93,7 @@
   </div>
 
   {#if loadError}
-    <p class="text-[13px] text-ink-secondary">No se pudo cargar el rendimiento. Abre Kronara desde la aplicación de escritorio.</p>
+    <p class="text-[13px] text-ink-secondary">No se pudo cargar el rendimiento. Inicia la web local y verifica que Python esté conectado.</p>
   {:else if activeTab === 'rendimiento'}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Card>

@@ -41,6 +41,11 @@ class RenderPreset:
 REEL_9x16 = RenderPreset("reel_9x16", 1080, 1920, 30)
 MASTER_16x9 = RenderPreset("master_16x9", 1920, 1080, 30)
 PRESETS = {preset.name: preset for preset in (REEL_9x16, MASTER_16x9)}
+SUBTITLE_STYLE = (
+    "FontName=Arial,FontSize=10,PrimaryColour=&H00FFFFFF&,"
+    "OutlineColour=&HCC000000&,BorderStyle=1,Outline=2,Shadow=1,"
+    "Alignment=2,MarginV=90,WrapStyle=2"
+)
 
 
 @dataclass(frozen=True)
@@ -168,7 +173,7 @@ def build_render_args(
     ]
     if subtitle_path:
         escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
-        args += ["-vf", f"subtitles='{escaped}'"]
+        args += ["-vf", f"subtitles='{escaped}':force_style='{SUBTITLE_STYLE}'"]
     args += [
         "-map",
         "0:v",
@@ -262,7 +267,9 @@ def build_composition_args(
 
     if subtitle_path:
         escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
-        filter_lines.append(f"[{video_label}]subtitles='{escaped}'[vsub]")
+        filter_lines.append(
+            f"[{video_label}]subtitles='{escaped}':force_style='{SUBTITLE_STYLE}'[vsub]"
+        )
         video_label = "vsub"
 
     if music_input:
