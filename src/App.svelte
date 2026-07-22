@@ -8,6 +8,7 @@
   import Calendario from './lib/views/Calendario.svelte';
   import Estudio from './lib/views/Estudio.svelte';
   import Analiticas from './lib/views/Analiticas.svelte';
+  import Biblioteca from './lib/views/Biblioteca.svelte';
   import Configuracion from './lib/views/Configuracion.svelte';
   import StubView from './lib/views/StubView.svelte';
   import { createControlState } from './lib/control-state.js';
@@ -116,6 +117,8 @@
         <Estudio bind:operations connection={operations.connection} />
       {:else if activeView === 'analiticas'}
         <Analiticas {operations} onNavigate={(id) => (activeView = id)} />
+      {:else if activeView === 'biblioteca'}
+        <Biblioteca {operations} />
       {:else if activeView === 'configuracion'}
         <Configuracion />
       {:else}
