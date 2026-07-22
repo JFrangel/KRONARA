@@ -228,12 +228,19 @@ fn spawn_schedule_ticker(handle: tauri::AppHandle) {
         loop {
             if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
                 let bridge = handle.state::<SidecarBridge>();
-                // Best-effort: a failed tick (paused, sidecar still starting,
-                // transient error) just waits for the next interval. It must
-                // never crash this background thread -- that would silently
-                // end the whole autonomous grid for the rest of the process
-                // lifetime with no user-visible signal.
-                let _ = bridge.call("schedule.tick", json!({"now": now.as_secs()}));
+                // Best-effort AND non-blocking (try_call, not call): a
+                // failed tick (paused, sidecar still starting, transient
+                // error, or the sidecar already busy with something else)
+                // just waits for the next interval. It must never crash
+                // this background thread -- that would silently end the
+                // whole autonomous grid for the rest of the process
+                // lifetime with no user-visible signal -- and it must never
+                // be the reason an interactive click hangs. Found via a real
+                // hang: a fresh install's very first tick found all 7
+                // programs "due" and held the sidecar's one request slot
+                // for as long as that took, making even a read-only
+                // programs.list look like the whole app had frozen.
+                let _ = bridge.try_call("schedule.tick", json!({"now": now.as_secs()}));
             }
             std::thread::sleep(SCHEDULE_TICK_INTERVAL);
         }
@@ -246,7 +253,21 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?.join("runtime");
             app.manage(SidecarBridge::new(data_dir)?);
-            spawn_schedule_ticker(app.handle().clone());
+            // Escape hatch for interactive dev/testing sessions: the
+            // autonomous grid is designed to catch up on every missed
+            // program the moment it's overdue (correct for a real deployed
+            // instance that must not silently skip its weekly schedule),
+            // but on a fresh data dir that means finding all 7 programs
+            // "due" at once and running real content.run for each in turn
+            // -- exactly the unattended-multi-generation behavior a manual
+            // testing session doesn't want. try_call (see sidecar_bridge.rs)
+            // stops the ticker from ever blocking an interactive click, but
+            // doesn't stop it from legitimately occupying the sidecar for a
+            // long time once it does start; this lets a dev session opt out
+            // of that entirely.
+            if std::env::var_os("KRONARA_DISABLE_AUTOSCHEDULE").is_none() {
+                spawn_schedule_ticker(app.handle().clone());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

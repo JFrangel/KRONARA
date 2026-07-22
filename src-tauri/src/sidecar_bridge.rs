@@ -24,6 +24,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "programs.list",
     "episodes.list",
     "episodes.get",
+    "episodes.delete",
     "schedule.tick",
     "action.approve",
 ];
@@ -143,6 +144,57 @@ impl SidecarBridge {
             return Err("RPC method is not authorized by Rust".into());
         }
         self.call_inner(method, params)
+    }
+
+    /// Same as `call`, but never blocks waiting for the sidecar: if it's
+    /// already busy with another request, returns "sidecar busy"
+    /// immediately instead of queuing. For the autonomous scheduler only --
+    /// a background tick must never be the thing a real user's click is
+    /// silently stuck waiting behind (found via a real hang: a fresh
+    /// install's very first tick found all 7 programs "due" and held the
+    /// sidecar's only request slot for as long as that took, making even a
+    /// read-only programs.list hang indefinitely). An interactive request
+    /// that arrives while the sidecar is free still takes the lock and
+    /// blocks normally through `call` -- only the background ticker must
+    /// back off instead of contend.
+    pub fn try_call(&self, method: &str, params: Value) -> Result<Value, String> {
+        if !is_allowed_method(method) {
+            return Err("RPC method is not authorized by Rust".into());
+        }
+        if !params.is_object() {
+            return Err("RPC params must be an object".into());
+        }
+        let mut guard = match self.process.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::WouldBlock) => return Err("sidecar busy".into()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                return Err("sidecar bridge is unavailable".into())
+            }
+        };
+        let mut authority = match self.authority.try_lock() {
+            Ok(authority) => authority,
+            Err(std::sync::TryLockError::WouldBlock) => return Err("sidecar busy".into()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                return Err("authority tools are unavailable".into())
+            }
+        };
+        if guard.is_none() {
+            *guard = Some(SidecarProcess::spawn(
+                &self.token,
+                &self.data_dir,
+                &self.embedding_alias,
+                self.reranker_alias.as_deref(),
+                authority.as_mut(),
+            )?);
+        }
+        let result = guard
+            .as_mut()
+            .expect("sidecar process initialized")
+            .request(method, params, authority.as_mut());
+        if result.is_err() {
+            guard.take();
+        }
+        result
     }
 
     pub fn sync_control(&self, paused: bool) -> Result<(), String> {
@@ -371,7 +423,7 @@ pub fn is_allowed_method(method: &str) -> bool {
 pub fn is_effectful_method(method: &str) -> bool {
     matches!(
         method,
-        "story.test" | "content.run" | "performance.learn" | "schedule.tick" | "action.approve"
+        "story.test" | "content.run" | "performance.learn" | "schedule.tick" | "action.approve" | "episodes.delete"
     )
 }
 
@@ -405,7 +457,31 @@ fn locate_sidecar() -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_allowed_method, is_effectful_method};
+    use super::{is_allowed_method, is_effectful_method, AuthorityToolExecutor, SidecarBridge};
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    struct UnusedExecutor;
+    impl AuthorityToolExecutor for UnusedExecutor {
+        fn invoke(&mut self, _tool_id: &str, _arguments: serde_json::Value) -> Result<serde_json::Value, String> {
+            unreachable!("try_call must return before ever reaching the executor when busy")
+        }
+    }
+
+    #[test]
+    fn try_call_returns_busy_immediately_instead_of_blocking_on_a_held_lock() {
+        // Reproduces the real hang found in the app: the autonomous
+        // scheduler's tick must never sit waiting for the sidecar's single
+        // request slot -- it must back off the instant something else
+        // already holds it, so an interactive click is never stuck queued
+        // behind a background job with no idea when (or if) it'll return.
+        let bridge = SidecarBridge::with_executor(PathBuf::from("."), Box::new(UnusedExecutor));
+        let _held = bridge.process.lock().expect("test holds the lock cleanly");
+
+        let result = bridge.try_call("schedule.tick", json!({"now": 0}));
+
+        assert_eq!(result, Err("sidecar busy".to_string()));
+    }
 
     #[test]
     fn bridge_exposes_only_bounded_cognitive_methods() {
@@ -416,6 +492,8 @@ mod tests {
         assert!(is_allowed_method("schedule.tick"));
         assert!(is_allowed_method("action.approve"));
         assert!(is_allowed_method("episodes.get"));
+        assert!(is_allowed_method("episodes.delete"));
+        assert!(is_effectful_method("episodes.delete"));
         assert!(!is_allowed_method("shell.execute"));
         assert!(!is_allowed_method("publication.publish"));
     }
