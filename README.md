@@ -48,6 +48,42 @@ python -m pip install edge-tts
 npm.cmd run dev:web
 ```
 
+### Primer arranque paso a paso
+
+1. **Clona el repo** e instala como arriba. Requisitos duros: Node 20+, Python 3.12+, ffmpeg/ffprobe en PATH.
+2. **Copia `.env.example` a `.env`** y llena al menos una clave de modelo (OpenRouter, Groq o Qwen). Sin ninguna, la generación no puede pasar de la etapa de guion.
+3. **(Opcional pero muy recomendado)** Agrega credenciales de proveedores de imagen gratuitos:
+   - `KRONARA_POLLINATION_API_KEY` (o el spelling original `KNORA_POLLINATION_API_KEY`) — Pollinations.ai, gratis sin registro, ~5-10s por imagen.
+   - `KRONARA_CLOUDFLARE_ACCOUNT_ID` + `KRONARA_CLOUDFLARE_API_TOKEN` — Cloudflare Workers AI Flux, gratis con cuenta, ~3s por imagen, 10 000 Neurons/día.
+   - Si ambas están presentes el pipeline las usa en cascada (Pollinations → Cloudflare → SDXL local → placeholder). Con ninguna, cae a SDXL local (necesita pesos en `.kronara/models/sdxl-base-1.0/` y ~7min por imagen en tarjeta de 8GB VRAM).
+4. **Arranca la web local**: `npm.cmd run dev:web` (o `npm.cmd run dev`). El comando `predev` mata primero cualquier sidecar huérfano de sesiones anteriores. Vite spawn el sidecar Python automáticamente en `stdin/stdout`.
+5. **Abre `http://localhost:5173`** en tu navegador (Chrome/Edge). Ya no se necesita ventana nativa Tauri — todo funciona en el navegador.
+6. **Crea el primer episodio**: Programas → clic en cualquier programa (ej. Viernes Paranormal) → **Crear episodio**. Con `wait:false` el backend devuelve enseguida y el frontend polea `run.progress` cada 3s, así que ves el progreso real (no el timer falso viejo).
+7. **Duración esperada** con la cascada de imágenes hosted: 5-10 minutos para un episodio típico (6 escenas, 18 tomas). Sin hosted providers y solo SDXL local: 20-60 minutos.
+8. **Video final**: aparece en `.kronara/runtime/artifacts/video/<story_id>/<story_id>.mp4` y se muestra en Programas → detalle del episodio → **Ver en Estudio** (reproductor embebido).
+9. **Si algo falla**: revisa el log en `.kronara/runtime/sidecar-stderr.log` y usa el botón **Abandonar** en Programas para limpiar el estado local antes de reintentar. Con la cascada activa, casi cualquier problema de red en un proveedor cae automáticamente al siguiente.
+
+### Providers de imagen (para probar por separado)
+
+```powershell
+# Forzar solo Pollinations
+$env:KRONARA_IMAGE_PROVIDER = "pollinations"; npm.cmd run dev:web
+
+# Forzar solo Cloudflare Workers AI
+$env:KRONARA_IMAGE_PROVIDER = "cloudflare"; npm.cmd run dev:web
+
+# Forzar solo SDXL local (lento)
+$env:KRONARA_IMAGE_PROVIDER = "sdxl"; npm.cmd run dev:web
+
+# Placeholder ilustrado sin GPU/red (rápido para debugging)
+$env:KRONARA_IMAGE_PROVIDER = "placeholder"; npm.cmd run dev:web
+
+# Modo por defecto: cascada (todos los que tengan creds, en orden)
+$env:KRONARA_IMAGE_PROVIDER = "cascade"; npm.cmd run dev:web
+```
+
+Ver [`docs/PROCESO_GENERACION_CONTENIDO.md`](docs/PROCESO_GENERACION_CONTENIDO.md) para el detalle de las 8 etapas del pipeline, y [`docs/BUGS_CONOCIDOS.md`](docs/BUGS_CONOCIDOS.md) para hallazgos abiertos.
+
 Abre `http://127.0.0.1:5173/`. Esa es la ruta recomendada: la interfaz web llama al sidecar Python por `__kronara_rpc` y sirve medios locales por `__kronara_asset`. No hay datos falsos; si Python o las claves no responden, la app muestra el fallo.
 
 En Programas > Configuración cada programa expone su plantilla narrativa de reglas. Si se guarda manualmente, queda en el runtime local y las siguientes generaciones usan esa versión para aprobar o bloquear. En Programas > Recursos se ven y editan las historias/plantillas RAG del programa; puedes pegar historias completas, guardarlas manualmente y el sidecar las reinyecta en `program_story_templates_v1` para las próximas generaciones. La producción visual usa la portada premium como referencia de continuidad para las imágenes de escena, además del contexto completo del episodio. En Episodios > Recursos se muestran visuales, música y SFX resueltos o faltantes.
