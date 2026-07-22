@@ -122,6 +122,7 @@ class OperationsService:
             "operations.control_snapshot": self.control_snapshot,
             "programs.list": self.programs_list,
             "episodes.list": self.episodes_list,
+            "episodes.get": self.episodes_get,
             "schedule.tick": self.schedule_tick,
             "action.approve": self.action_approve,
         }
@@ -192,6 +193,42 @@ class OperationsService:
                 }
                 for episode in episodes
             ],
+        }
+
+    def episodes_get(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Full detail for ONE episode, including its script text -- kept
+        out of episodes_list() (which can return up to 200 rows) so
+        browsing the list never pulls every episode's full script over the
+        wire. KeyError (unknown story_id) surfaces as a normal RPC
+        "invalid params" error, same as every other not-found case in this
+        service."""
+        story_id = str(params["story_id"])
+        artifact = self.store.load_owned_story_artifact(story_id)
+        script = Path(artifact["path"]).read_text(encoding="utf-8")
+        metadata = artifact["metadata"]
+        return {
+            "schema_version": 1,
+            "story_id": story_id,
+            "program_id": artifact["program_id"] or None,
+            "created_at": artifact["created_at"],
+            "title": metadata.get("title", story_id),
+            "hook": metadata.get("hook", ""),
+            "script": script,
+            "duration_seconds": metadata.get("duration_seconds"),
+            "generator_family": metadata.get("generator_family"),
+            "critic_family": metadata.get("critic_family"),
+            "narrative_passed": metadata.get("narrative_passed"),
+            "originality_passed": metadata.get("originality_passed"),
+            "evidence_refs": list(metadata.get("evidence_refs", [])),
+            "video_status": metadata.get("video_status"),
+            "video_path": metadata.get("video_path") or None,
+            "cover_image_path": metadata.get("cover_image_path") or None,
+            "video_qc_passed": metadata.get("video_qc_passed"),
+            "video_qc_issues": list(metadata.get("video_qc_issues", [])),
+            "video_integrated_lufs": metadata.get("video_integrated_lufs"),
+            "video_scene_count": metadata.get("video_scene_count"),
+            "video_shot_count": metadata.get("video_shot_count"),
+            "video_source_kind_counts": dict(metadata.get("video_source_kind_counts", {})),
         }
 
     def programs_list(self, _: dict[str, Any]) -> dict[str, Any]:

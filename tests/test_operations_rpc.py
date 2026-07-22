@@ -122,6 +122,35 @@ def test_episodes_list_returns_most_recent_first(tmp_path):
     service.close()
 
 
+def test_episodes_get_returns_the_saved_script_text(tmp_path, tmp_path_factory):
+    server, service = _server(tmp_path)
+    artifact_dir = tmp_path_factory.mktemp("artifact")
+    script_path = artifact_dir / "script.txt"
+    script_path.write_text("Escena 1: la casa vieja crujía en la noche.", encoding="utf-8")
+    service.store.save_owned_story_artifact(
+        story_id="ep_script", artifact_uri="kronara://sha256/s", path=str(script_path), sha256="s",
+        created_at=100, program_id="viernes-paranormal",
+        metadata={"title": "La casa vieja", "duration_seconds": 95.0, "generator_family": "groq"},
+    )
+
+    response = server.handle(_request("episodes.get", {"story_id": "ep_script"}))
+
+    assert response["result"]["script"] == "Escena 1: la casa vieja crujía en la noche."
+    assert response["result"]["title"] == "La casa vieja"
+    assert response["result"]["program_id"] == "viernes-paranormal"
+    assert response["result"]["generator_family"] == "groq"
+    service.close()
+
+
+def test_episodes_get_rejects_an_unknown_story_id(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("episodes.get", {"story_id": "does-not-exist"}))
+
+    assert response["error"]["code"] == -32602
+    service.close()
+
+
 def test_episodes_list_respects_limit_param(tmp_path):
     server, service = _server(tmp_path)
     for i in range(3):

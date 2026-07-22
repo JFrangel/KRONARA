@@ -374,6 +374,7 @@ class ProductionContentPipeline:
             program_id=brief.program_id or "",
             metadata={
                 "title": result.packaging.facebook_reels_title if result.packaging else brief.title,
+                "hook": result.retention.hook if result.retention else "",
                 "rights_mode": "owned_original",
                 "evidence_refs": list(evidence),
                 "duration_seconds": result.script.estimated_seconds,
@@ -387,6 +388,11 @@ class ProductionContentPipeline:
                 "video_path": video.get("output_path", "") if video else "",
                 "cover_image_path": video.get("cover_image_path", "") if video else "",
                 "video_qc_passed": video.get("qc_passed") if video else None,
+                "video_qc_issues": video.get("qc_issues", []) if video else [],
+                "video_integrated_lufs": video.get("integrated_lufs") if video else None,
+                "video_scene_count": video.get("scene_count") if video else None,
+                "video_shot_count": video.get("shot_count") if video else None,
+                "video_source_kind_counts": video.get("source_kind_counts", {}) if video else {},
             },
         )
         self.store.append_event(

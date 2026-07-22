@@ -23,6 +23,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "agent.capabilities",
     "programs.list",
     "episodes.list",
+    "episodes.get",
     "schedule.tick",
     "action.approve",
 ];
@@ -414,6 +415,7 @@ mod tests {
         assert!(is_allowed_method("performance.learn"));
         assert!(is_allowed_method("schedule.tick"));
         assert!(is_allowed_method("action.approve"));
+        assert!(is_allowed_method("episodes.get"));
         assert!(!is_allowed_method("shell.execute"));
         assert!(!is_allowed_method("publication.publish"));
     }
