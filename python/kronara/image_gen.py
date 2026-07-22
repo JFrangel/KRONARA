@@ -107,6 +107,145 @@ def find_lightning_lora_dir() -> str:
     return LIGHTNING_LORA_REPO
 
 
+class CloudflareWorkersAiImageProvider:
+    """Free hosted Flux via Cloudflare Workers AI.
+
+    Faster and higher-cuota than Pollinations for the same 100% free tier
+    (10 000 Neurons/day for anonymous accounts, measured ~3s per image on
+    ``@cf/black-forest-labs/flux-1-schnell``). Requires two env vars:
+    ``KRONARA_CLOUDFLARE_ACCOUNT_ID`` and ``KRONARA_CLOUDFLARE_API_TOKEN``
+    -- both come from the Workers AI dashboard.
+
+    Response is a JSON envelope: ``{"result": {"image": "<base64 png>"},
+    "success": true, ...}`` -- we decode the base64 and write it as a PNG
+    next to any other generated frame. Currently only supports 1024x1024
+    output (the model's fixed bucket), so the composition stage's zoompan
+    upscale is what gets us to 1080x1920 for a 9:16 reel.
+
+    Same ImageGenerationProvider protocol as DiffusersImageProvider, so
+    ImageProviderCascade can put it after Pollinations in the failover chain.
+    """
+
+    MODEL = "@cf/black-forest-labs/flux-1-schnell"
+
+    def __init__(
+        self,
+        *,
+        output_dir: str,
+        account_id: str | None = None,
+        api_token: str | None = None,
+    ):
+        self.output_dir = output_dir
+        self.account_id = account_id or os.environ.get("KRONARA_CLOUDFLARE_ACCOUNT_ID")
+        self.api_token = api_token or os.environ.get("KRONARA_CLOUDFLARE_API_TOKEN")
+        if not self.account_id or not self.api_token:
+            raise RuntimeError(
+                "cloudflare workers ai requires KRONARA_CLOUDFLARE_ACCOUNT_ID and "
+                "KRONARA_CLOUDFLARE_API_TOKEN in the environment"
+            )
+
+    def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
+        import base64
+        import json
+        import time
+        import urllib.error
+        import urllib.request
+
+        started = time.monotonic()
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        prompt = request.prompt.strip()
+        if request.negative_prompt.strip():
+            prompt = f"{prompt}. Avoid: {request.negative_prompt.strip()}."
+        # Steps: 4 (schnell default) is a full-quality generation; anything
+        # higher is wasted on Flux-schnell. Keep tier as an override lever
+        # for future models rather than hard-coding it.
+        steps = 4 if request.quality_tier == "fast" else 8
+
+        url = (
+            f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}"
+            f"/ai/run/{self.MODEL}"
+        )
+        payload = {"prompt": prompt, "steps": steps, "seed": request.seed or 1}
+        req = urllib.request.Request(
+            url,
+            method="POST",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "Kronara/0.5",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                body = response.read()
+        except (urllib.error.URLError, TimeoutError) as error:
+            raise RuntimeError(f"cloudflare workers ai request failed: {error}") from error
+        try:
+            envelope = json.loads(body)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"cloudflare workers ai returned non-json: {error}") from error
+        if not envelope.get("success"):
+            raise RuntimeError(
+                f"cloudflare workers ai reported failure: {envelope.get('errors') or envelope}"
+            )
+        image_b64 = envelope.get("result", {}).get("image")
+        if not image_b64:
+            raise RuntimeError("cloudflare workers ai response missing result.image")
+        image_bytes = base64.b64decode(image_b64)
+        if len(image_bytes) < 512:
+            raise RuntimeError(
+                f"cloudflare workers ai returned {len(image_bytes)} bytes (expected a PNG)"
+            )
+        path = os.path.join(self.output_dir, f"{request.cache_key()[:16]}_cf.png")
+        with open(path, "wb") as fp:
+            fp.write(image_bytes)
+        # Flux-1-schnell outputs a fixed 1024x1024; report that, not the
+        # request's aspect ratio, so downstream composition knows to pan/crop
+        # into 9:16 via ffmpeg zoompan (not to trust the src as vertical).
+        return ImageGenerationResult(
+            image_path=path,
+            seed=request.seed or 1,
+            width=1024,
+            height=1024,
+            quality_tier=request.quality_tier,
+            generation_ms=int((time.monotonic() - started) * 1000),
+            degraded=False,
+        )
+
+
+class ImageProviderCascade:
+    """Try providers in order; on any RuntimeError, fall through to the
+    next. First success wins. If every provider fails, re-raises the last
+    error so the composition layer can surface a real diagnostic rather
+    than silently producing a black frame.
+
+    Typical wiring (see sidecar.py): pollinations -> cloudflare -> local
+    SDXL -> placeholder. The cheap fast ones go first so a working
+    generation never has to wait on a slow local GPU."""
+
+    def __init__(self, providers: "list[ImageGenerationProvider]", label: str = ""):
+        if not providers:
+            raise ValueError("cascade requires at least one provider")
+        self.providers = providers
+        self.label = label
+
+    def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
+        last_error: Exception | None = None
+        for provider in self.providers:
+            try:
+                result = provider.generate(request)
+                return result
+            except Exception as error:  # noqa: BLE001 - cascade is best-effort by design
+                last_error = error
+                continue
+        assert last_error is not None
+        raise RuntimeError(
+            f"every image provider in the cascade failed: {last_error}"
+        ) from last_error
+
+
 class PollinationsImageProvider:
     """Free hosted image generation via pollinations.ai.
 

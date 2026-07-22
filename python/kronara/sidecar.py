@@ -110,34 +110,66 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
             from kronara.visual_style import VisualStyleRegistry, default_registry_path
 
             # KRONARA_IMAGE_PROVIDER selects the backend:
-            #   pollinations (default when the token env var is set) -- free
-            #     hosted Flux via pollinations.ai, ~5-10s per image, works
-            #     without SDXL weights or a beefy GPU. Preferred once the
-            #     ~7min/image SDXL slowdown on 8GB VRAM was measured
-            #     (docs/BUGS_CONOCIDOS.md).
-            #   sdxl -- local SDXL/Diffusers (slow on 8GB but full control,
-            #     supports IP-Adapter). Kept for the cover-image premium tier.
+            #   cascade (default when any hosted provider has credentials) --
+            #     tries pollinations -> cloudflare workers ai -> local sdxl
+            #     -> placeholder in order, first success wins. Failover is
+            #     silent (see ImageProviderCascade); only the final total
+            #     failure surfaces to the user. Best for production: fast
+            #     hosted first, expensive slow local only as backup.
+            #   pollinations -- force pollinations.ai only, ~5-10s/image.
+            #   cloudflare -- force Cloudflare Workers AI Flux only, ~3s/image.
+            #     Free tier: 10 000 Neurons/day.
+            #   sdxl -- local SDXL/Diffusers (slow on 8GB VRAM: measured
+            #     ~7min/image, see docs/BUGS_CONOCIDOS.md). Kept for the
+            #     cover-image premium tier where full control matters.
             #   placeholder -- Pillow-drawn stand-in, no network/GPU (fast
             #     iteration for composition/render debugging).
             provider_choice = os.environ.get("KRONARA_IMAGE_PROVIDER", "").lower().strip()
-            has_pollinations_token = bool(
+            has_pollinations = bool(
                 os.environ.get("KRONARA_POLLINATION_API_KEY")
                 or os.environ.get("KNORA_POLLINATION_API_KEY")
             )
+            has_cloudflare = bool(
+                os.environ.get("KRONARA_CLOUDFLARE_ACCOUNT_ID")
+                and os.environ.get("KRONARA_CLOUDFLARE_API_TOKEN")
+            )
             if not provider_choice:
-                provider_choice = "pollinations" if has_pollinations_token else "sdxl"
+                provider_choice = "cascade" if (has_pollinations or has_cloudflare) else "sdxl"
+
+            from kronara.image_gen import (
+                CloudflareWorkersAiImageProvider,
+                DiffusersImageProvider,
+                ImageProviderCascade,
+                PlaceholderImageProvider,
+                PollinationsImageProvider,
+            )
+
+            images_dir = str(data_dir / "images")
             if provider_choice == "placeholder":
-                from kronara.image_gen import PlaceholderImageProvider
-
-                image_provider = PlaceholderImageProvider(output_dir=str(data_dir / "images"))
+                image_provider = PlaceholderImageProvider(output_dir=images_dir)
             elif provider_choice == "pollinations":
-                from kronara.image_gen import PollinationsImageProvider
-
-                image_provider = PollinationsImageProvider(output_dir=str(data_dir / "images"))
+                image_provider = PollinationsImageProvider(output_dir=images_dir)
+            elif provider_choice == "cloudflare":
+                image_provider = CloudflareWorkersAiImageProvider(output_dir=images_dir)
+            elif provider_choice == "sdxl":
+                image_provider = DiffusersImageProvider(output_dir=images_dir)
             else:
-                from kronara.image_gen import DiffusersImageProvider
-
-                image_provider = DiffusersImageProvider(output_dir=str(data_dir / "images"))
+                # cascade: try every provider we have credentials for, in
+                # order of speed. Local SDXL and placeholder are always
+                # eligible as final fallbacks. See ImageProviderCascade for
+                # the failover semantics -- first success wins, all failures
+                # re-raise the last one so the user sees a real error.
+                chain: list = []
+                if has_pollinations:
+                    chain.append(PollinationsImageProvider(output_dir=images_dir))
+                if has_cloudflare:
+                    chain.append(CloudflareWorkersAiImageProvider(output_dir=images_dir))
+                try:
+                    chain.append(DiffusersImageProvider(output_dir=images_dir))
+                except Exception:
+                    pass  # no SDXL weights -- skip that rung
+                chain.append(PlaceholderImageProvider(output_dir=images_dir))
+                image_provider = ImageProviderCascade(chain, label=provider_choice)
             visual_style_registry = VisualStyleRegistry.load(default_registry_path())
             asset_library = AssetLibraryStore(data_dir / "asset_library.db").initialize()
         except Exception:

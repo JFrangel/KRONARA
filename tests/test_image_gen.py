@@ -3,8 +3,11 @@ import pytest
 from kronara.image_gen import (
     FAST_STEPS,
     PREMIUM_STEPS,
+    CloudflareWorkersAiImageProvider,
     DiffusersImageProvider,
     ImageGenerationRequest,
+    ImageGenerationResult,
+    ImageProviderCascade,
     PlaceholderImageProvider,
     PollinationsImageProvider,
     SDXL_BUCKET_9x16,
@@ -134,6 +137,154 @@ def test_pollinations_provider_writes_response_bytes_and_honors_env_token(monkey
     assert "enhance=true" in captured["url"]  # premium tier
     # header keys are lower-case in urllib.request
     assert captured["headers"].get("Authorization") == "Bearer test-token"
+
+
+# ---- CloudflareWorkersAiImageProvider ------------------------------------
+
+
+def test_cloudflare_provider_decodes_base64_envelope_and_writes_png(monkeypatch, tmp_path):
+    """The Workers AI response is a JSON envelope with a base64-encoded PNG
+    under ``result.image``; the provider must decode it, not save the raw
+    JSON as if it were the image."""
+    import base64
+    import json
+    import urllib.request
+
+    monkeypatch.setenv("KRONARA_CLOUDFLARE_ACCOUNT_ID", "test-account")
+    monkeypatch.setenv("KRONARA_CLOUDFLARE_API_TOKEN", "test-token")
+    fake_png = b"\x89PNG\r\n\x1a\n" + b"1" * 4096
+    envelope = json.dumps(
+        {"result": {"image": base64.b64encode(fake_png).decode("ascii")}, "success": True, "errors": [], "messages": []}
+    ).encode("utf-8")
+    captured = {}
+
+    class FakeResponse:
+        def read(self):
+            return envelope
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["headers"] = dict(request.header_items())
+        captured["data"] = request.data
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    provider = CloudflareWorkersAiImageProvider(output_dir=str(tmp_path))
+    result = provider.generate(ImageGenerationRequest(prompt="hello", seed=7, quality_tier="premium"))
+
+    with open(result.image_path, "rb") as fp:
+        assert fp.read() == fake_png
+    assert result.width == 1024
+    assert result.height == 1024
+    assert "/accounts/test-account/ai/run/@cf/black-forest-labs/flux-1-schnell" in captured["url"]
+    assert captured["headers"].get("Authorization") == "Bearer test-token"
+    body = json.loads(captured["data"])
+    assert body["prompt"] == "hello"
+    assert body["seed"] == 7
+    assert body["steps"] == 8  # premium -> 8 steps
+
+
+def test_cloudflare_provider_raises_when_success_is_false(monkeypatch, tmp_path):
+    import json
+    import urllib.request
+
+    monkeypatch.setenv("KRONARA_CLOUDFLARE_ACCOUNT_ID", "acc")
+    monkeypatch.setenv("KRONARA_CLOUDFLARE_API_TOKEN", "tok")
+
+    class FakeResponse:
+        def read(self):
+            return json.dumps({"success": False, "errors": [{"code": 9999, "message": "quota"}]}).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: FakeResponse())
+    provider = CloudflareWorkersAiImageProvider(output_dir=str(tmp_path))
+    with pytest.raises(RuntimeError, match="reported failure"):
+        provider.generate(ImageGenerationRequest(prompt="x", seed=1))
+
+
+def test_cloudflare_provider_requires_env_vars(monkeypatch, tmp_path):
+    monkeypatch.delenv("KRONARA_CLOUDFLARE_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("KRONARA_CLOUDFLARE_API_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="requires KRONARA_CLOUDFLARE"):
+        CloudflareWorkersAiImageProvider(output_dir=str(tmp_path))
+
+
+# ---- ImageProviderCascade -----------------------------------------------
+
+
+class _AlwaysFails:
+    def __init__(self, label: str):
+        self.label = label
+        self.calls = 0
+
+    def generate(self, request):
+        self.calls += 1
+        raise RuntimeError(f"{self.label} unavailable")
+
+
+class _AlwaysWorks:
+    def __init__(self, label: str, tmp_path):
+        self.label = label
+        self.calls = 0
+        self._tmp = tmp_path
+
+    def generate(self, request):
+        self.calls += 1
+        path = str(self._tmp / f"{self.label}.png")
+        with open(path, "wb") as fp:
+            fp.write(b"\x89PNG\r\n\x1a\n" + b"0" * 1024)
+        return ImageGenerationResult(
+            image_path=path, seed=request.seed, width=1024, height=1024,
+            quality_tier=request.quality_tier, generation_ms=0,
+        )
+
+
+def test_cascade_returns_first_success_and_short_circuits(tmp_path):
+    """Failover must stop the moment one provider succeeds -- calling a
+    later, slower fallback (e.g. local SDXL) after a hosted one already
+    delivered wastes real time. Also covers the request-order guarantee:
+    providers are tried in the order given, not shuffled."""
+    fast = _AlwaysWorks("fast", tmp_path)
+    slow = _AlwaysWorks("slow", tmp_path)
+    cascade = ImageProviderCascade([fast, slow])
+
+    result = cascade.generate(ImageGenerationRequest(prompt="a", seed=1))
+
+    assert result.image_path.endswith("fast.png")
+    assert fast.calls == 1
+    assert slow.calls == 0
+
+
+def test_cascade_falls_through_failures_until_one_works(tmp_path):
+    broken = _AlwaysFails("hosted")
+    backup = _AlwaysWorks("local", tmp_path)
+    cascade = ImageProviderCascade([broken, backup])
+
+    result = cascade.generate(ImageGenerationRequest(prompt="a", seed=1))
+
+    assert result.image_path.endswith("local.png")
+    assert broken.calls == 1
+    assert backup.calls == 1
+
+
+def test_cascade_raises_after_every_provider_fails(tmp_path):
+    """A silent all-fail would let composition proceed with no image and
+    render a black frame -- must surface the last error for real diagnostics."""
+    cascade = ImageProviderCascade([_AlwaysFails("a"), _AlwaysFails("b")])
+    with pytest.raises(RuntimeError, match="every image provider in the cascade failed"):
+        cascade.generate(ImageGenerationRequest(prompt="a", seed=1))
 
 
 def test_pollinations_provider_rejects_empty_response_as_generation_failure(monkeypatch, tmp_path):

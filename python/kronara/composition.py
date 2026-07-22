@@ -23,8 +23,14 @@ from kronara import narrative_workflow
 
 _PREMIUM_STAGES = frozenset({"hook", "revelation", "climax", "emotional_close"})
 
-MIN_SHOT_MS = 3000
-MAX_SHOT_MS = 7000
+MIN_SHOT_MS = 2500
+# Was 7000ms (single shot could cover a 7-second beat with one static image
+# panning). Tightened to 4500ms after Pollinations/Cloudflare cut per-image
+# cost from ~7min (local SDXL on 8GB VRAM) to ~2-5s -- shorter shots mean
+# more visual variety per scene without a real time penalty. A 24-second
+# scene now becomes 6 shots instead of 4; a 15-second scene becomes 4
+# shots instead of 3.
+MAX_SHOT_MS = 4500
 DEFAULT_CROSSFADE_MS = 400
 
 
