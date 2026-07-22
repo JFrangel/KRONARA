@@ -5,6 +5,29 @@ Documento vivo: qué se arregló, qué sigue roto, qué bloquea qué. Léase jun
 detallada del transporte stdio) y [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md)
 (checklist de release).
 
+## Estado actual de los bloqueos
+
+Los bloqueos descritos más abajo sobre el sidecar y las dependencias visuales
+son el registro histórico de la revisión inicial. Ya se reconstruyó el
+ejecutable el 21-07-2026 y el stack SDXL quedó instalado en D. La única
+verificación pendiente es abrir el ejecutable Tauri completo y reproducir allí
+un MP4 real; la previsualización Vite y el sidecar por separado ya fueron
+verificados.
+
+**Confirmación adicional (independiente del punto anterior):** se relanzó el
+binario nuevo (`kronara-sidecar-x86_64-pc-windows-msvc.exe`, 21-07-2026
+20:42) y se le mandaron peticiones JSON-RPC reales por stdio otra vez, igual
+que en la revisión inicial que encontró los bugs:
+- `programs.list` → ahora devuelve los 7 programas reales (antes:
+  `FileNotFoundError`). Bug de `resource_root()` confirmado arreglado en el
+  binario empaquetado, no solo en el código fuente.
+- `action.approve` → ahora responde `invalid params: 'idempotency_key'`
+  (falta el parámetro, como se esperaba al mandar `{}`) en vez de
+  `method not found`. El método existe y responde en el binario empaquetado.
+
+Sigue pendiente solo lo que dice el párrafo de arriba: reproducir un MP4
+real dentro de la ventana de escritorio de Tauri (no solo por RPC directo).
+
 ## 🔴 Bloqueante: el binario empaquetado del sidecar está desactualizado
 
 **`src-tauri/binaries/kronara-sidecar-x86_64-pc-windows-msvc.exe`** (2.7 GB,
@@ -203,3 +226,14 @@ El MP4 final verificado mide 88,8 s, tiene 1080×1920, audio AAC, seis escenas,
 subtítulos sobredimensionados y la repetición de una misma narración en todas
 las escenas. La prueba del navegador confirmó `readyState=4`, sin error, y
 avance de reproducción con el control de teclado.
+## Actualización posterior: SDXL local y sidecar reconstruido
+
+El bloqueo de dependencias visuales quedó resuelto el 21 de julio de 2026:
+
+- Python tiene `numpy`, PyTorch `2.13.0+cu126`, `diffusers`, `transformers`, `accelerate`, `peft`, `safetensors` y Pillow.
+- CUDA está operativo en la `NVIDIA GeForce RTX 4060 Ti`.
+- Los pesos SDXL base (6,9 GB) y el LoRA SDXL-Lightning (394 MB) viven en `D:\Proyecto Redit\.kronara\models`.
+- Las rutas premium y rápida generaron imágenes 768×1344 reales con `degraded=False`.
+- El sidecar fue reconstruido con PyInstaller y respondió correctamente al handshake, `operations.context` y `programs.list`.
+
+Sigue pendiente una comprobación manual dentro del ejecutable Tauri completo (no solo el navegador Vite) para confirmar que el `<video>` reproduce después de iniciar la aplicación empaquetada. La generación visual ya está lista en el sidecar nuevo; el modelo se lee desde D y no se copia dentro del ejecutable.
