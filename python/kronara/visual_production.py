@@ -171,11 +171,41 @@ def _episode_visual_context(
         parts.append(f"{visual_style.display_name} visual identity")
         if visual_style.program_id == "viernes-paranormal":
             parts.append("supernatural horror with a visible ghost, entity or shadow presence")
+    # Consistency anchors: every scene share these so hosted providers
+    # (Pollinations/Cloudflare Flux) that don't take a reference image
+    # still land close enough visually across shots that the episode
+    # reads as one story instead of a slideshow of disconnected photos.
+    # See docs/BUGS_CONOCIDOS.md consistency finding.
+    characters = _dominant_characters(scenes)
+    if characters:
+        parts.append(f"recurring characters throughout the episode: {characters}")
+        parts.append("same faces, same wardrobe, same age and features across every shot")
+    parts.append("consistent color palette, consistent lighting mood, consistent location")
+    parts.append("shot on 35mm film stock, warm shadows, filmic grain, cinematic depth")
     if anchors:
         parts.append(anchors)
     if story_world:
         parts.append(f"story world: {story_world}")
     return ". ".join(dict.fromkeys(parts))
+
+
+def _dominant_characters(scenes: Sequence, limit: int = 3) -> str:
+    """Extract the top-N recurring character names across every scene so
+    every shot prompt carries the same protagonist(s). Without this,
+    hosted image providers (Flux via Pollinations/Cloudflare) generate a
+    new face per shot even for the same character -- these are freeze-
+    seeded but the model interprets a fresh prompt each time. Prepending
+    the character name(s) is the cheapest anchor a text-only prompt
+    supports."""
+    from collections import Counter
+
+    tally: Counter[str] = Counter()
+    for scene in scenes:
+        for name in getattr(scene, "characters", ()) or ():
+            clean = str(name).strip()
+            if clean:
+                tally[clean] += 1
+    return ", ".join(name for name, _ in tally.most_common(limit))
 
 
 def render_graphic_overlay_card(text: str, output_path: str, *, width: int, height: int) -> None:
