@@ -11,6 +11,45 @@ export const GENERATION_STAGES = [
 ];
 
 const STAGE_INDEX_BY_KEY = Object.fromEntries(GENERATION_STAGES.map((stage, index) => [stage.key, index]));
+const LIVE_STAGE_DETAILS = {
+  investigacion: [
+    [0, 'Investigacion: consultando fuentes publicas, hilos completos, memoria RAG y oportunidades recientes.'],
+    [10, 'Investigacion: separando senales utiles, continuaciones de historias y material que no sirve.'],
+    [20, 'Investigacion: registrando evidencia y preparando la mejor senal para Concepto.'],
+  ],
+  concepto: [
+    [0, 'Concepto: convirtiendo la senal elegida en una premisa propia del programa.'],
+    [18, 'Concepto: comparando plantillas RAG, tono del dia y conflicto central.'],
+    [35, 'Concepto: dejando claro protagonista, deseo, amenaza, costo y promesa del episodio.'],
+  ],
+  guion: [
+    [0, 'Guion: armando beats, escenas separadas, gancho inicial y payoff final.'],
+    [25, 'Guion: reforzando claridad, escalada, pregunta dramatica y anclas visuales por escena.'],
+    [50, 'Guion: preparando marcas para voz, storyboard, musica y SFX.'],
+  ],
+  critica: [
+    [0, 'Critica: revisando originalidad, derechos, plantilla del programa y claridad narrativa.'],
+    [20, 'Critica: si encuentra fallos, pide reparaciones concretas antes de producir.'],
+    [40, 'Critica: revalidando estructura, duracion, genero y consistencia visual.'],
+  ],
+  narracion: [
+    [0, 'Narracion: midiendo voz premium, pausas y duracion real del guion.'],
+    [45, 'Narracion: marcando escenas navegables, respiraciones, silencios y puntos de SFX.'],
+    [90, 'Narracion: comparando duracion real contra el objetivo del programa.'],
+  ],
+  produccion: [
+    [0, 'Produccion: generando portada obligatoria y fijando personaje, lugar, paleta y amenaza.'],
+    [90, 'Produccion: preparando tandas de imagenes consistentes con la historia completa.'],
+    [180, 'Produccion: revisando recursos visuales, musica, SFX y composicion vertical.'],
+    [360, 'Produccion: ensamblando video 9:16 y comprobando que las escenas no pierdan contexto.'],
+    [720, 'Produccion: ejecutando QC visual/audio antes de permitir que pase a Guardando.'],
+  ],
+  guardando: [
+    [0, 'Guardando: registrando guion, portada, video, musica, SFX, evidencias y diagnostico local.'],
+    [45, 'Guardando: verificando archivos finales y actualizando la biblioteca del programa.'],
+    [90, 'Guardando: cerrando metadatos para que el episodio aparezca en Programas y Biblioteca.'],
+  ],
+};
 const STORAGE_KEY = 'kronara.episodeGeneration.v1';
 const RESTORED_GENERATION = loadStoredGeneration();
 
@@ -116,7 +155,7 @@ export function currentGenerationStage(run) {
 export function currentGenerationDetail(run) {
   const stage = currentGenerationStage(run);
   const phase = run?.diagnostics?.phases?.find((item) => item.key === stage.key);
-  return phase?.detail || stage.detail;
+  return latestDiagnosticText(run) || phase?.detail || liveStageDetail(run, stage) || stage.detail;
 }
 
 function stageIndexForElapsed(elapsedSeconds) {
@@ -147,6 +186,28 @@ function diagnosticMessage(diagnostics) {
   if (failed?.detail) return failed.detail;
   const latest = [...(diagnostics?.phases ?? [])].reverse().find((phase) => phase.detail);
   return latest?.detail ?? null;
+}
+
+function liveStageDetail(run, stage) {
+  const details = LIVE_STAGE_DETAILS[stage.key] ?? [];
+  const relative = Math.max(0, Number(run?.elapsedSeconds ?? 0) - Number(stage.at ?? 0));
+  let selected = null;
+  for (const [at, text] of details) {
+    if (relative >= at) selected = text;
+  }
+  return selected;
+}
+
+function latestDiagnosticText(run) {
+  const tool = [...(run?.diagnostics?.tool_events ?? [])]
+    .reverse()
+    .find((event) => event.summary);
+  if (tool?.summary) return `Herramienta ${tool.tool_id}: ${tool.summary}`;
+  const agent = [...(run?.diagnostics?.agent_logs ?? [])]
+    .reverse()
+    .find((event) => event.detail);
+  if (agent?.detail) return `${agent.agent_id || 'Agente'}: ${agent.detail}`;
+  return null;
 }
 
 function stopGenerationTimer() {

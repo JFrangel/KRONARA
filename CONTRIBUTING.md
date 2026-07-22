@@ -72,17 +72,25 @@ Codigos importantes:
 Hay dos capas:
 
 - Plantillas base de reglas: `python/kronara/program_narrative.py`.
-- Plantillas RAG visibles: `knowledge/narrative/program-story-templates.md`.
+- Plantillas/historias RAG visibles y editables:
+  `knowledge/narrative/program-story-templates.md` + overrides locales en
+  `.kronara/runtime/program_story_resources.v1.json`.
 
 La UI muestra:
 
 - **Programas > Configuracion**: reglas editables por programa.
 - **Programas > Recursos**: moldes/historias de referencia que alimentan al
-  RAG y sirven para confirmar que el agente esta mirando el material correcto.
+  RAG. Desde ahi se puede pegar texto completo, guardarlo manualmente y
+  reinyectarlo en el documento `program_story_templates_v1` para las proximas
+  generaciones.
 
 Las historias inspiradas en Reddit no son guiones para copiar. Se guardan como
 estructura propia: tipo de arranque, nudos, decision, giro, cierre y anclas
 visuales.
+
+No mezcles las dos capas: Configuracion decide reglas de aprobacion y Recursos
+aporta ejemplos narrativos para RAG. Un recurso puede inspirar al agente, pero
+no debe forzar copia literal ni saltarse derechos/originalidad.
 
 ## Imagenes, portada, musica y SFX
 

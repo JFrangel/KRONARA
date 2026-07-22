@@ -38,8 +38,18 @@ test('program resources expose RAG story templates in the UI', () => {
   const source = fs.readFileSync('src/lib/views/Programas.svelte', 'utf8');
 
   assert.match(source, /Plantillas RAG del programa/);
-  assert.match(source, /La Entidad de la Esquina/);
-  assert.match(source, /PROGRAM_RESOURCE_TEMPLATES/);
+  assert.match(source, /Editor manual para RAG/);
+  assert.match(source, /Guardar en RAG/);
+  assert.match(source, /programs\.resources\.save/);
+});
+
+test('generation banner can show live agent and production substeps', () => {
+  const source = fs.readFileSync('src/lib/generation-state.js', 'utf8');
+
+  assert.match(source, /LIVE_STAGE_DETAILS/);
+  assert.match(source, /Produccion: generando portada obligatoria/);
+  assert.match(source, /tandas de imagenes consistentes/);
+  assert.match(source, /Herramienta/);
 });
 
 test('frontend uses only the local web operations bridge', () => {

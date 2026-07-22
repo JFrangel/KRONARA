@@ -41,6 +41,9 @@
   let templateDraft = $state('');
   let templateSaving = $state(false);
   let templateNotice = $state('');
+  let storyResourceDraft = $state('');
+  let storyResourceSaving = $state(false);
+  let storyResourceNotice = $state('');
   const EPISODE_DETAIL_TABS = ['resumen', 'guion', 'recursos', 'produccion', 'distribucion', 'analiticas'];
   const EPISODE_DETAIL_TAB_LABELS = {
     resumen: 'Resumen', guion: 'Guion', recursos: 'Recursos',
@@ -58,43 +61,6 @@
   const WEEKDAY_LABELS = {
     monday: 'lunes', tuesday: 'martes', wednesday: 'miércoles', thursday: 'jueves',
     friday: 'viernes', saturday: 'sábado', sunday: 'domingo',
-  };
-  const PROGRAM_RESOURCE_TEMPLATES = {
-    'viernes-paranormal': [
-      { title: 'La Entidad de la Esquina', length: 'larga', focus: 'casa antigua, esquina oscura, aparicion repetida, investigacion de la casa y huida final' },
-      { title: 'La Casa que No Queria Dejar', length: 'larga', focus: 'casa de campo, entidad familiar en el atico, puertas que bloquean salida y apego sobrenatural' },
-      { title: 'El Espejo del Bano', length: 'larga', focus: 'espejo viejo, figura que se acerca por reflejo, golpes desde dentro y salida al mundo real' },
-    ],
-    'decisiones-dificiles': [
-      { title: 'La Decision de mi Madre Enferma', length: 'larga', focus: 'promesa imposible, dolor terminal, ley contra compasion y culpa familiar' },
-      { title: 'Denunciar a Alguien Querido', length: 'mediana', focus: 'pruebas contra alguien cercano, denuncia y costo social' },
-      { title: 'Perdon Negado', length: 'corta', focus: 'despedida, dano pasado, no perdonar y duda moral final' },
-    ],
-    'confesiones-anonimas': [
-      { title: 'Accidente Oculto', length: 'larga', focus: 'culpa escondida, mentira sostenida y confesion imposible' },
-      { title: 'Vida Falsa en Redes', length: 'mediana', focus: 'identidad inventada, engano emocional y miedo a revelar la verdad' },
-      { title: 'Traicion Privada', length: 'corta', focus: 'secreto intimo, dano a una amiga y culpa que no se apaga' },
-    ],
-    'cronicas-de-justicia': [
-      { title: 'La Venganza de 7 Anos', length: 'muy larga', focus: 'traicion, investigacion privada, pruebas, abogados y consecuencias' },
-      { title: 'Cumplimiento Literal', length: 'mediana', focus: 'jefe abusivo, orden escrita, evidencia y justicia laboral' },
-      { title: 'La Traicion de mi Socio', length: 'larga', focus: 'fraude, auditoria, abogado y recuperacion con costo personal' },
-    ],
-    'mentes-ocultas': [
-      { title: 'Gaslighting Durante 4 Anos', length: 'muy larga', focus: 'manipulacion, aislamiento, duda de memoria y terapia' },
-      { title: 'Jefe Destructor', length: 'larga', focus: 'abuso psicologico laboral, patron repetido y denuncia colectiva' },
-      { title: 'Identidad Robada', length: 'larga', focus: 'deudas falsas, familia que minimiza y ruptura necesaria' },
-    ],
-    'historias-medianoche': [
-      { title: 'El Pueblo que no Aparece en los Mapas', length: 'larga', focus: 'carretera nocturna, pueblo imposible, regla de retorno y fuego final' },
-      { title: 'La Habitacion que Cambia de Tamano', length: 'larga', focus: 'cuarto que se encoge, casero evasivo y desaparicion previa' },
-      { title: 'El Amigo Imaginario que Crecio Conmigo', length: 'larga', focus: 'presencia de infancia, apariciones adultas y giro final' },
-    ],
-    'caso-de-la-semana': [
-      { title: 'El Secreto de mi Familia', length: 'muy larga', focus: 'verdad familiar, busqueda, confrontacion y reflexion seria' },
-      { title: 'Denuncia que Cuesta Familia', length: 'larga', focus: 'abuso, pruebas, proceso legal y perdida de apoyo' },
-      { title: 'Encubrimiento que se Rompe', length: 'larga', focus: 'crimen oculto, amenaza, confesion tardia y condena moral' },
-    ],
   };
   onMount(async () => {
     try {
@@ -138,7 +104,9 @@
     activeTab = tab;
     createNotice = '';
     templateNotice = '';
+    storyResourceNotice = '';
     templateDraft = templateText(program.narrative_template);
+    storyResourceDraft = program.story_resource_text ?? '';
     selectedEpisodeId = null;
   }
 
@@ -421,6 +389,72 @@
     ));
     if (selected?.program_id === programId) {
       selected = { ...selected, narrative_template: template, narrative_template_source: source };
+    }
+  }
+
+  function storyResourceItems() {
+    return selected?.story_resource_items ?? [];
+  }
+
+  function storyResourceWordCount() {
+    return storyResourceDraft.trim().split(/\s+/).filter(Boolean).length;
+  }
+
+  function replaceProgramStoryResource(programId, result) {
+    programs = programs.map((program) => (
+      program.program_id === programId
+        ? {
+            ...program,
+            story_resource_text: result.story_resource_text ?? '',
+            story_resource_source: result.story_resource_source ?? 'base',
+            story_resource_items: result.story_resource_items ?? [],
+          }
+        : program
+    ));
+    if (selected?.program_id === programId) {
+      selected = {
+        ...selected,
+        story_resource_text: result.story_resource_text ?? '',
+        story_resource_source: result.story_resource_source ?? 'base',
+        story_resource_items: result.story_resource_items ?? [],
+      };
+    }
+  }
+
+  async function saveStoryResources() {
+    if (!selected || storyResourceSaving) return;
+    storyResourceSaving = true;
+    storyResourceNotice = '';
+    try {
+      const result = await callOperations('programs.resources.save', {
+        program_id: selected.program_id,
+        text: storyResourceDraft,
+      });
+      replaceProgramStoryResource(selected.program_id, result);
+      storyResourceDraft = result.story_resource_text ?? storyResourceDraft;
+      storyResourceNotice = 'Historias guardadas en Recursos y actualizadas para el RAG.';
+    } catch (error) {
+      storyResourceNotice = 'No se pudo guardar. Pega texto util de historias o plantillas antes de guardar.';
+    } finally {
+      storyResourceSaving = false;
+    }
+  }
+
+  async function resetStoryResources() {
+    if (!selected || storyResourceSaving) return;
+    storyResourceSaving = true;
+    storyResourceNotice = '';
+    try {
+      const result = await callOperations('programs.resources.reset', {
+        program_id: selected.program_id,
+      });
+      replaceProgramStoryResource(selected.program_id, result);
+      storyResourceDraft = result.story_resource_text ?? '';
+      storyResourceNotice = 'Recursos base restaurados para este programa.';
+    } catch (error) {
+      storyResourceNotice = 'No se pudo restaurar Recursos.';
+    } finally {
+      storyResourceSaving = false;
     }
   }
 
@@ -965,11 +999,18 @@
         {:else if activeTab === 'recursos'}
           <div class="space-y-4">
             <div>
-              <p class="font-display text-[14px] font-semibold text-ink">Plantillas RAG del programa</p>
-              <p class="mt-1 text-[12px] text-ink-secondary">Estos son los moldes visibles que los agentes consultan como referencia de estructura. Sirven para aprender forma, tono y anclas visuales; no para copiar texto literal.</p>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p class="font-display text-[14px] font-semibold text-ink">Plantillas RAG del programa</p>
+                  <p class="mt-1 text-[12px] text-ink-secondary">Historias ejemplo y moldes que los agentes consultan como referencia de estructura, tono y anclas visuales.</p>
+                </div>
+                <Badge tone={selected.story_resource_source === 'manual' ? 'success' : 'neutral'}>
+                  {selected.story_resource_source === 'manual' ? 'Manual' : 'Base'}
+                </Badge>
+              </div>
             </div>
             <div class="grid grid-cols-1 gap-2">
-              {#each PROGRAM_RESOURCE_TEMPLATES[selected.program_id] ?? [] as template}
+              {#each storyResourceItems() as template}
                 <article class="rounded-lg border border-line bg-surface-inset p-3">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="text-[12.5px] font-semibold text-ink">{template.title}</p>
@@ -978,6 +1019,34 @@
                   <p class="mt-1 text-[11.5px] leading-relaxed text-ink-secondary">{template.focus}</p>
                 </article>
               {/each}
+            </div>
+            <div class="rounded-lg border border-line bg-surface-inset p-3">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p class="font-medium text-[12px] text-ink">Editor manual para RAG</p>
+                  <p class="mt-1 text-[11.5px] text-ink-secondary">Pega aqui historias completas o ajusta las existentes. Al guardar, quedan disponibles para las proximas generaciones.</p>
+                </div>
+                <span class="font-mono text-[11px] text-ink-tertiary">{storyResourceWordCount()} palabras</span>
+              </div>
+              <textarea
+                bind:value={storyResourceDraft}
+                class="mt-3 min-h-96 w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 font-mono text-[12px] leading-relaxed text-ink outline-none transition focus:border-purple-500"
+                spellcheck="false"
+              ></textarea>
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-[11px] text-ink-tertiary">Se guarda como recurso propio, no como copia obligatoria del guion.</p>
+                <div class="flex items-center gap-2">
+                  <button class="rounded-lg border border-line px-3 py-2 text-[12px] font-medium text-ink-secondary transition hover:border-purple-500 hover:text-ink disabled:opacity-50" onclick={resetStoryResources} disabled={storyResourceSaving}>
+                    Restaurar base
+                  </button>
+                  <button class="rounded-lg bg-purple-500 px-3 py-2 text-[12px] font-semibold text-ink transition hover:bg-purple-400 disabled:opacity-50" onclick={saveStoryResources} disabled={storyResourceSaving || storyResourceDraft.trim().length < 80}>
+                    {storyResourceSaving ? 'Guardando...' : 'Guardar en RAG'}
+                  </button>
+                </div>
+              </div>
+              {#if storyResourceNotice}
+                <p class="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-[11.5px] text-ink-secondary">{storyResourceNotice}</p>
+              {/if}
             </div>
             <div class="rounded-lg border border-line bg-surface-inset p-3">
               <p class="font-medium text-[12px] text-ink">Musica y SFX</p>

@@ -17,7 +17,7 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 | RAG v3: FTS5, vectores, grafo, filtros y promoción reversible | Implementado | `tests/test_story_learning_pipeline.py` |
 | Reddit RSS/OAuth y filtros | Implementado; activación sujeta a credenciales y términos | `tests/test_production_content_vertical.py` |
 | Qwen, Kimi, Groq, Nemotron Super/**Ultra** y Hy3 | Inferencia por puente web local con fallback; alias `critic` | `frontend-tests/local-web.test.js` |
-| Plantillas RAG por programa visibles en Recursos | Implementado | `knowledge/narrative/program-story-templates.md`, `frontend-tests/local-web.test.js` |
+| Plantillas/historias RAG editables en Recursos | Implementado | `knowledge/narrative/program-story-templates.md`, `tests/test_operations_rpc.py`, `frontend-tests/local-web.test.js` |
 | Motor narrativo literario (oficio + rúbrica) | Implementado | `tests/test_narrative_craft.py` |
 | Memoria de grafo bitemporal + series multi-parte | Implementado | `tests/test_graph_memory.py`, `tests/test_series.py` |
 | Voz real (edge-tts) y **duración medida** | Medición integrada; síntesis en vivo requiere binario edge-tts | `tests/test_voice_duration.py` |
@@ -50,7 +50,7 @@ npm.cmd run dev:web
 
 Abre `http://127.0.0.1:5173/`. Esa es la ruta recomendada: la interfaz web llama al sidecar Python por `__kronara_rpc` y sirve medios locales por `__kronara_asset`. No hay datos falsos; si Python o las claves no responden, la app muestra el fallo.
 
-En Programas > Configuración cada programa expone su plantilla narrativa. Si se guarda manualmente, queda en el runtime local y las siguientes generaciones usan esa versión. En Programas > Recursos se ven las plantillas RAG del programa, incluyendo los moldes de historias que sirven de referencia estructural para los agentes. La producción visual usa la portada premium como referencia de continuidad para las imágenes de escena, además del contexto completo del episodio. En Episodios > Recursos se muestran visuales, música y SFX resueltos o faltantes.
+En Programas > Configuración cada programa expone su plantilla narrativa de reglas. Si se guarda manualmente, queda en el runtime local y las siguientes generaciones usan esa versión para aprobar o bloquear. En Programas > Recursos se ven y editan las historias/plantillas RAG del programa; puedes pegar historias completas, guardarlas manualmente y el sidecar las reinyecta en `program_story_templates_v1` para las próximas generaciones. La producción visual usa la portada premium como referencia de continuidad para las imágenes de escena, además del contexto completo del episodio. En Episodios > Recursos se muestran visuales, música y SFX resueltos o faltantes.
 
 Si una generación falla:
 

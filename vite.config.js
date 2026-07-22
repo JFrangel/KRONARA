@@ -25,6 +25,8 @@ const ALLOWED_RPC_METHODS = new Set([
   'programs.list',
   'programs.template.save',
   'programs.template.reset',
+  'programs.resources.save',
+  'programs.resources.reset',
   'episodes.list',
   'episodes.get',
   'episodes.delete',

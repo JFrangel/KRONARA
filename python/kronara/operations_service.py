@@ -78,6 +78,7 @@ class OperationsService:
         self.reranker_alias = reranker_alias
         self.database_path = self.data_dir / "kronara.db"
         self._program_template_path = self.data_dir / "program_narrative_templates.v1.json"
+        self._program_story_resource_path = self.data_dir / "program_story_resources.v1.json"
         os.environ["KRONARA_PROGRAM_TEMPLATE_OVERRIDES"] = str(self._program_template_path)
         self.store = KronaraStore(self.database_path)
         self.store.initialize()
@@ -128,6 +129,8 @@ class OperationsService:
             "programs.list": self.programs_list,
             "programs.template.save": self.programs_template_save,
             "programs.template.reset": self.programs_template_reset,
+            "programs.resources.save": self.programs_resources_save,
+            "programs.resources.reset": self.programs_resources_reset,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -292,6 +295,11 @@ class OperationsService:
     def programs_list(self, _: dict[str, Any]) -> dict[str, Any]:
         from kronara.programs import ProgramRegistry, default_registry_path
         from kronara.program_narrative import narrative_contract, narrative_contract_source
+        from kronara.program_story_resources import (
+            story_resource_items,
+            story_resource_source,
+            story_resource_text,
+        )
 
         registry = ProgramRegistry.load(default_registry_path())
         return {
@@ -311,6 +319,22 @@ class OperationsService:
                     ),
                     "narrative_template_source": narrative_contract_source(
                         program.program_id, self._program_template_path
+                    ),
+                    "story_resource_text": story_resource_text(
+                        program.program_id,
+                        self.resource_root,
+                        self._program_story_resource_path,
+                    ),
+                    "story_resource_source": story_resource_source(
+                        program.program_id,
+                        self._program_story_resource_path,
+                    ),
+                    "story_resource_items": story_resource_items(
+                        story_resource_text(
+                            program.program_id,
+                            self.resource_root,
+                            self._program_story_resource_path,
+                        )
                     ),
                 }
                 for program in (registry.get(pid) for pid in registry.program_ids)
@@ -357,6 +381,56 @@ class OperationsService:
             "program_id": program_id,
             "narrative_template": directives,
             "narrative_template_source": "base",
+        }
+
+    def programs_resources_save(self, params: dict[str, Any]) -> dict[str, Any]:
+        from kronara.program_story_resources import (
+            save_story_resource_override,
+            story_resource_items,
+        )
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        program_id = str(params.get("program_id", "")).strip()
+        registry = ProgramRegistry.load(default_registry_path())
+        registry.get(program_id)
+        text = save_story_resource_override(
+            program_id,
+            str(params.get("text", "")),
+            self._program_story_resource_path,
+        )
+        self._upsert_story_resources()
+        return {
+            "schema_version": 1,
+            "status": "saved",
+            "program_id": program_id,
+            "story_resource_text": text,
+            "story_resource_source": "manual",
+            "story_resource_items": story_resource_items(text),
+        }
+
+    def programs_resources_reset(self, params: dict[str, Any]) -> dict[str, Any]:
+        from kronara.program_story_resources import (
+            reset_story_resource_override,
+            story_resource_items,
+        )
+        from kronara.programs import ProgramRegistry, default_registry_path
+
+        program_id = str(params.get("program_id", "")).strip()
+        registry = ProgramRegistry.load(default_registry_path())
+        registry.get(program_id)
+        text = reset_story_resource_override(
+            program_id,
+            self.resource_root,
+            self._program_story_resource_path,
+        )
+        self._upsert_story_resources()
+        return {
+            "schema_version": 1,
+            "status": "reset",
+            "program_id": program_id,
+            "story_resource_text": text,
+            "story_resource_source": "base",
+            "story_resource_items": story_resource_items(text),
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -792,23 +866,33 @@ class OperationsService:
                 version=1,
             )
         )
-        template_path = self.resource_root / "knowledge" / "narrative" / "program-story-templates.md"
-        if template_path.exists():
-            index.upsert(
-                IngestDocument(
-                    document_id="program_story_templates_v1",
-                    title="Plantillas narrativas por programa",
-                    content=template_path.read_text(encoding="utf-8"),
-                    rights_mode="owned_original",
-                    language="es",
-                    scope="narrative",
-                    valid_from=0,
-                    valid_until=None,
-                    confidence=0.96,
-                    version=1,
-                )
-            )
+        self._upsert_story_resources(index)
         return index
+
+    def _upsert_story_resources(self, index: RAGV3Index | None = None) -> None:
+        from kronara.program_story_resources import combined_story_resources_markdown
+
+        target = index or self._rag
+        content = combined_story_resources_markdown(
+            self.resource_root,
+            self._program_story_resource_path,
+        )
+        if not content.strip():
+            return
+        target.upsert(
+            IngestDocument(
+                document_id="program_story_templates_v1",
+                title="Plantillas e historias narrativas por programa",
+                content=content,
+                rights_mode="owned_original",
+                language="es",
+                scope="narrative",
+                valid_from=0,
+                valid_until=None,
+                confidence=0.97,
+                version=2,
+            )
+        )
 
     @staticmethod
     def _metric_snapshot(params: dict[str, Any]) -> MetricSnapshot:

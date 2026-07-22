@@ -100,6 +100,9 @@ def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_
     assert "youtube" in viernes["platforms"]
     assert viernes["narrative_template"]
     assert viernes["narrative_template_source"] == "base"
+    assert "La Casa que Respiraba" in viernes["story_resource_text"]
+    assert viernes["story_resource_source"] == "base"
+    assert any(item["title"] == "La Casa que Respiraba" for item in viernes["story_resource_items"])
     service.close()
 
 
@@ -126,6 +129,43 @@ def test_program_template_can_be_saved_and_restored_from_local_ui(tmp_path):
     response = server.handle(_request("programs.list", {}))
     viernes = next(p for p in response["result"]["programs"] if p["program_id"] == "viernes-paranormal")
     assert viernes["narrative_template_source"] == "base"
+    service.close()
+
+
+def test_program_story_resources_can_be_saved_restored_and_retrieved_by_rag(tmp_path):
+    server, service = _server(tmp_path)
+
+    custom_text = """### 1. Historia Larga - "La Escalera que Susurraba"
+
+Una familia llega a una casa vieja y descubre que la escalera susurra nombres
+distintos cada madrugada. La hija menor empieza a responderle, el padre graba
+audio, la vecina reconoce la voz de un inquilino muerto y la sombra termina
+subiendo los escalones hacia el cuarto principal.
+"""
+    saved = server.handle(_request("programs.resources.save", {
+        "program_id": "viernes-paranormal",
+        "text": custom_text,
+    }))["result"]
+
+    assert saved["status"] == "saved"
+    assert saved["story_resource_source"] == "manual"
+    assert saved["story_resource_items"][0]["title"] == "La Escalera que Susurraba"
+
+    response = server.handle(_request("programs.list", {}))["result"]
+    viernes = next(p for p in response["programs"] if p["program_id"] == "viernes-paranormal")
+    assert viernes["story_resource_source"] == "manual"
+    assert "La Escalera que Susurraba" in viernes["story_resource_text"]
+
+    retrieval = server.handle(_request("rag.retrieve_v3", {
+        "query": "escalera que susurraba nombres madrugada casa vieja",
+        "limit": 5,
+    }))["result"]
+    assert "program_story_templates_v1" in {item["document_id"] for item in retrieval["results"]}
+
+    reset = server.handle(_request("programs.resources.reset", {"program_id": "viernes-paranormal"}))["result"]
+    assert reset["status"] == "reset"
+    assert reset["story_resource_source"] == "base"
+    assert "La Casa que Respiraba" in reset["story_resource_text"]
     service.close()
 
 
@@ -386,7 +426,7 @@ def test_static_program_story_templates_are_available_to_rag(tmp_path):
     retrieval = server.handle(
         _request(
             "rag.retrieve_v3",
-            {"query": "plantilla viernes paranormal entidad esquina imagenes consistentes", "limit": 5},
+            {"query": "plantilla viernes paranormal casa respiraba imagenes consistentes", "limit": 5},
             5,
         )
     )["result"]
