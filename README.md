@@ -23,10 +23,11 @@ Kronara es una fábrica editorial local-first para Windows. Su propósito es inv
 | Scheduler + autonomía (agentes desatendidos) | Implementado | `tests/test_schedule.py` |
 | BGE-M3 y reranker BGE | Carga local productiva; degradación explícita si faltan pesos | `tests/test_production_embeddings.py` |
 | Métricas Meta y aprendizaje | Lectura versionada y promoción prudente implementadas | `tests/test_performance_learning.py` |
-| Voz, Whisper, FFmpeg y publicación Meta Reels | Pendiente | `docs/INTEGRATIONS.md` |
+| Voz real y FFmpeg local | Integrado; el sidecar empaquetado debe reconstruirse | `docs/INTEGRATIONS.md`, `docs/BUGS_CONOCIDOS.md` |
+| Whisper y publicación Meta Reels | Pendiente | `docs/INTEGRATIONS.md` |
 | Fine-tuning automático | Bloqueado por diseño | `tests/test_story_reuse.py` |
 
-`full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. Kronara ya crea historias propias desde señales abstractas y puede analizar métricas de una pieza remota; la primera publicación real en Facebook todavía requiere completar audio, video, upload/reconciliación y una Página sandbox autorizada.
+`full_auto` es el modo previsto, pero no elimina compuertas: derechos, originalidad, presupuesto, credenciales, políticas, calidad de render y ambigüedad remota bloquean el avance. Kronara ya crea historias propias desde señales abstractas y puede generar/reproducir un Reel local; la primera publicación real en Facebook todavía requiere una Página sandbox autorizada, upload y reconciliación remota.
 
 ## Uso local
 
@@ -65,6 +66,8 @@ Rust crea un token de sesión, limpia el entorno heredado del sidecar y solo per
 ## Documentación
 
 - [Funcionalidades por función (para el frontend)](docs/FUNCIONALIDADES.md)
+- [Proceso de generación de contenido, paso a paso](docs/PROCESO_GENERACION_CONTENIDO.md)
+- [Bugs conocidos y estado real](docs/BUGS_CONOCIDOS.md)
 - [Fases futuras](docs/roadmap/FASES-FUTURAS.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Runtime y modelos](docs/AGENT_RUNTIME.md)
