@@ -126,13 +126,42 @@
     startEpisodeGeneration({ programId, programName: selected.name, storyId });
     activeTab = 'episodios';
     try {
-      const result = await callOperations('content.run', {
+      // wait:false triggers Fase A.1 async mode -- backend returns
+      // immediately with a queued run_id and executes the pipeline in a
+      // background thread. We poll run.progress every 3s to advance the
+      // real state. This unblocks the browser tab for the entire
+      // generation, kills the "94% Guardando forever" bug, and enables
+      // Fase B (live view of the guion and investigation).
+      const initial = await callOperations('content.run', {
         program_id: programId,
         story_id: storyId,
+        wait: false,
       });
-      if (result.status === 'completed') {
-        completeEpisodeGeneration(result);
-        createNotice = `Episodio creado: "${result.story?.title ?? result.run_id}".`;
+      const runId = initial.run_id ?? `content:${storyId}`;
+      const terminal = new Set(['completed', 'blocked', 'failed', 'cancelled']);
+      let lastResult = initial;
+      // Poll until terminal. Guard is generation-state.js's
+      // GENERATION_TIMEOUT_SECONDS -- if the run runs past 20 minutes
+      // with no progress, the local indicator auto-fails so the user
+      // isn't stuck.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        try {
+          const state = await callOperations('run.progress', { run_id: runId });
+          lastResult = state;
+          const diagnostics = await loadRunDiagnostics(runId);
+          if (diagnostics) updateEpisodeGenerationDiagnostics(diagnostics);
+          if (state?.status && terminal.has(state.status)) break;
+        } catch (pollError) {
+          // Transient poll failure: back off but don't tear down the run.
+          continue;
+        }
+      }
+      if (lastResult.status === 'completed') {
+        const diagnostics = await loadRunDiagnostics(runId);
+        completeEpisodeGeneration({ story: { title: lastResult.story_title }, diagnostics });
+        createNotice = `Episodio creado: "${lastResult.story_title ?? runId}".`;
         activeTab = 'episodios';
         const refreshed = await callOperations('episodes.list', { limit: 200 });
         episodes = refreshed.episodes ?? episodes;
@@ -140,9 +169,9 @@
           ?? episodes.find((episode) => episode.program_id === programId);
         selectedEpisodeId = created?.story_id ?? null;
       } else {
-        const diagnostics = result.diagnostics ?? await loadRunDiagnostics(result.run_id);
+        const diagnostics = await loadRunDiagnostics(runId);
         updateEpisodeGenerationDiagnostics(diagnostics);
-        const message = generationFailureMessage(result.error_code ?? result.status, diagnostics);
+        const message = generationFailureMessage(lastResult.error_code ?? lastResult.status, diagnostics);
         failEpisodeGeneration(message, diagnostics);
         createNotice = `${message} El vertical no publica nada a menos que Reddit, los modelos, los derechos y la calidad pasen todas las validaciones.`;
       }

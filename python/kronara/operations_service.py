@@ -542,7 +542,22 @@ class OperationsService:
             if self._paused:
                 raise ValueError("global pause blocks content runs")
         params = self._resolve_program_defaults(params)
-        result = ProductionContentPipeline(
+        # Async mode (FASE A.1): return immediately with a queued run_id
+        # and execute the pipeline in a background thread. Frontend polls
+        # run.diagnostics(run_id) for live progress instead of blocking on
+        # the sync RPC for the entire 5-15 minute generation. Enabled
+        # explicitly with wait=false so existing sync callers (produce_
+        # episode.rs, tests) keep their blocking semantics.
+        if params.get("wait") is False or params.get("async") is True:
+            return self._content_run_async(params)
+        result = self._content_pipeline().run(params)
+        if result.get("run_id"):
+            result = dict(result)
+            result["diagnostics"] = self._run_diagnostics(str(result["run_id"]))
+        return result
+
+    def _content_pipeline(self) -> "ProductionContentPipeline":
+        return ProductionContentPipeline(
             authority=self.authority,
             store=self.store,
             rag=self._rag,
@@ -556,11 +571,64 @@ class OperationsService:
             asset_library=self._asset_library,
             opportunity_store=self._opportunity_store,
             rate_learner=self._rate_learner,
-        ).run(params)
-        if result.get("run_id"):
-            result = dict(result)
-            result["diagnostics"] = self._run_diagnostics(str(result["run_id"]))
-        return result
+        )
+
+    def _content_run_async(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fire-and-poll: spawn a background thread to run the pipeline
+        and return a queued run_id immediately. Reuses the same threading
+        infrastructure story.test already uses (self._states/_threads).
+
+        Whoever kicked off the run polls run.diagnostics(run_id) for
+        live progress (agent events, tool traces, phase transitions all
+        already land in self.store as the pipeline advances). Cancel via
+        run.cancel(run_id) same as story.test. Global-pause blocks new
+        async runs the same as sync ones."""
+        story_id = str(params.get("story_id") or f"owned_{int(datetime.now(UTC).timestamp())}")
+        run_id = f"content:{story_id}"
+        with self._lock:
+            existing = self._states.get(run_id)
+            if existing and existing["status"] in {"queued", "running"}:
+                return dict(existing)
+            self._cancellations[run_id] = threading.Event()
+            state = self._run_state(run_id, "queued", 0, "queued")
+            state["story_id"] = story_id
+            self._states[run_id] = state
+
+        def worker() -> None:
+            try:
+                with self._lock:
+                    self._states[run_id] = {
+                        **self._states[run_id],
+                        "status": "running",
+                        "node": "content_pipeline",
+                    }
+                result = self._content_pipeline().run({**params, "story_id": story_id})
+                with self._lock:
+                    self._states[run_id] = {
+                        **self._states[run_id],
+                        "status": result.get("status", "completed"),
+                        "progress_percent": 100,
+                        "node": "completed",
+                        "error_code": result.get("error_code"),
+                        "story_title": (result.get("story") or {}).get("title"),
+                    }
+            except Exception as error:  # noqa: BLE001 - background thread must never raise
+                with self._lock:
+                    self._states[run_id] = {
+                        **self._states[run_id],
+                        "status": "failed",
+                        "progress_percent": 0,
+                        "node": "error",
+                        "error_code": type(error).__name__,
+                        "error_detail": str(error)[:400],
+                    }
+
+        thread = threading.Thread(
+            target=worker, name=f"kronara-content-{story_id}", daemon=True
+        )
+        self._threads[run_id] = thread
+        thread.start()
+        return dict(self._states[run_id])
 
     @staticmethod
     def _resolve_program_defaults(params: dict[str, Any]) -> dict[str, Any]:
