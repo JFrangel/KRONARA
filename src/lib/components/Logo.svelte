@@ -6,12 +6,12 @@
 <svg viewBox="0 0 512 512" width={size} height={size} class={className} xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="kronara-logo-g" x1="64" y1="448" x2="448" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7457ff" />
+      <stop stop-color="#7b5cff" />
       <stop offset="1" stop-color="#ed496e" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="116" fill="#0b0d15" />
-  <circle cx="256" cy="256" r="166" fill="none" stroke="#292d40" stroke-width="18" />
+  <rect width="512" height="512" rx="116" fill="#090b12" />
+  <circle cx="256" cy="256" r="166" fill="none" stroke="#242836" stroke-width="18" />
   <path
     d="M168 118v276M174 276 344 116M176 274l180 132"
     fill="none"

@@ -32,16 +32,14 @@
       {#each PRINCIPAL_NAV as item (item.id)}
         <li>
           <button
-            class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] transition-colors"
-            class:bg-purple-500={activeView === item.id}
-            class:text-ink={activeView === item.id}
-            class:text-ink-secondary={activeView !== item.id}
-            class:hover:bg-surface-hover={activeView !== item.id}
-            class:hover:text-ink={activeView !== item.id}
+            class="relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2 text-left text-[13.5px] transition-all duration-150 {activeView === item.id
+              ? 'bg-gradient-to-r from-purple-500 to-purple-600 font-medium text-ink shadow-[0_6px_16px_-8px_rgba(123,92,255,0.65)]'
+              : 'text-ink-secondary hover:translate-x-0.5 hover:bg-surface-hover hover:text-ink'}"
             onclick={() => onNavigate(item.id)}
             title={collapsed ? item.label : undefined}
           >
-            <Icon name={item.icon} size={17} class="shrink-0" />
+            {#if activeView === item.id}<span class="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-purple-300"></span>{/if}
+            <Icon name={item.icon} size={17} class="shrink-0 {activeView === item.id ? 'text-purple-100' : ''}" />
             {#if !collapsed}<span class="truncate">{item.label}</span>{/if}
           </button>
         </li>
@@ -68,9 +66,10 @@
   </nav>
 
   {#if !collapsed}
-    <div class="mt-4 rounded-xl border border-line bg-surface p-3.5">
-      <div class="flex items-center justify-between">
-        <span class="text-[11px] font-medium tracking-wide text-ink-tertiary">PLAN LOCAL</span>
+    <div class="mt-4 rounded-2xl border border-line bg-gradient-to-br from-surface to-surface-inset p-3.5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.6)] transition-colors hover:from-surface-hover">
+      <div class="flex items-center gap-1.5">
+        <Icon name="sparkles" size={13} class="text-purple-300" />
+        <span class="font-mono text-[10px] tracking-[0.16em] text-purple-300/70">PLAN LOCAL</span>
       </div>
       <p class="mt-2 text-sm font-semibold text-ink">Herramientas gratuitas</p>
       <p class="mt-1 text-[11.5px] leading-snug text-ink-secondary">SDXL local, Nemotron/Qwen/Kimi gratis, sin costos por episodio.</p>
