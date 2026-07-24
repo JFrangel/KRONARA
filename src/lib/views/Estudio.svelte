@@ -182,7 +182,7 @@
   // el conteo de fuentes, la música y los SFX que el pipeline visual reporta.
   const SOURCE_KIND_LABELS = { ai_image: 'Imagen IA', video_loop: 'Video loop', graphic_overlay: 'Tarjeta gráfica', placeholder: 'Placeholder' };
   const SOURCE_KIND_TONE = { ai_image: 'purple', video_loop: 'success', graphic_overlay: 'neutral', placeholder: 'neutral' };
-  const SOURCE_KIND_HEX = { ai_image: '#a855f7', video_loop: '#34d399', graphic_overlay: '#64748b', placeholder: '#3f3f46' };
+  const SOURCE_KIND_HEX = { ai_image: '#9f83ff', video_loop: '#52c69a', graphic_overlay: '#697389', placeholder: '#242836' };
   const TIER_LABELS = { premium: 'Premium', fast: 'Rápida' };
 
   const secs = (ms) => `${(Math.max(0, ms ?? 0) / 1000).toFixed(1)}s`;
@@ -582,10 +582,10 @@
         {#if animateNotice}<p class="mb-3 rounded-lg border border-line bg-surface-inset px-3 py-2 text-[11.5px] text-ink-secondary">{animateNotice}</p>{/if}
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {#each sceneManifest as scene (scene.scene_id)}
-            <figure class="overflow-hidden rounded-xl border border-line bg-surface-inset">
-              <div class="relative aspect-[9/16] bg-black">
+            <figure class="group overflow-hidden rounded-xl border border-line bg-surface-inset transition-all duration-300 hover:border-purple-500/60 hover:shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+              <div class="relative aspect-[9/16] overflow-hidden bg-black">
                 {#if assetSrc(scene.asset_path)}
-                  <img src={assetSrc(scene.asset_path)} alt={`Escena ${scene.scene_index}`} class="h-full w-full object-cover" loading="lazy" />
+                  <img src={assetSrc(scene.asset_path)} alt={`Escena ${scene.scene_index}`} class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" loading="lazy" />
                 {:else}
                   <div class="flex h-full items-center justify-center text-ink-tertiary"><Icon name="film" /></div>
                 {/if}
@@ -618,13 +618,13 @@
         <Card title="Composición de fuentes visuales" subtitle="De dónde sale cada escena del episodio">
           <div class="flex h-3 overflow-hidden rounded-full border border-line">
             {#each sourceBreakdown as seg (seg.kind)}
-              <div class="h-full" style={`width:${seg.pct}%;background:${SOURCE_KIND_HEX[seg.kind] ?? '#3f3f46'}`} title={SOURCE_KIND_LABELS[seg.kind] ?? seg.kind}></div>
+              <div class="h-full transition-[width] duration-700 ease-out" style={`width:${seg.pct}%;background:${SOURCE_KIND_HEX[seg.kind] ?? '#242836'}`} title={SOURCE_KIND_LABELS[seg.kind] ?? seg.kind}></div>
             {/each}
           </div>
           <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
             {#each sourceBreakdown as seg (seg.kind)}
               <div class="flex items-center gap-1.5 text-[11.5px] text-ink-secondary">
-                <span class="h-2.5 w-2.5 rounded-sm" style={`background:${SOURCE_KIND_HEX[seg.kind] ?? '#3f3f46'}`}></span>
+                <span class="h-2.5 w-2.5 rounded-sm" style={`background:${SOURCE_KIND_HEX[seg.kind] ?? '#242836'}`}></span>
                 {SOURCE_KIND_LABELS[seg.kind] ?? seg.kind}<span class="text-ink-tertiary">· {seg.count}</span>
               </div>
             {/each}
