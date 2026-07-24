@@ -73,12 +73,22 @@ de los programas (~70 disparadores). Freesound queda para ampliar el catálogo.
 
 ## Movimiento y construcción de video
 
-Hoy cada escena es una imagen fija con **Ken Burns** (zoom/pan vía `zoompan` +
-crossfades `xfade`, sesgo por `motion_bias` del estilo). La composición **ya
-soporta clips de video** (`video_clip_filter`, fuente `video_loop`); falta poblar
-la biblioteca con loops reales de Pexels. La animación generativa i2v (Cloudflare
-Wan) está keyeada pero aún no cableada. Render final 9:16 con FFmpeg, subtítulos y
-normalización de loudness a la ventana −19…−13 LUFS.
+Tres niveles de movimiento, de gratis a premium:
+
+1. **Ken Burns** (default, gratis): imagen fija con zoom/pan (`zoompan`) + crossfades
+   (`xfade`), sesgo por `motion_bias` del estilo.
+2. **Video-loops de Pexels** (gratis, real): metraje en movimiento (fuente
+   `video_loop`, `video_clip_filter`). Cablear con `library.harvest_video_loops`
+   (`KRONARA_PEXELS_ENABLED=1`). La composición ya lo renderiza con `-stream_loop -1`.
+3. **i2v generativo** (opt-in, de pago): anima la propia imagen de una escena.
+   **Investigado (jul-2026): Cloudflare Workers AI NO tiene i2v** (su changelog no
+   lista modelos de video). El i2v real y barato es **fal.ai `fal-ai/wan-i2v`**
+   (Wan 2.x, 9:16, ~1 min/clip, ~$0.20 480p / $0.40 720p). Provider `i2v.py`
+   (`FalWanI2VProvider`, gated por `KRONARA_I2V_ENABLED=1` + `KRONARA_FAL_KEY`),
+   expuesto como RPC **on-demand** `media.animate_scene` (deliberado, no automático,
+   por costo/latencia). Sin key → apagado; el episodio usa loops o Ken Burns.
+
+Render final 9:16 con FFmpeg, subtítulos y normalización de loudness a −19…−13 LUFS.
 
 ## Reddit
 

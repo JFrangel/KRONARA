@@ -146,6 +146,7 @@ class OperationsService:
             "voice.delete_profile": self.voice_delete_profile,
             "voice.settings": self.voice_settings,
             "library.harvest_video_loops": self.harvest_video_loops,
+            "media.animate_scene": self.animate_scene,
             "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
@@ -177,6 +178,37 @@ class OperationsService:
             now=int(datetime.now(UTC).timestamp()),
         )
         return {"schema_version": 1, **result}
+
+    def animate_scene(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Escena animada bajo demanda (i2v generativo, opt-in). Anima la imagen
+        de una escena según un prompt de movimiento (fal.ai Wan i2v). Deliberado,
+        no automático: es lento (~1 min) y de pago (~$0.20-0.40/clip), por eso se
+        dispara desde la edición, no en cada corrida. Gated: sin
+        KRONARA_I2V_ENABLED=1 + KRONARA_FAL_KEY devuelve i2v_disabled y el
+        episodio conserva su imagen fija / loop de Pexels."""
+        from kronara.i2v import FalWanI2VProvider
+
+        provider = FalWanI2VProvider.from_env(dict(os.environ))
+        if provider is None:
+            return {
+                "status": "i2v_disabled",
+                "detail": "Activa KRONARA_I2V_ENABLED=1 y KRONARA_FAL_KEY para animar escenas "
+                "(fal.ai Wan i2v, ~$0.20-0.40 por clip). Mientras, las escenas usan Pexels loops o Ken Burns.",
+            }
+        image_path = str(params.get("image_path") or "")
+        try:
+            resolved = Path(image_path).resolve()
+            if not image_path or not resolved.is_file() or not resolved.is_relative_to(self.data_dir.resolve()):
+                return {"status": "error", "detail": "image_path debe existir y estar dentro del almacenamiento de Kronara."}
+        except (OSError, ValueError):
+            return {"status": "error", "detail": "image_path inválido."}
+        prompt = str(params.get("prompt") or "movimiento sutil de cámara, atmósfera cinemática")
+        stamp = hashlib.sha256(f"{resolved}|{prompt}".encode("utf-8")).hexdigest()[:16]
+        dest = str(self.data_dir / "assets" / "animated" / f"{stamp}.mp4")
+        out = provider.animate(image_path=str(resolved), prompt=prompt, dest=dest)
+        if out is None:
+            return {"status": "failed", "detail": "La animación no se completó; se conserva la imagen fija."}
+        return {"status": "completed", "video_path": out}
 
     def schedule_tick(self, params: dict[str, Any]) -> dict[str, Any]:
         """B1: the autonomous weekly grid's real trigger. Rust's background
