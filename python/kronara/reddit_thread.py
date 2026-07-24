@@ -75,6 +75,22 @@ def extract_updates(selftext: str) -> tuple[str, tuple[ThreadUpdate, ...]]:
     return original, tuple(updates)
 
 
+def build_source_case(detail: "ThreadDetail | None") -> str:
+    """Aplana un ThreadDetail al bloque 'caso fuente' que recibe el guionista en
+    modo reconstrucción: cuerpo original + actualizaciones + seguimientos del
+    autor, etiquetados. Devuelve '' si no hay cuerpo (el pipeline cae al modo
+    original). NO incluye el nombre del autor: la anonimización la hace el
+    guionista, pero el material que se le pasa ya viene sin la identidad."""
+    if detail is None or not detail.body:
+        return ""
+    parts = [detail.body]
+    for update in detail.updates:
+        parts.append(f"[{update.label}] {update.text}")
+    for follow in detail.op_followups:
+        parts.append(f"[SEGUIMIENTO DEL AUTOR] {follow}")
+    return "\n\n".join(part for part in parts if part).strip()
+
+
 class RedditThreadReader:
     """Trae el detalle de un hilo por su permalink/id, sin login."""
 

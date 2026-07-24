@@ -179,6 +179,13 @@ _SCENE_CRAFT_DIRECTIVES = [
     "Cada escena hace al menos una cosa nueva: sube el riesgo, revela, decide o paga una pista.",
 ]
 
+_RECONSTRUCTION_CONTRACT = [
+    "Modo RECONSTRUCCIÓN FIEL: source_case es el caso REAL (cuerpo del hilo + bloques [UPDATE]/[SEGUIMIENTO DEL AUTOR]). Reconstruye ESOS hechos: respeta cronología, evidencias, giros y el desenlace real de las actualizaciones.",
+    "NO inventes eventos, pruebas ni personajes que no estén en source_case; si el caso queda abierto, no cierres con un final fabricado.",
+    "ANONIMIZA: cambia nombres, lugares, fechas exactas y detalles identificables (no copies frases textuales del original). El resultado debe ser irreconocible como la persona real pero fiel a los hechos.",
+    "Mantén el tono documental; si el caso no es verificable, no afirmes que lo es (usa el fraseo de disclaimers del hook_playbook).",
+]
+
 _CONCEPT_AGENT_CONTRACT = [
     "Transforma la senal externa en una premisa original; no reutilices secuencia, identidad ni fraseo.",
     "Dale a la protagonista una decision activa en el gancho o en la promesa.",
@@ -373,6 +380,10 @@ class RoutedStoryProvider:
         # quality/duration revision must not silently contradict established
         # characters/facts.
         self._series_context: str = ""
+        # Modo reconstrucción fiel: el caso real (cuerpo + actualizaciones) que el
+        # guionista reconstruye anonimizado. "" = modo original (inventar desde la
+        # señal abstracta). Se cachea para las etapas guion/revisión.
+        self._source_case: str = ""
 
     @property
     def family(self) -> str:
@@ -392,6 +403,7 @@ class RoutedStoryProvider:
         self._sensitivity = brief.source_sensitivity
         self._program_id = brief.program_id
         self._series_context = brief.series_context or ""
+        self._source_case = brief.source_case or ""
         inspiration = self.router.complete(
             alias="experimental_hy3",
             requirements=ModelRequirements(frozenset({"creative"})),
@@ -422,6 +434,11 @@ class RoutedStoryProvider:
                 "agent_contract": _CONCEPT_AGENT_CONTRACT,
                 "program_contract": narrative_contract(brief.program_id),
                 "hook_playbook": load_hooks().playbook(program_id=brief.program_id),
+                **(
+                    {"source_case": self._source_case, "reconstruction_contract": _RECONSTRUCTION_CONTRACT}
+                    if self._source_case
+                    else {}
+                ),
             },
             response_schema=_object_schema({
                 "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},
@@ -514,6 +531,11 @@ class RoutedStoryProvider:
                     "hechos establecidos y retoma las preguntas abiertas."
                     if brief.series_context
                     else ""
+                ),
+                **(
+                    {"source_case": brief.source_case, "reconstruction_contract": _RECONSTRUCTION_CONTRACT}
+                    if brief.source_case
+                    else {}
                 ),
             },
             response_schema=_SCENES_SCHEMA,

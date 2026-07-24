@@ -86,3 +86,27 @@ def test_fetch_retries_on_429_then_gives_up():
     reader._sleep = lambda _s: None
     assert reader.fetch("id") is None
     assert calls["n"] == 3
+
+
+def test_build_source_case_flattens_body_updates_and_followups():
+    from kronara.reddit_thread import ThreadDetail, ThreadUpdate, build_source_case
+
+    detail = ThreadDetail(
+        thread_id="id", subreddit="nosleep", title="t",
+        body="Cuerpo original del caso.", edited=True,
+        updates=(ThreadUpdate("UPDATE", "apareció el responsable.", "selftext"),),
+        op_followups=("aquí lo que pasó después según el autor",),
+        author="op",
+    )
+    case = build_source_case(detail)
+    assert "Cuerpo original del caso." in case
+    assert "[UPDATE] apareció el responsable." in case
+    assert "[SEGUIMIENTO DEL AUTOR] aquí lo que pasó después" in case
+    # El nombre del autor nunca viaja en el material del caso.
+    assert "op" not in case.split()
+
+
+def test_build_source_case_empty_when_no_body():
+    from kronara.reddit_thread import build_source_case
+
+    assert build_source_case(None) == ""

@@ -514,3 +514,48 @@ def test_revise_without_a_target_word_count_falls_back_to_existing_scene_length(
     ][-1]
     existing_words = sum(len(scene.narration.split()) for scene in scenes)
     assert revise_call["max_tokens"] == max(4096, min(8192, round(existing_words * 3.0) + 1536))
+
+
+def reconstruction_brief():
+    base = brief()
+    return StoryBrief(
+        story_id=base.story_id,
+        title=base.title,
+        premise=base.premise,
+        theme=base.theme,
+        target_duration_seconds=base.target_duration_seconds,
+        rights_mode=base.rights_mode,
+        source_uri=base.source_uri,
+        evidence_refs=base.evidence_refs,
+        source_case="Cuerpo real del caso.\n\n[UPDATE] apareció el responsable.",
+    )
+
+
+def test_reconstruction_mode_forwards_source_case_and_contract_to_writer():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(reconstruction_brief())
+
+    concept_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert "[UPDATE]" in concept_call["input"]["source_case"]
+    contract = concept_call["input"]["reconstruction_contract"]
+    assert any("RECONSTRUCCIÓN FIEL" in item for item in contract)
+    assert any("ANONIMIZA" in item for item in contract)
+
+
+def test_original_mode_omits_reconstruction_material():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(brief())  # sin source_case -> modo original
+
+    concept_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert "source_case" not in concept_call["input"]
+    assert "reconstruction_contract" not in concept_call["input"]

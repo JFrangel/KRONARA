@@ -29,6 +29,10 @@ class StoryBrief:
     evidence_refs: tuple[str, ...]
     reference_texts: tuple[str, ...] = ()
     forbidden_event_sequence: tuple[str, ...] = ()
+    # Modo "reconstrucción fiel": el cuerpo real del hilo (con actualizaciones)
+    # que el guionista reconstruye anonimizado en vez de inventar. "" = modo
+    # original (historia inventada desde la señal abstracta). Ver reddit_thread.
+    source_case: str = ""
     # Serialized multi-part stories: optional canon inherited from earlier parts.
     series_id: str | None = None
     part_number: int | None = None

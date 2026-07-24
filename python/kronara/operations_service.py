@@ -14,6 +14,7 @@ from uuid import uuid4
 from kronara.agent_catalog import AgentCatalog
 from kronara.authority_client import AuthorityClient, UnavailableAuthorityClient
 from kronara.content_pipeline import ProductionContentPipeline, TracingAuthorityClient
+from kronara.reddit_thread import RedditThreadReader
 from kronara.embedding_registry import EmbeddingRegistry, ProductionEmbeddingFactory
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2
 from kronara.observable_tools import ObservableToolRegistry
@@ -868,6 +869,9 @@ class OperationsService:
             asset_library=self._asset_library,
             opportunity_store=self._opportunity_store,
             rate_learner=self._rate_learner,
+            # Reconstrucción fiel (default en producción): lee el hilo real del
+            # caso para reconstruir hechos reales anonimizados. Sin login.
+            thread_reader=RedditThreadReader(),
         )
 
     def _content_run_async(self, params: dict[str, Any]) -> dict[str, Any]:

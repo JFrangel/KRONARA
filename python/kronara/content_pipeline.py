@@ -20,6 +20,7 @@ from kronara.reddit_observatory import (
     RedditSignalFilters,
 )
 from kronara.reddit_source_map import load_source_map, sensitivity_for
+from kronara.reddit_thread import RedditThreadReader, build_source_case
 from kronara.routed_story_provider import (
     AuthorityModelRouter,
     KRONARA_CREATIVE_SYSTEM,
@@ -174,12 +175,18 @@ class ProductionContentPipeline:
         asset_library: "object | None" = None,
         opportunity_store: "object | None" = None,
         rate_learner: "object | None" = None,
+        thread_reader: "object | None" = None,
     ):
         self.authority = authority
         self.store = store
         self.rag = rag
         self.model_registry = model_registry
         self.artifacts = ArtifactStore(artifact_root)
+        # Modo reconstrucción fiel: cuando el sidecar inyecta un RedditThreadReader,
+        # cada corrida trae el hilo REAL del caso (cuerpo + actualizaciones) para
+        # que el guionista reconstruya hechos reales anonimizados. None -> modo
+        # original (inventar desde la señal abstracta); mantiene los tests sin red.
+        self._thread_reader = thread_reader
         # Optional bitemporal knowledge graph for serialized (multi-part) stories.
         self.graph = graph
         # Optional real-voice duration: when a provider is supplied the story
@@ -426,6 +433,7 @@ class ProductionContentPipeline:
                 str(series_id), part_number, now=observed_at
             ).context_block
         source_sensitivity = sensitivity_for(self._subreddit_of(selected), self._source_map)
+        source_case = self._reconstruction_source_case(selected, params, run_id)
         brief = StoryBrief(
             story_id=story_id,
             title=str(editorial["title"]),
@@ -441,6 +449,7 @@ class ProductionContentPipeline:
             series_context=series_context,
             source_sensitivity=source_sensitivity,
             program_id=str(params["program_id"]) if params.get("program_id") else None,
+            source_case=source_case,
         )
         return {
             "params": params,
@@ -643,6 +652,43 @@ class ProductionContentPipeline:
                 "payload": payload,
             },
         )
+
+    def _reconstruction_source_case(self, selected, params: dict[str, Any], run_id: str) -> str:
+        """Modo reconstrucción fiel (default): trae el hilo REAL del caso
+        seleccionado (cuerpo + actualizaciones + seguimientos del autor) para que
+        el guionista reconstruya hechos reales anonimizados en vez de inventar.
+        Best-effort y gated por params['reconstruct'] (default True): si no hay
+        permalink usable o la lectura falla, devuelve '' y el pipeline cae al modo
+        original basado en la señal abstracta -- nunca rompe una corrida."""
+        if not params.get("reconstruct", True):
+            return ""
+        # Inyección de dependencia: el lector lo cablea el sidecar (producción =
+        # reconstrucción ON). Sin lector inyectado -> "" (tests herméticos no
+        # tocan la red). Ver sidecar.py y RedditThreadReader.
+        reader = getattr(self, "_thread_reader", None)
+        if reader is None:
+            return ""
+        uri = str(getattr(selected, "source_uri", "") or "")
+        if "reddit.com" not in uri or "/comments/" not in uri:
+            return ""
+        try:
+            detail = reader.fetch(uri)
+        except Exception:
+            detail = None
+        source_case = build_source_case(detail)
+        if source_case and detail is not None:
+            self._agent_log(
+                run_id,
+                "opportunity_intelligence",
+                "thread.reconstruct",
+                (
+                    f"Hilo real leído para reconstrucción: {len(source_case)} chars, "
+                    f"{len(detail.updates)} actualización(es), "
+                    f"{len(detail.op_followups)} seguimiento(s) del autor."
+                ),
+                {"source_uri": uri, "has_updates": detail.has_updates},
+            )
+        return source_case
 
     def _rss_fallback_signals(
         self, subreddits: list[str], params: dict[str, Any]
