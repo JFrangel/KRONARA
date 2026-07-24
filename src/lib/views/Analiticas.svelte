@@ -32,6 +32,36 @@
     }
   });
 
+  // #97: Kronara Pulse -- el agente de métricas da recomendaciones editoriales.
+  // Con métricas reales (vía la conexión de red) el análisis es más rico; por
+  // ahora razona sobre el catálogo (títulos, duración, QC).
+  let pulse = $state(null);
+  let pulseLoading = $state(false);
+  let pulseError = $state('');
+
+  async function runPulse() {
+    if (pulseLoading || episodes.length === 0) return;
+    pulseLoading = true;
+    pulse = null;
+    pulseError = '';
+    try {
+      const eps = episodes.slice(0, 40).map((e) => ({
+        title: e.title,
+        program: e.program_id,
+        duration_seconds: e.duration_seconds,
+        narrative_passed: e.narrative_passed,
+        originality_passed: e.originality_passed,
+      }));
+      const result = await callOperations('pulse.analyze', { episodes: eps });
+      if (result.status === 'ok') pulse = result;
+      else pulseError = result.detail || 'Sin datos suficientes para el análisis.';
+    } catch (error) {
+      pulseError = 'Kronara Pulse no respondió (revisa la ruta de modelos).';
+    } finally {
+      pulseLoading = false;
+    }
+  }
+
   const qcPassRate = $derived.by(() => {
     if (episodes.length === 0) return null;
     const passed = episodes.filter((e) => e.narrative_passed && e.originality_passed).length;
@@ -113,6 +143,32 @@
         <p class="mt-1 font-display text-2xl font-semibold text-ink">{(operations.toolEvents ?? []).length}</p>
       </Card>
     </div>
+
+    <Card title="Kronara Pulse" subtitle="El agente analiza el catálogo y recomienda qué funciona, qué cambiar y fórmulas de título">
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          class="rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+          onclick={runPulse}
+          disabled={pulseLoading || episodes.length === 0}
+        >
+          {pulseLoading ? 'Analizando…' : 'Analizar con Pulse'}
+        </button>
+        <p class="text-[11.5px] text-ink-tertiary">Con métricas reales (vía Postiz/red conectada) el análisis se afina; ahora razona sobre el catálogo.</p>
+      </div>
+      {#if pulseError}<p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">{pulseError}</p>{/if}
+      {#if pulse}
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {#each [['Qué funciona', pulse.what_works], ['Qué cambiar', pulse.what_to_change], ['Fórmulas de título', pulse.title_formulas], ['Próximos temas', pulse.next_topics]] as [label, items]}
+            <div class="rounded-xl border border-line bg-surface-inset p-3">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">{label}</p>
+              <ul class="mt-1.5 space-y-1">
+                {#each items ?? [] as item}<li class="text-[12px] leading-relaxed text-ink-secondary">• {item}</li>{/each}
+              </ul>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </Card>
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
       <Card title="Episodios por programa" subtitle="episodes.list">
