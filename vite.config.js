@@ -36,6 +36,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'voice.delete_profile',
   'voice.settings',
   'library.harvest_video_loops',
+  'library.harvest_freesound',
   'media.animate_scene',
   'accounts.list',
   'agents.overview',

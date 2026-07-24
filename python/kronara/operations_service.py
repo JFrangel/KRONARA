@@ -146,6 +146,7 @@ class OperationsService:
             "voice.delete_profile": self.voice_delete_profile,
             "voice.settings": self.voice_settings,
             "library.harvest_video_loops": self.harvest_video_loops,
+            "library.harvest_freesound": self.harvest_freesound,
             "media.animate_scene": self.animate_scene,
             "accounts.list": self.accounts_list,
             "agents.overview": self.agents_overview,
@@ -210,6 +211,52 @@ class OperationsService:
         if out is None:
             return {"status": "failed", "detail": "La animación no se completó; se conserva la imagen fija."}
         return {"status": "completed", "video_path": out}
+
+    def harvest_freesound(self, params: dict[str, Any]) -> dict[str, Any]:
+        """V7: cosecha música/SFX CC0 de Freesound para ampliar la ambientación.
+        Gated por KRONARA_FREESOUND_ACCESS_TOKEN (OAuth de Freesound; expira 24h).
+        which = 'music' | 'sfx' | 'both' (default)."""
+        if self._asset_library is None:
+            return {"status": "library_unavailable"}
+        token = os.environ.get("KRONARA_FREESOUND_ACCESS_TOKEN")
+        if not token:
+            return {
+                "status": "freesound_disabled",
+                "detail": "Falta KRONARA_FREESOUND_ACCESS_TOKEN (OAuth de Freesound; el token expira 24h).",
+            }
+        from kronara.freesound_harvest import (
+            MUSIC_QUERIES,
+            SFX_QUERIES,
+            freesound_download,
+            freesound_search,
+            harvest_freesound,
+        )
+
+        which = str(params.get("which") or "both")
+        search = freesound_search(token)
+        download = freesound_download(token)
+        now = int(datetime.now(UTC).timestamp())
+        reports: dict[str, Any] = {}
+        seeded = 0
+        if which in ("both", "music"):
+            result = harvest_freesound(
+                search=search, download=download, library=self._asset_library,
+                queries=MUSIC_QUERIES, asset_type="music",
+                dest_dir=self.data_dir / "assets" / "music",
+                min_duration=20.0, max_duration=120.0, now=now,
+            )
+            reports["music"] = result["reports"]
+            seeded += result["seeded"]
+        if which in ("both", "sfx"):
+            result = harvest_freesound(
+                search=search, download=download, library=self._asset_library,
+                queries=SFX_QUERIES, asset_type="sfx",
+                dest_dir=self.data_dir / "assets" / "sfx",
+                min_duration=0.2, max_duration=8.0, now=now,
+            )
+            reports["sfx"] = result["reports"]
+            seeded += result["seeded"]
+        return {"schema_version": 1, "seeded": seeded, "reports": reports}
 
     def accounts_list(self, params: dict[str, Any]) -> dict[str, Any]:
         """Multi-cuenta (Fase 5): qué canal/plataforma publica cada modo. Vista

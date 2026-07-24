@@ -143,6 +143,32 @@
     }
   }
 
+  // Cosecha de música/SFX CC0 desde Freesound (amplía la ambientación).
+  let harvestingAudio = $state(false);
+  let audioReport = $state(null);
+  let audioError = $state('');
+
+  async function harvestFreesound() {
+    if (harvestingAudio) return;
+    harvestingAudio = true;
+    audioReport = null;
+    audioError = '';
+    try {
+      const result = await callOperations('library.harvest_freesound', {});
+      if (result.status === 'library_unavailable') {
+        audioError = 'La biblioteca de assets no está disponible en esta sesión.';
+      } else if (result.status === 'freesound_disabled') {
+        audioError = result.detail;
+      } else {
+        audioReport = result;
+      }
+    } catch (error) {
+      audioError = 'Freesound no respondió. El token OAuth (KRONARA_FREESOUND_ACCESS_TOKEN) expira cada 24h.';
+    } finally {
+      harvestingAudio = false;
+    }
+  }
+
   let voiceInfo = $state(null);
   let voicesLoaded = $state(false);
 
@@ -576,6 +602,28 @@
             {/each}
           </div>
         </div>
+      {/if}
+    </Card>
+
+    <Card title="Música y SFX (Freesound)" subtitle="Amplía la ambientación con audio de dominio público (CC0)">
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          class="rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+          onclick={harvestFreesound}
+          disabled={harvestingAudio}
+        >
+          {harvestingAudio ? 'Cosechando de Freesound…' : 'Cosechar música y SFX'}
+        </button>
+        <p class="text-[11.5px] text-ink-tertiary">
+          Baja pistas y efectos <a class="text-purple-300 hover:underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0</a>
+          por mood/tag y los siembra con su atribución. Requiere <code class="text-purple-300">KRONARA_FREESOUND_ACCESS_TOKEN</code> (OAuth, expira 24h).
+        </p>
+      </div>
+      {#if audioError}
+        <p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">{audioError}</p>
+      {/if}
+      {#if audioReport}
+        <p class="mt-3 border-t border-line pt-3 text-[12px] text-ink">Sembrados <strong class="text-ink">{audioReport.seeded}</strong> asset(s) nuevo(s) (música + SFX).</p>
       {/if}
     </Card>
   {:else if activeTab === 'voces'}
