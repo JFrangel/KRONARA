@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 
 from kronara.authority_client import AuthorityClient
+from kronara.hooks_library import load_hooks
 from kronara.model_registry_v2 import (
     ModelCapabilityRegistryV2,
     ModelRequirements,
@@ -182,6 +183,10 @@ _CONCEPT_AGENT_CONTRACT = [
     "Transforma la senal externa en una premisa original; no reutilices secuencia, identidad ni fraseo.",
     "Dale a la protagonista una decision activa en el gancho o en la promesa.",
     "Cada concepto debe prometer una revelacion preparada por pistas, no por sorpresa gratuita.",
+    # Apertura documental (ver hook_playbook): reconstruimos un caso, no leemos Reddit.
+    "El 'hook' abre como un expediente (evidencia, contradiccion, cuenta regresiva, dilema...), no anunciando 'un usuario de Reddit'; la procedencia va DESPUES, no en la primera frase.",
+    "Elige el mecanismo de hook_playbook segun selection_rules y la naturaleza real de la historia; construye una apertura ORIGINAL con hechos concretos, sin copiar ni parafrasear de cerca ningun ejemplo.",
+    "No repitas el mismo mecanismo de apertura del episodio anterior (hook_playbook.avoid_mechanisms) ni uses formulas gastadas ('no creeras lo que paso').",
 ]
 
 _BLUEPRINT_AGENT_CONTRACT = [
@@ -416,6 +421,7 @@ class RoutedStoryProvider:
                 "count": 3,
                 "agent_contract": _CONCEPT_AGENT_CONTRACT,
                 "program_contract": narrative_contract(brief.program_id),
+                "hook_playbook": load_hooks().playbook(program_id=brief.program_id),
             },
             response_schema=_object_schema({
                 "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},

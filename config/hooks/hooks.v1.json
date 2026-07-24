@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "philosophy": "No leemos historias de Reddit: reconstruimos relatos, testimonios y casos que aparecieron en Reddit. La voz es la de un narrador que investiga un expediente, no la de alguien leyendo una publicación. La procedencia (Reddit/foro) aparece DESPUÉS del gancho, entre la 2.ª y la 5.ª frase, nunca domina la entrada.",
+  "usage_contract": [
+    "El hook_playbook es material de OFICIO: mecanismos, estructura y ejemplos ILUSTRATIVOS.",
+    "Construye SIEMPRE un gancho ORIGINAL con los hechos específicos de esta historia.",
+    "Los ejemplos muestran el patrón; NUNCA los copies ni los parafrasees de cerca. Copiar un ejemplo hace fallar la verificación de originalidad.",
+    "No uses el mismo mecanismo en dos episodios consecutivos (ver avoid_mechanisms).",
+    "El gancho crea curiosidad con información incompleta, pero la historia SIEMPRE paga esa promesa.",
+    "Prohibido inventar pruebas, capturas, actualizaciones o que una publicación fue eliminada si no consta en el material original."
+  ],
+  "mechanisms": [
+    {
+      "id": "consequence_first",
+      "name": "Consecuencia primero",
+      "when_to_use": "Historias con un desenlace fuerte (pérdida, ruptura, despido, cárcel). Ideal para dilemas y casos largos: abre cerca del clímax y reconstruye hacia atrás.",
+      "structure": "Muestra el resultado impactante antes de la causa; luego promete reconstruir cómo se llegó ahí.",
+      "examples_illustrative": [
+        "Cuando todo terminó, una familia había quedado dividida y nadie sabía quién dijo la primera mentira.",
+        "Antes de que acabara la noche, perdería a su prometida, a su mejor amigo y el respeto de su familia."
+      ]
+    },
+    {
+      "id": "impossible_contradiction",
+      "name": "Contradicción imposible",
+      "when_to_use": "Cuando hay dos hechos que no pueden coexistir, o dos versiones enfrentadas. Fuerte en paranormal y misterio.",
+      "structure": "Presenta dos hechos verificables que se contradicen; la tensión es resolver cómo ambos pueden ser ciertos.",
+      "examples_illustrative": [
+        "La casa llevaba vacía ocho años, pero cada mes aparecía una nueva factura de electricidad.",
+        "Los documentos decían que no tenía hijos; cuatro personas aseguraban que era su madre."
+      ]
+    },
+    {
+      "id": "forbidden_information",
+      "name": "Información prohibida",
+      "when_to_use": "Cuando existe un secreto, instrucción o documento que el protagonista no debería conocer.",
+      "structure": "Nombra algo que estaba prohibido saber o abrir; la mente quiere justo eso.",
+      "examples_illustrative": [
+        "El documento familiar tenía escrito: 'No dejar que lo lea'.",
+        "La única condición del trabajo era no responder llamadas provenientes del tercer piso."
+      ]
+    },
+    {
+      "id": "evidence_object",
+      "name": "Evidencia u objeto inexplicable",
+      "when_to_use": "Cuando hay una prueba física concreta (foto, recibo, llave, USB, carta).",
+      "structure": "Abre describiendo el objeto y el detalle que no encaja.",
+      "examples_illustrative": [
+        "En el fondo de una caja había tres fotografías, una llave oxidada y un nombre que nadie reconocía.",
+        "El recibo mostraba una compra hecha a 900 km mientras toda la familia estaba en casa."
+      ]
+    },
+    {
+      "id": "precise_timestamp",
+      "name": "Fecha y hora precisa",
+      "when_to_use": "Cuando un momento exacto ancla el misterio; da sensación de expediente.",
+      "structure": "Abre con una hora o fecha específica y el hecho anómalo asociado.",
+      "examples_illustrative": [
+        "A las 3:17 de la madrugada, todas las cámaras dejaron de grabar durante exactamente once minutos."
+      ]
+    },
+    {
+      "id": "interrupted_phrase",
+      "name": "Frase interrumpida o conversación incompleta",
+      "when_to_use": "Cuando una línea de diálogo o una revelación corta antes de la palabra clave. Breve; no la estires.",
+      "structure": "Muestra una sola parte del diálogo o corta la revelación un instante antes del dato crítico.",
+      "examples_illustrative": [
+        "El mensaje decía solo cinco palabras: 'Yo sé lo que hiciste'.",
+        "—No le digas que ya lo sabemos. Eso fue lo primero que escuchó al entrar."
+      ]
+    },
+    {
+      "id": "countdown",
+      "name": "Cuenta regresiva",
+      "when_to_use": "Cuando hay un plazo inevitable que presiona la decisión.",
+      "structure": "Introduce el reloj: cuánto falta y qué está en juego cuando se acabe.",
+      "examples_illustrative": [
+        "Tenía veinte minutos para demostrar que decía la verdad antes de que ella abordara el avión."
+      ]
+    },
+    {
+      "id": "small_detail",
+      "name": "Detalle insignificante que lo desencadena todo",
+      "when_to_use": "Cuando algo pequeño y cotidiano abre un problema enorme.",
+      "structure": "Empieza por el detalle mínimo y promete que esconde algo extraordinario.",
+      "examples_illustrative": [
+        "Todo comenzó porque su esposa cambió la contraseña del wifi.",
+        "Una diferencia de tres dólares en un recibo reveló una mentira de quince años."
+      ]
+    },
+    {
+      "id": "moral_accusation",
+      "name": "Acusación moral",
+      "when_to_use": "Cuando el protagonista hizo algo moralmente cuestionable y el contexto que lo justifica se retiene un momento.",
+      "structure": "Presenta la acción condenable; retén temporalmente lo que podría explicarla.",
+      "examples_illustrative": [
+        "Se negó a pagar la operación de su propia madre. Antes de juzgarlo, hay algo que deben saber."
+      ]
+    },
+    {
+      "id": "hidden_pattern",
+      "name": "Patrón oculto",
+      "when_to_use": "Psicológicas y de manipulación: un patrón que el protagonista aún no comprendía.",
+      "structure": "Enuncia el patrón repetido antes de revelar su causa única.",
+      "examples_illustrative": [
+        "Cada una de sus exparejas desapareció exactamente seis meses después de conocerlo.",
+        "Las cámaras fallaban siempre a las 3:17."
+      ]
+    },
+    {
+      "id": "significant_absence",
+      "name": "Ausencia significativa",
+      "when_to_use": "Cuando lo que falta es la pista, no lo que sobra.",
+      "structure": "Describe una normalidad intacta salvo por una única cosa ausente.",
+      "examples_illustrative": [
+        "No había puertas forzadas ni objetos robados. Solo faltaba un álbum familiar."
+      ]
+    },
+    {
+      "id": "false_safety",
+      "name": "Falsa seguridad",
+      "when_to_use": "Cuando conviene normalizar primero para romper la escena después.",
+      "structure": "Establece una calma creíble y luego quiébrala con el detalle que la desmiente.",
+      "examples_illustrative": [
+        "Durante los primeros seis meses, el nuevo vecino fue la persona más amable que había conocido."
+      ]
+    },
+    {
+      "id": "reconstructed_scene",
+      "name": "Escena crítica reconstruida",
+      "when_to_use": "Cuando una escena concreta condensa el conflicto (una cena, una puerta cerrada por dentro).",
+      "structure": "Reconstruye el momento con detalle físico, como un plano cinematográfico.",
+      "examples_illustrative": [
+        "La cena había terminado cuando el padre puso un sobre sobre la mesa y pidió que nadie lo abriera hasta que él saliera."
+      ]
+    },
+    {
+      "id": "spectator_verdict",
+      "name": "Juicio al espectador / pregunta investigativa",
+      "when_to_use": "Cuando conviene volver al espectador un investigador que toma partido. Evita '¿y si les dijera?' genérico.",
+      "structure": "Formula una pregunta ligada al caso concreto, no una hipótesis vacía.",
+      "examples_illustrative": [
+        "¿Quién enviaría dinero durante dieciocho años a una familia que supuestamente no conocía?",
+        "Esta historia tiene dos versiones. Solo una puede ser cierta."
+      ]
+    },
+    {
+      "id": "moral_dilemma",
+      "name": "Dilema moral",
+      "when_to_use": "Cuando el corazón de la historia es una decisión imposible entre dos daños.",
+      "structure": "Plantea las dos opciones y su costo antes de contar qué eligió.",
+      "examples_illustrative": [
+        "El audio podía demostrar que su hermano era inocente. También podía enviar a su padre a prisión."
+      ]
+    },
+    {
+      "id": "announced_future",
+      "name": "Futuro anunciado / pista sembrada",
+      "when_to_use": "Videos largos: crear una deuda narrativa que se paga más tarde.",
+      "structure": "Señala un elemento que 'cobrará sentido' después, creando expectativa.",
+      "examples_illustrative": [
+        "En ese momento ignoró un detalle que, meses después, cambiaría el caso."
+      ]
+    }
+  ],
+  "selection_rules": [
+    "Si existe una prueba física -> evidence_object o precise_timestamp.",
+    "Si hay dos versiones enfrentadas -> impossible_contradiction (contradicción testimonial).",
+    "Si es paranormal -> impossible_contradiction o precise_timestamp (anomalía concreta).",
+    "Si hay un dilema -> moral_dilemma o consequence_first.",
+    "Si es crimen o justicia -> evidence_object, moral_accusation o reconstructed_scene.",
+    "Si es confesional -> impossible_contradiction entre imagen pública y verdad privada.",
+    "Si es psicológica -> hidden_pattern.",
+    "Si la historia es larga -> consequence_first o announced_future (abre cerca del clímax)."
+  ],
+  "program_hints": {
+    "decisiones_dificiles": ["moral_dilemma", "consequence_first"],
+    "confesiones_anonimas": ["impossible_contradiction", "moral_accusation"],
+    "cronicas_de_justicia": ["evidence_object", "reconstructed_scene", "moral_accusation"],
+    "mentes_ocultas": ["hidden_pattern", "false_safety"],
+    "viernes_paranormal": ["impossible_contradiction", "precise_timestamp", "significant_absence"],
+    "historias_de_medianoche": ["reconstructed_scene", "interrupted_phrase"],
+    "el_caso_de_la_semana": ["evidence_object", "spectator_verdict"]
+  },
+  "source_attribution_variations": [
+    "La historia apareció inicialmente en un foro de relaciones.",
+    "El relato fue publicado de manera anónima buscando consejo.",
+    "Los primeros detalles surgieron en una extensa publicación de Reddit.",
+    "El protagonista compartió su versión tras ser acusado públicamente.",
+    "Meses después, alguien involucrado reconstruyó los hechos en internet.",
+    "La publicación original fue escrita en primera persona.",
+    "La historia llegó a Reddit dividida en varias actualizaciones.",
+    "La versión que conocemos proviene de una de las personas implicadas.",
+    "Aunque el relato no puede verificarse de forma independiente, su cronología permite reconstruir lo sucedido."
+  ],
+  "verifiability_disclaimers": [
+    "según contó el usuario",
+    "la historia fue compartida como una experiencia personal",
+    "aunque los hechos no pudieron verificarse de forma independiente"
+  ],
+  "format_rules": {
+    "short": [
+      "Entrega el conflicto antes de los 3 segundos.",
+      "Máximo 25-35 palabras en la primera frase.",
+      "Introduce una segunda pregunta antes del segundo 12.",
+      "Evita nombres, edades y antecedentes innecesarios al inicio."
+    ],
+    "long": [
+      "Abre con una consecuencia o una escena avanzada.",
+      "Formula la pregunta principal y regresa al inicio antes de los 30 segundos.",
+      "Abre un microconflicto nuevo en cada sección; cierra todos los loops antes del final.",
+      "Para proteger identidades, asigna nombres ficticios ('lo llamaremos Daniel')."
+    ]
+  },
+  "prohibitions": [
+    "No inventar que una publicación fue eliminada, ni pruebas/capturas/actualizaciones que no existan.",
+    "No prometer pruebas que la historia no muestra.",
+    "No afirmar que una historia es real sin verificación.",
+    "No usar 'no creerás lo que pasó', 'esto te dejará sin palabras' ni cadenas gastadas.",
+    "No retener artificialmente la respuesta hasta el último segundo.",
+    "No crear títulos o miniaturas que no correspondan al contenido."
+  ],
+  "quality_rubric": {
+    "axes": ["claridad", "curiosidad", "conflicto", "especificidad", "promesa_narrativa", "originalidad"],
+    "rule": "Evalúa el gancho del 1 al 10 en cada eje; reescríbelo si alguno queda por debajo de 8."
+  }
+}
