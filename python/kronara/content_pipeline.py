@@ -848,6 +848,7 @@ class ProductionContentPipeline:
             "sfx_cue_tags": list(production.sfx_cue_tags),
             "sfx_resolved_paths": production.sfx_resolved_paths or {},
             "sfx_missing_tags": list(production.sfx_missing_tags),
+            "scene_manifest": list(production.scene_manifest),
         }
 
     def _trace_retrieval(self, run_id: str, query: str, packet: Any) -> None:

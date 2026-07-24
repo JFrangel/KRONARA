@@ -24,7 +24,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from kronara.asset_library import AssetLibraryStore, LibraryAsset, sfx_paths_from_library
 from kronara.audio_mix import DEFAULT_KEYWORD_SFX, match_sfx_cues
@@ -62,6 +62,11 @@ class VisualProductionResult:
     sfx_cue_tags: tuple[str, ...] = ()
     sfx_resolved_paths: dict[str, str] | None = None
     sfx_missing_tags: tuple[str, ...] = ()
+    # One row per scene, in narration order: the concrete asset that renders it
+    # (real path -> thumbnail), how it was sourced/tiered, how many shots it was
+    # cut into, and its measured spoken duration. Powers the Storyboard and
+    # Voces tabs in Estudio -- honest per-scene detail, not aggregate counts.
+    scene_manifest: tuple[dict[str, Any], ...] = ()
 
 
 def concatenate_audio(ffmpeg: str, paths: Sequence[str], output_path: str, *, timeout: int = 300) -> None:
@@ -565,6 +570,7 @@ def produce_episode_video(
     )
 
     all_shots: list[Shot] = []
+    scene_manifest: list[dict[str, Any]] = []
     source_counts = {"ai_image": 0, "video_loop": 0, "graphic_overlay": 0}
     motion_bias = visual_style.motion_bias if visual_style else "standard"
     # Stable seed per recurring character so the same protagonist keeps a
@@ -595,11 +601,22 @@ def produce_episode_video(
             reference_image_path=cover_image_path if Path(cover_image_path).exists() else None,
             character_seed=_scene_character_seed(scene, character_seeds),
         )
-        all_shots.extend(
-            plan_shots_for_scene(
-                scene.scene_id, voice_duration.per_scene_ms[index], tier, [asset],
-                motion_bias=motion_bias,
-            )
+        scene_shots = plan_shots_for_scene(
+            scene.scene_id, voice_duration.per_scene_ms[index], tier, [asset],
+            motion_bias=motion_bias,
+        )
+        all_shots.extend(scene_shots)
+        scene_manifest.append(
+            {
+                "scene_index": index + 1,
+                "scene_id": scene.scene_id,
+                "source_kind": assignment.source_kind,
+                "tier": tier,
+                "duration_ms": voice_duration.per_scene_ms[index],
+                "shot_count": len(scene_shots),
+                "asset_path": asset.path,
+                "narration": scene.narration,
+            }
         )
 
     plan = build_visual_track_plan(all_shots, crossfade_ms=crossfade_ms)
@@ -656,4 +673,5 @@ def produce_episode_video(
         sfx_cue_tags=sfx_tags,
         sfx_resolved_paths=dict(sfx_paths),
         sfx_missing_tags=missing_sfx_tags,
+        scene_manifest=tuple(scene_manifest),
     )

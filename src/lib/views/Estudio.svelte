@@ -3,7 +3,6 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
-  import StubView from './StubView.svelte';
   import { applyProgressEvent } from '../operations-state.js';
   import { episodeGeneration } from '../generation-state.js';
   import { assetSrc, callOperations } from '../local-operations.js';
@@ -158,6 +157,40 @@
     const timeline = await callOperations('tools.timeline', { run_id: runId });
     for (const event of timeline.events) operations = applyProgressEvent(operations, event);
   }
+
+  // --- Cabina de edición: derivados sobre el episodio producido -------------
+  // Los tabs Voces/Storyboard/Recursos/Música leen el mismo `video.scene_manifest`
+  // (una fila por escena, con su asset real, corte, tier y duración medida) más
+  // el conteo de fuentes, la música y los SFX que el pipeline visual reporta.
+  const SOURCE_KIND_LABELS = { ai_image: 'Imagen IA', video_loop: 'Video loop', graphic_overlay: 'Tarjeta gráfica', placeholder: 'Placeholder' };
+  const SOURCE_KIND_TONE = { ai_image: 'purple', video_loop: 'success', graphic_overlay: 'neutral', placeholder: 'neutral' };
+  const SOURCE_KIND_HEX = { ai_image: '#a855f7', video_loop: '#34d399', graphic_overlay: '#64748b', placeholder: '#3f3f46' };
+  const TIER_LABELS = { premium: 'Premium', fast: 'Rápida' };
+
+  const secs = (ms) => `${(Math.max(0, ms ?? 0) / 1000).toFixed(1)}s`;
+
+  const video = $derived(contentResult?.video ?? null);
+  const sceneManifest = $derived(video?.scene_manifest ?? []);
+  const hasEpisode = $derived(sceneManifest.length > 0);
+  const maxSceneMs = $derived(sceneManifest.reduce((m, s) => Math.max(m, s.duration_ms ?? 0), 0) || 1);
+  const totalNarrationMs = $derived(sceneManifest.reduce((sum, s) => sum + (s.duration_ms ?? 0), 0));
+
+  // Composición de fuentes visuales como segmentos proporcionales (Recursos).
+  const sourceBreakdown = $derived.by(() => {
+    const counts = video?.source_kind_counts ?? {};
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .map(([kind, n]) => ({ kind, count: n, pct: (n / total) * 100 }));
+  });
+
+  // Medidor de loudness: dónde cae el LUFS integrado dentro de la ventana
+  // objetivo de plataforma (-19…-13 LUFS). Dominio visible -30…-6.
+  const lufsPct = (lufs) => Math.min(100, Math.max(0, ((lufs - -30) / (-6 - -30)) * 100));
+  const lufsInRange = $derived(video?.integrated_lufs != null && video.integrated_lufs >= -19 && video.integrated_lufs <= -13);
+  const sfxTags = $derived(video?.sfx_cue_tags ?? []);
+  const sfxResolved = $derived(video?.sfx_resolved_paths ?? {});
+  const sfxMissing = $derived(video?.sfx_missing_tags ?? []);
 </script>
 
 <div class="space-y-4">
@@ -387,6 +420,142 @@
         <p class="text-[13px] text-ink-secondary">Crea una historia desde la pestaña Resumen para ver el guion aquí.</p>
       {/if}
     </Card>
+  {:else if activeTab === 'voces'}
+    {#if hasEpisode}
+      <Card title="Voz en off, escena por escena" subtitle={`${sceneManifest.length} escenas · ${secs(totalNarrationMs)} narrados`}>
+        <p class="text-[11.5px] text-ink-tertiary">Duración medida sobre el audio real. La voz y la clonación por programa se configuran en <strong class="text-ink-secondary">Configuración → Voces</strong>.</p>
+        <div class="mt-4 space-y-2.5">
+          {#each sceneManifest as scene (scene.scene_id)}
+            <div class="rounded-lg border border-line bg-surface-inset p-3">
+              <div class="flex items-baseline justify-between gap-3">
+                <span class="font-mono text-[10.5px] text-purple-300">E{String(scene.scene_index).padStart(2, '0')}</span>
+                <span class="shrink-0 font-mono text-[11px] tabular-nums text-ink-secondary">{secs(scene.duration_ms)}</span>
+              </div>
+              <p class="mt-1.5 text-[12.5px] leading-relaxed text-ink">{scene.narration}</p>
+              <div class="mt-2 h-1 overflow-hidden rounded-full bg-line">
+                <div class="h-full rounded-full bg-purple-500/70" style={`width:${(scene.duration_ms / maxSceneMs) * 100}%`}></div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </Card>
+    {:else}
+      <Card title="Voces">
+        <p class="text-[13px] text-ink-secondary">Aún no hay narración. Crea una historia en <strong>Resumen</strong> y aquí verás la voz en off segmentada por escena, con la duración hablada real de cada una.</p>
+      </Card>
+    {/if}
+  {:else if activeTab === 'storyboard'}
+    {#if hasEpisode}
+      <Card title="Storyboard" subtitle={`${video.scene_count} escenas · ${video.shot_count} tomas`}>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {#each sceneManifest as scene (scene.scene_id)}
+            <figure class="overflow-hidden rounded-xl border border-line bg-surface-inset">
+              <div class="relative aspect-[9/16] bg-black">
+                {#if assetSrc(scene.asset_path)}
+                  <img src={assetSrc(scene.asset_path)} alt={`Escena ${scene.scene_index}`} class="h-full w-full object-cover" loading="lazy" />
+                {:else}
+                  <div class="flex h-full items-center justify-center text-ink-tertiary"><Icon name="film" /></div>
+                {/if}
+                <span class="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">E{String(scene.scene_index).padStart(2, '0')}</span>
+                <span class="absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-white">{secs(scene.duration_ms)}</span>
+              </div>
+              <figcaption class="flex items-center justify-between gap-2 px-2.5 py-2">
+                <Badge tone={SOURCE_KIND_TONE[scene.source_kind] ?? 'neutral'}>{SOURCE_KIND_LABELS[scene.source_kind] ?? scene.source_kind}</Badge>
+                <span class="text-[10.5px] text-ink-tertiary">{scene.shot_count} tomas · {TIER_LABELS[scene.tier] ?? scene.tier}</span>
+              </figcaption>
+            </figure>
+          {/each}
+        </div>
+      </Card>
+    {:else}
+      <Card title="Storyboard">
+        <p class="text-[13px] text-ink-secondary">Sin escenas todavía. Cuando el pipeline visual produzca un episodio, cada escena aparecerá aquí con su imagen real, tipo de fuente, número de tomas y duración.</p>
+      </Card>
+    {/if}
+  {:else if activeTab === 'recursos'}
+    {#if hasEpisode}
+      <div class="space-y-3">
+        <Card title="Composición de fuentes visuales" subtitle="De dónde sale cada escena del episodio">
+          <div class="flex h-3 overflow-hidden rounded-full border border-line">
+            {#each sourceBreakdown as seg (seg.kind)}
+              <div class="h-full" style={`width:${seg.pct}%;background:${SOURCE_KIND_HEX[seg.kind] ?? '#3f3f46'}`} title={SOURCE_KIND_LABELS[seg.kind] ?? seg.kind}></div>
+            {/each}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {#each sourceBreakdown as seg (seg.kind)}
+              <div class="flex items-center gap-1.5 text-[11.5px] text-ink-secondary">
+                <span class="h-2.5 w-2.5 rounded-sm" style={`background:${SOURCE_KIND_HEX[seg.kind] ?? '#3f3f46'}`}></span>
+                {SOURCE_KIND_LABELS[seg.kind] ?? seg.kind}<span class="text-ink-tertiary">· {seg.count}</span>
+              </div>
+            {/each}
+          </div>
+        </Card>
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[0.8fr_1.2fr]">
+          <Card title="Portada">
+            {#if assetSrc(video.cover_image_path)}
+              <img src={assetSrc(video.cover_image_path)} alt="Portada del episodio" class="w-full rounded-lg border border-line object-cover" />
+            {:else}
+              <p class="text-[12px] text-ink-tertiary">Sin portada generada.</p>
+            {/if}
+          </Card>
+          <Card title="Efectos de sonido" subtitle={`${sfxTags.length} señales detectadas`}>
+            {#if sfxTags.length}
+              <div class="flex flex-wrap gap-1.5">
+                {#each sfxTags as tag}
+                  <span class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${sfxResolved[tag] ? 'border-success text-success' : 'border-line text-ink-tertiary'}`}>
+                    <span class={`h-1.5 w-1.5 rounded-full ${sfxResolved[tag] ? 'bg-success' : 'bg-line'}`}></span>
+                    {tag}
+                  </span>
+                {/each}
+              </div>
+              {#if sfxMissing.length}
+                <p class="mt-3 text-[11px] text-ink-tertiary">{sfxMissing.length} señal(es) sin archivo en la biblioteca: se omiten sin romper la mezcla.</p>
+              {/if}
+            {:else}
+              <p class="text-[12px] text-ink-tertiary">Este episodio no disparó SFX; el guion no contenía palabras clave mapeadas.</p>
+            {/if}
+          </Card>
+        </div>
+      </div>
+    {:else}
+      <Card title="Recursos">
+        <p class="text-[13px] text-ink-secondary">Sin recursos todavía. Aquí verás el desglose de fuentes visuales (imagen IA, video loop, tarjeta gráfica), la portada y los efectos de sonido usados cuando se produzca un episodio.</p>
+      </Card>
+    {/if}
+  {:else if activeTab === 'musica'}
+    {#if hasEpisode}
+      <div class="space-y-3">
+        <Card title="Loudness del episodio" subtitle="Nivel integrado contra la ventana objetivo de plataforma">
+          {#if video.integrated_lufs != null}
+            <div class="flex items-baseline justify-between">
+              <span class="font-display text-2xl font-semibold tabular-nums text-ink">{video.integrated_lufs.toFixed(1)} <span class="text-[12px] font-normal text-ink-tertiary">LUFS</span></span>
+              <Badge tone={lufsInRange ? 'success' : 'error'}>{lufsInRange ? 'En rango' : 'Fuera de rango'}</Badge>
+            </div>
+            <div class="relative mt-3 h-2.5 rounded-full bg-line">
+              <div class="absolute inset-y-0 rounded-full bg-success/25" style="left:45.8%;width:25%"></div>
+              <div class="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-ink" style={`left:${lufsPct(video.integrated_lufs)}%`}></div>
+            </div>
+            <div class="mt-1 flex justify-between text-[10px] text-ink-tertiary"><span>-30</span><span>ventana -19…-13</span><span>-6</span></div>
+          {:else}
+            <p class="text-[12px] text-ink-tertiary">Sin medición de loudness para este episodio.</p>
+          {/if}
+        </Card>
+        <Card title="Música" subtitle="Pista de fondo con ducking bajo la narración">
+          {#if video.music_path}
+            <div class="flex items-center gap-3 rounded-lg border border-line bg-surface-inset p-3">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/15 text-purple-300"><Icon name="play" /></span>
+              <p class="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-secondary">{video.music_path.split(/[\\/]/).pop()}</p>
+            </div>
+          {:else}
+            <p class="text-[12px] text-ink-tertiary">Este episodio se renderizó sin música (el estilo visual no define moods musicales o la biblioteca no tenía una pista compatible).</p>
+          {/if}
+        </Card>
+      </div>
+    {:else}
+      <Card title="Música y SFX">
+        <p class="text-[13px] text-ink-secondary">Sin mezcla todavía. Aquí verás el loudness integrado del episodio, la pista musical con ducking y los efectos de sonido una vez producido.</p>
+      </Card>
+    {/if}
   {:else if activeTab === 'produccion'}
     <Card title="Producción">
       <button
@@ -467,11 +636,5 @@
         <p class="text-[13px] text-ink-secondary">Sin exportaciones todavía. El master 16:9 y sus variantes por plataforma aparecerán aquí una vez que el pipeline visual (V0-V8) produzca un episodio.</p>
       {/if}
     </Card>
-  {:else}
-    <StubView
-      icon="wand"
-      title={TAB_LABELS[activeTab]}
-      description="Esta pestaña se conecta cuando el guion tenga escenas navegables por separado (voz por escena, storyboard, biblioteca de recursos, mezcla de música y SFX)."
-    />
   {/if}
 </div>
