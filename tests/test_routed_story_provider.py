@@ -559,3 +559,41 @@ def test_original_mode_omits_reconstruction_material():
     ][0]
     assert "source_case" not in concept_call["input"]
     assert "reconstruction_contract" not in concept_call["input"]
+
+
+def content_kind_brief(kind):
+    base = brief()
+    return StoryBrief(
+        story_id=base.story_id, title=base.title, premise=base.premise, theme=base.theme,
+        target_duration_seconds=45, rights_mode=base.rights_mode, source_uri=base.source_uri,
+        evidence_refs=base.evidence_refs, content_kind=kind,
+    )
+
+
+def test_content_kind_directives_reach_the_writer():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(content_kind_brief("scripture"))
+
+    concept_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert concept_call["input"]["content_kind"] == "scripture"
+    contract = concept_call["input"]["content_kind_contract"]
+    assert any("dominio público" in item for item in contract)
+
+
+def test_narrative_story_omits_content_kind_material():
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+
+    provider.concepts(brief())  # default content_kind == narrative_story
+
+    concept_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.concepts"
+    ][0]
+    assert "content_kind" not in concept_call["input"]
+    assert "content_kind_contract" not in concept_call["input"]

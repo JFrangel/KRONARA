@@ -259,6 +259,12 @@ class ProductionContentPipeline:
 
     def _stage_estratega(self, state: dict[str, Any]) -> dict[str, Any]:
         params = state["params"]
+        content_kind = str(params.get("content_kind") or "narrative_story")
+        if content_kind != "narrative_story":
+            # Fase 5: reflexión/bíblico/frases -> forma corta, SIN Reddit. Se
+            # arma el brief desde tema/corpus y sigue por guionista+productor
+            # (idénticos). No hay señal ni reconstrucción en estos modos.
+            return self._stage_estratega_shortform(state, content_kind)
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
         run_id = f"content:{story_id}"
         traced = TracingAuthorityClient(
@@ -463,6 +469,75 @@ class ProductionContentPipeline:
             "citations": list(citations),
             "evidence": list(evidence),
             "series_id": str(series_id) if series_id else None,
+            "part_number": part_number,
+        }
+
+    _SHORTFORM_DEFAULTS = {
+        "reflection": {
+            "theme": "una reflexión breve sobre la calma y lo que sí controlamos",
+            "premise": "Un pensamiento reflexivo que reencuadra una preocupación cotidiana en 30-60s.",
+        },
+        "scripture": {
+            "theme": "un pasaje bíblico de dominio público (Reina-Valera 1909) y su lectura",
+            "premise": "Lectura devocional breve de un pasaje de dominio público; no dramatiza como hecho lo interpretado.",
+        },
+        "quote": {
+            "theme": "un aforismo original sobre el tiempo y la constancia",
+            "premise": "Un aforismo ORIGINAL (nunca una frase con derechos ajenos) desarrollado en 20-40s.",
+        },
+    }
+
+    def _stage_estratega_shortform(self, state: dict[str, Any], content_kind: str) -> dict[str, Any]:
+        """Estratega para modos de forma corta (reflexión/bíblico/frases): arma el
+        brief desde tema/corpus SIN Reddit y devuelve el mismo shape de estado que
+        el estratega narrativo (con los campos de Reddit en None/vacío). El guion
+        y la producción son idénticos aguas abajo."""
+        params = state["params"]
+        story_id = self._story_id(str(params.get("story_id") or f"owned_{content_kind}_{uuid4().hex[:12]}"))
+        run_id = f"content:{story_id}"
+        observed_at = int(params.get("observed_at", int(datetime.now(UTC).timestamp())))
+        defaults = self._SHORTFORM_DEFAULTS.get(content_kind, self._SHORTFORM_DEFAULTS["reflection"])
+        theme = str(params.get("theme") or defaults["theme"])
+        title = str(params.get("title") or theme)[:80]
+        premise = str(params.get("premise") or defaults["premise"])
+        self._agent_log(
+            run_id, "opportunity_intelligence", "content.mode",
+            f"Modo {content_kind} (forma corta, sin Reddit): {theme[:80]}",
+            {"content_kind": content_kind, "story_id": story_id},
+        )
+        series_id = params.get("series_id")
+        part_number = int(params.get("part_number", 1)) if series_id else None
+        # La "evidencia" de forma corta es el propio corpus/modo, no una señal de
+        # Reddit -- así el brief queda íntegro sin fabricar procedencia externa.
+        corpus_ref = f"kronara://corpus/{content_kind}"
+        brief = StoryBrief(
+            story_id=story_id,
+            title=title,
+            premise=premise,
+            theme=theme,
+            target_duration_seconds=int(params.get("target_duration_seconds", 45)),
+            rights_mode="owned_original",
+            source_uri=f"kronara://artifacts/{story_id}",
+            evidence_refs=(corpus_ref,),
+            reference_texts=(theme,),
+            series_id=str(series_id) if series_id else None,
+            part_number=part_number,
+            source_sensitivity="entertainment",
+            program_id=str(params["program_id"]) if params.get("program_id") else None,
+            content_kind=content_kind,
+        )
+        return {
+            "params": params,
+            "story_id": story_id,
+            "run_id": run_id,
+            "observed_at": observed_at,
+            "brief": brief,
+            "selected_signal": None,
+            "rejected_signals": {},
+            "receipt": {},
+            "citations": [],
+            "evidence": [corpus_ref],
+            "series_id": brief.series_id,
             "part_number": part_number,
         }
 

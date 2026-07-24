@@ -33,6 +33,10 @@ class StoryBrief:
     # que el guionista reconstruye anonimizado en vez de inventar. "" = modo
     # original (historia inventada desde la señal abstracta). Ver reddit_thread.
     source_case: str = ""
+    # Tipo de contenido (Fase 5): "narrative_story" (default, historia desde
+    # Reddit) | "reflection" | "scripture" | "quote". Los no-narrativos son de
+    # forma corta, sin Reddit, y llevan directivas de oficio propias.
+    content_kind: str = "narrative_story"
     # Serialized multi-part stories: optional canon inherited from earlier parts.
     series_id: str | None = None
     part_number: int | None = None

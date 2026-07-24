@@ -179,6 +179,29 @@ _SCENE_CRAFT_DIRECTIVES = [
     "Cada escena hace al menos una cosa nueva: sube el riesgo, revela, decide o paga una pista.",
 ]
 
+_CONTENT_KIND_CONTRACTS = {
+    "reflection": [
+        "Es una REFLEXIÓN breve (30-60s), no una historia: una idea que reencuadra una preocupación cotidiana.",
+        "Voz cercana y serena; una sola idea central desarrollada con imágenes concretas, sin trama ni personajes con nombre.",
+        "Cierra con una vuelta que resignifique la apertura; nada de clichés de superación.",
+    ],
+    "scripture": [
+        "Es una lectura BÍBLICA devocional breve. Usa SOLO texto de dominio público (Reina-Valera 1909); no cites versiones con derechos.",
+        "Distingue el texto bíblico de la interpretación/dramatización; no afirmes como hecho lo que es lectura.",
+        "Tono reverente y sobrio; una enseñanza central, aplicable, sin sensacionalismo.",
+    ],
+    "quote": [
+        "Es un AFORISMO ORIGINAL (nunca una frase con derechos ajenos ni atribuida a otra persona real).",
+        "Una sola sentencia memorable + un breve desarrollo que la sostenga (20-40s).",
+        "Especificidad emocional; evita frases motivacionales gastadas.",
+    ],
+}
+
+
+def _content_kind_contract(content_kind: str) -> list[str]:
+    return _CONTENT_KIND_CONTRACTS.get(content_kind, [])
+
+
 _RECONSTRUCTION_CONTRACT = [
     "Modo RECONSTRUCCIÓN FIEL: source_case es el caso REAL (cuerpo del hilo + bloques [UPDATE]/[SEGUIMIENTO DEL AUTOR]). Reconstruye ESOS hechos: respeta cronología, evidencias, giros y el desenlace real de las actualizaciones.",
     "NO inventes eventos, pruebas ni personajes que no estén en source_case; si el caso queda abierto, no cierres con un final fabricado.",
@@ -439,6 +462,11 @@ class RoutedStoryProvider:
                     if self._source_case
                     else {}
                 ),
+                **(
+                    {"content_kind": brief.content_kind, "content_kind_contract": _content_kind_contract(brief.content_kind)}
+                    if brief.content_kind and brief.content_kind != "narrative_story"
+                    else {}
+                ),
             },
             response_schema=_object_schema({
                 "concepts": {"type": "array", "items": _CONCEPT_ITEM_SCHEMA, "minItems": 3, "maxItems": 3},
@@ -535,6 +563,11 @@ class RoutedStoryProvider:
                 **(
                     {"source_case": brief.source_case, "reconstruction_contract": _RECONSTRUCTION_CONTRACT}
                     if brief.source_case
+                    else {}
+                ),
+                **(
+                    {"content_kind": brief.content_kind, "content_kind_contract": _content_kind_contract(brief.content_kind)}
+                    if brief.content_kind and brief.content_kind != "narrative_story"
                     else {}
                 ),
             },

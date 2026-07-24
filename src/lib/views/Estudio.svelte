@@ -21,6 +21,19 @@
   let styles = $state([]);
   let selectedStyleId = $state('');
 
+  // Fase 5: tipo de contenido. "narrative_story" investiga Reddit; los demás son
+  // de forma corta (30-60s) desde un tema, sin Reddit. Cambiar el modo cambia el
+  // formulario ("cambiar a la otra vista") y lo que se envía a content.run.
+  const CONTENT_KINDS = [
+    { id: 'narrative_story', label: 'Historia', hint: 'Reconstruye un caso real de Reddit.' },
+    { id: 'reflection', label: 'Reflexión', hint: 'Idea breve que reencuadra una preocupación.' },
+    { id: 'scripture', label: 'Bíblico', hint: 'Lectura devocional (dominio público).' },
+    { id: 'quote', label: 'Frase', hint: 'Aforismo original memorable.' },
+  ];
+  let contentKind = $state('narrative_story');
+  let theme = $state('');
+  const isStoryMode = $derived(contentKind === 'narrative_story');
+
   onMount(async () => {
     try {
       const result = await callOperations('styles.list', {});
@@ -99,8 +112,12 @@
   async function runProductionContent() {
     if (contentRunning || connection !== 'connected') return;
     const community = subreddit.trim().replace(/^r\//, '');
-    if (!community) {
+    if (isStoryMode && !community) {
       notice = 'Escribe una comunidad de Reddit para investigar.';
+      return;
+    }
+    if (!isStoryMode && !theme.trim()) {
+      notice = 'Escribe un tema para este contenido.';
       return;
     }
     contentRunning = true;
@@ -108,11 +125,12 @@
     notice = '';
     try {
       const result = await callOperations('content.run', {
-        story_id: `owned_reddit_${Date.now()}`,
-        subreddits: [community],
-        sort: 'hot',
-        limit: 25,
-        target_duration_seconds: 90,
+        story_id: `owned_${contentKind}_${Date.now()}`,
+        content_kind: contentKind,
+        // Historia = investiga Reddit (90s); modos cortos = tema, sin Reddit (45s).
+        ...(isStoryMode
+          ? { subreddits: [community], sort: 'hot', limit: 25, target_duration_seconds: 90 }
+          : { theme: theme.trim(), target_duration_seconds: 45 }),
         // Only send style_id when the user picked one; empty means "let the
         // program's configured style decide" (the resolver falls back to it).
         ...(selectedStyleId ? { style_id: selectedStyleId } : {}),
@@ -120,7 +138,7 @@
       contentResult = result;
       await refreshTimeline(result.run_id);
     } catch (error) {
-      notice = 'El vertical productivo se detuvo: ninguna historia se publica si falla Reddit, los modelos, los derechos o la calidad.';
+      notice = 'La generación se detuvo de forma segura: nada se publica si fallan los modelos, los derechos o la calidad.';
     } finally {
       contentRunning = false;
     }
@@ -309,17 +327,44 @@
       </Card>
     {/if}
   {:else if activeTab === 'resumen'}
-    <Card title="Vertical productivo" subtitle="Reddit oficial → oportunidad abstracta → historia propia">
+    <Card title="Crear contenido" subtitle="Elige el tipo: historia real de Reddit, o forma corta (reflexión / bíblico / frase)">
+      <div class="mb-4 flex flex-wrap gap-1.5">
+        {#each CONTENT_KINDS as kind (kind.id)}
+          <button
+            class="rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-colors"
+            class:border-purple-500={contentKind === kind.id}
+            class:bg-purple-500={contentKind === kind.id}
+            class:text-ink={contentKind === kind.id}
+            class:border-line={contentKind !== kind.id}
+            class:text-ink-secondary={contentKind !== kind.id}
+            onclick={() => (contentKind = kind.id)}
+          >
+            {kind.label}
+          </button>
+        {/each}
+      </div>
       <div class="flex flex-wrap items-center gap-3">
-        <label class="flex-1 min-w-[220px]">
-          <span class="mb-1 block text-[11px] text-ink-tertiary">Comunidad para observar</span>
-          <input
-            class="w-full rounded-full border border-line bg-surface-inset px-4 py-2 text-[13px] text-ink placeholder:text-ink-tertiary focus:border-purple-500 focus:outline-none"
-            bind:value={subreddit}
-            placeholder="Historias"
-            autocomplete="off"
-          />
-        </label>
+        {#if isStoryMode}
+          <label class="flex-1 min-w-[220px]">
+            <span class="mb-1 block text-[11px] text-ink-tertiary">Comunidad para observar</span>
+            <input
+              class="w-full rounded-full border border-line bg-surface-inset px-4 py-2 text-[13px] text-ink placeholder:text-ink-tertiary focus:border-purple-500 focus:outline-none"
+              bind:value={subreddit}
+              placeholder="Historias"
+              autocomplete="off"
+            />
+          </label>
+        {:else}
+          <label class="flex-1 min-w-[220px]">
+            <span class="mb-1 block text-[11px] text-ink-tertiary">Tema</span>
+            <input
+              class="w-full rounded-full border border-line bg-surface-inset px-4 py-2 text-[13px] text-ink placeholder:text-ink-tertiary focus:border-purple-500 focus:outline-none"
+              bind:value={theme}
+              placeholder={contentKind === 'scripture' ? 'Salmo 23, el buen pastor' : contentKind === 'quote' ? 'la constancia' : 'la calma en la incertidumbre'}
+              autocomplete="off"
+            />
+          </label>
+        {/if}
         <label class="min-w-[200px]">
           <span class="mb-1 block text-[11px] text-ink-tertiary">Estilo visual</span>
           <select
@@ -337,11 +382,15 @@
           onclick={runProductionContent}
           disabled={contentRunning || connection !== 'connected'}
         >
-          {contentRunning ? 'Investigando y creando…' : 'Crear historia gobernada'}
+          {contentRunning ? 'Creando…' : isStoryMode ? 'Crear historia gobernada' : 'Crear pieza'}
         </button>
       </div>
       <p class="mt-3 text-[11.5px] text-ink-tertiary">
-        <code class="text-purple-300">reddit.list_signals</code> usa solo señales abstractas; nunca entrega el cuerpo externo al escritor.
+        {#if isStoryMode}
+          <code class="text-purple-300">reddit.list_signals</code> usa solo señales abstractas; el investigador reconstruye el caso real anonimizado.
+        {:else}
+          {CONTENT_KINDS.find((k) => k.id === contentKind)?.hint} Forma corta (~45s), sin Reddit; reusa voz, estilo y música.
+        {/if}
       </p>
 
       {#if contentResult}
