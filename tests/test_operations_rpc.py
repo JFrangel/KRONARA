@@ -866,3 +866,11 @@ def test_action_approve_inherits_the_content_run_pause_gate(tmp_path):
     assert response["error"]["code"] == -32602
     assert "global pause blocks content runs" in response["error"]["message"]
     service.close()
+
+
+def test_agents_overview_returns_the_three_super_agents(tmp_path):
+    server, service = _server(tmp_path)
+    result = server.handle(_request("agents.overview", {}))["result"]
+    assert [a["id"] for a in result["agents"]] == ["estratega", "guionista", "productor"]
+    assert any(a["absorbs"] for a in result["agents"])
+    service.close()

@@ -38,3 +38,13 @@ def test_super_agent_is_idempotent_and_safe():
 def test_all_twenty_four_legacy_ids_collapse_into_the_three():
     assert len(LEGACY_TO_SUPER) == 24
     assert set(LEGACY_TO_SUPER.values()) == set(SUPER_AGENTS)
+
+
+def test_super_agent_overview_covers_all_24_legacy_agents():
+    from kronara.agents import LEGACY_TO_SUPER, super_agent_overview
+
+    overview = super_agent_overview()
+    assert [a["id"] for a in overview] == ["estratega", "guionista", "productor"]
+    absorbed = [legacy for a in overview for legacy in a["absorbs"]]
+    assert sorted(absorbed) == sorted(LEGACY_TO_SUPER)  # each legacy id under exactly one
+    assert all(a["name"] and a["role"] and a["description"] and a["capabilities"] for a in overview)

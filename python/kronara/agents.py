@@ -61,6 +61,81 @@ LEGACY_TO_SUPER: dict[str, str] = {
 }
 
 
+# Rich metadata for the Agentes view / agents.overview RPC. The 24 legacy
+# configs still exist (code loads some by name), but these three are the surface
+# a run actually emits and the user sees.
+SUPER_AGENT_PROFILES: tuple[dict, ...] = (
+    {
+        "id": ESTRATEGA,
+        "name": "Estratega",
+        "role": "Decide, investiga, recuerda y aprende",
+        "description": (
+            "Elige la oportunidad, hace la investigación y el RAG, arma el brief "
+            "editorial y gestiona memoria, rendimiento y evaluación. Es el que "
+            "responde el chat de operación."
+        ),
+        "capabilities": (
+            "Oportunidad y señales de Reddit",
+            "RAG e investigación",
+            "Brief editorial original",
+            "Memoria corto/largo plazo",
+            "Métricas, rendimiento y evaluación",
+        ),
+    },
+    {
+        "id": GUIONISTA,
+        "name": "Guionista",
+        "role": "Escribe y critica la historia",
+        "description": (
+            "Concepto, blueprint causal, guion por escenas, gancho/retención y "
+            "QC/originalidad, cuidando derechos. Escribe y se auto-critica hasta "
+            "pasar la calidad."
+        ),
+        "capabilities": (
+            "Concepto y blueprint causal",
+            "Guion por escenas",
+            "Gancho y retención",
+            "QC de calidad y originalidad",
+            "Derechos y procedencia",
+        ),
+    },
+    {
+        "id": PRODUCTOR,
+        "name": "Productor",
+        "role": "Convierte el guion en video publicado",
+        "description": (
+            "Estilo visual, imágenes por escena con consistencia de personajes, "
+            "voz clonada, música/SFX, composición y render, empaquetado y "
+            "distribución."
+        ),
+        "capabilities": (
+            "Dirección visual y estilos",
+            "Voz clonada (VoiceBox)",
+            "Música y SFX",
+            "Composición y render",
+            "Empaquetado y distribución",
+        ),
+    },
+)
+
+
+def super_agent_overview() -> list[dict]:
+    """The 3 super-agents with the legacy agent ids each one absorbs -- the data
+    behind the Agentes view and the agents.overview RPC (makes the 24->3
+    consolidation visible)."""
+    absorbs: dict[str, list[str]] = {name: [] for name in SUPER_AGENTS}
+    for legacy, sup in LEGACY_TO_SUPER.items():
+        absorbs[sup].append(legacy)
+    return [
+        {
+            **profile,
+            "capabilities": list(profile["capabilities"]),
+            "absorbs": sorted(absorbs[profile["id"]]),
+        }
+        for profile in SUPER_AGENT_PROFILES
+    ]
+
+
 def super_agent(agent_id: str) -> str:
     """Map any agent id to its super-agent. A value that is already a
     super-agent (or an unknown id) passes through unchanged, so this is safe to

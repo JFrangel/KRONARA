@@ -144,6 +144,7 @@ class OperationsService:
             "voice.add_sample": self.voice_add_sample,
             "voice.delete_profile": self.voice_delete_profile,
             "voice.settings": self.voice_settings,
+            "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -672,6 +673,14 @@ class OperationsService:
         except Exception:
             return {"schema_version": 1, "status": "error", "error": "VoiceBox no responde", **self._voice_state()}
         return {"schema_version": 1, "status": "added", "profile_id": profile_id, **self._voice_state()}
+
+    def agents_overview(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 3: the 3 super-agents for the Agentes view -- their role,
+        capabilities, and the legacy agent ids each absorbs (makes the 24->3
+        consolidation visible). A real run only ever emits these three ids."""
+        from kronara.agents import super_agent_overview
+
+        return {"schema_version": 1, "agents": super_agent_overview()}
 
     def voice_settings(self, params: dict[str, Any]) -> dict[str, Any]:
         """Fase 3: read/write narration voice settings (currently ``speed``).

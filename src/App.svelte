@@ -10,6 +10,7 @@
   import Analiticas from './lib/views/Analiticas.svelte';
   import Biblioteca from './lib/views/Biblioteca.svelte';
   import Configuracion from './lib/views/Configuracion.svelte';
+  import Agentes from './lib/views/Agentes.svelte';
   import StubView from './lib/views/StubView.svelte';
   import { createControlState } from './lib/control-state.js';
   import { createOperationsState } from './lib/operations-state.js';
@@ -121,6 +122,8 @@
         <Biblioteca {operations} />
       {:else if activeView === 'configuracion'}
         <Configuracion />
+      {:else if activeView === 'agentes'}
+        <Agentes />
       {:else}
         <StubView icon={VIEW_META[activeView]?.icon} title={VIEW_META[activeView]?.title} description={VIEW_META[activeView]?.description} />
       {/if}

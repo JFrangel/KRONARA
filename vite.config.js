@@ -35,6 +35,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'voice.add_sample',
   'voice.delete_profile',
   'voice.settings',
+  'agents.overview',
   'episodes.list',
   'episodes.get',
   'episodes.delete',
