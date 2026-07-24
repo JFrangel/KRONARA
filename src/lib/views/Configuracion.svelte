@@ -125,9 +125,76 @@
     try {
       voiceInfo = await callOperations('voice.profiles', {});
     } catch (error) {
-      voiceInfo = { reachable: false, profiles: [], base_url: '', configured_profile: '' };
+      voiceInfo = { reachable: false, profiles: [], engines: [], base_url: '', configured_profile: '' };
     } finally {
       voicesLoaded = true;
+    }
+  }
+
+  // --- Clonación de voces (Fase 3) ---
+  let cloneForm = $state({ name: '', reference_text: '', engine: 'qwen', language: 'es' });
+  let cloneFile = $state(null);
+  let cloning = $state(false);
+  let cloneNotice = $state('');
+
+  const cloneEngines = $derived((voiceInfo?.engines ?? []).filter((e) => e.clone));
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function cloneVoice() {
+    if (cloning) return;
+    if (!cloneForm.name.trim() || !cloneForm.reference_text.trim() || !cloneFile) {
+      cloneNotice = 'Nombre, texto exacto y audio de referencia son obligatorios.';
+      return;
+    }
+    cloning = true;
+    cloneNotice = '';
+    try {
+      const audio_base64 = await readFileAsBase64(cloneFile);
+      const result = await callOperations('voice.clone', {
+        name: cloneForm.name.trim(),
+        reference_text: cloneForm.reference_text.trim(),
+        engine: cloneForm.engine,
+        language: cloneForm.language,
+        filename: cloneFile.name,
+        audio_base64,
+      });
+      if (result.status === 'created') {
+        voiceInfo = result;
+        cloneNotice = `Voz "${result.profile?.name ?? cloneForm.name.trim()}" clonada. Ya aparece en la lista.`;
+        cloneForm = { name: '', reference_text: '', engine: cloneForm.engine, language: cloneForm.language };
+        cloneFile = null;
+      } else if (result.reachable === false) {
+        cloneNotice = 'VoiceBox no está corriendo. Arráncalo e inténtalo de nuevo.';
+      } else {
+        cloneNotice = `No se pudo clonar: ${result.error ?? 'error desconocido'}`;
+      }
+    } catch (error) {
+      cloneNotice = 'No se pudo clonar la voz.';
+    } finally {
+      cloning = false;
+    }
+  }
+
+  async function deleteProfile(profile) {
+    const question = `¿Quitar la voz "${profile.name || profile.id}"? Los programas que la usen quedarán sin voz asignada.`;
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm(question)) return;
+    try {
+      const result = await callOperations('voice.delete_profile', { profile_id: profile.id });
+      if (result.profiles !== undefined) voiceInfo = result;
+    } catch (error) {
+      cloneNotice = 'No se pudo quitar la voz.';
     }
   }
 
@@ -408,11 +475,18 @@
                 </div>
                 {#if profile.voice_type}<Badge tone="neutral">{profile.voice_type}</Badge>{/if}
                 {#if profile.id === voiceInfo.configured_profile}<Badge tone="success">Predeterminada</Badge>{/if}
+                <button
+                  class="rounded-lg border border-error/25 px-2 py-1 text-[11px] text-error transition-colors hover:bg-error/10"
+                  onclick={() => deleteProfile(profile)}
+                  title="Quitar voz"
+                >
+                  Quitar
+                </button>
               </li>
             {/each}
           </ul>
         {:else}
-          <p class="mt-3 text-[12px] text-ink-secondary">No hay voces todavía. Clona una en la app de VoiceBox (sube unos segundos de audio) y aparecerá aquí.</p>
+          <p class="mt-3 text-[12px] text-ink-secondary">No hay voces todavía. Clona una abajo (sube unos segundos de audio con su texto exacto) y aparecerá aquí.</p>
         {/if}
         <p class="mt-3 text-[11px] text-ink-tertiary">La voz predeterminada por programa se fija con <code class="text-purple-300">KRONARA_VOICEBOX_PROFILE</code> en tu <code>.env</code> (usa el <span class="font-mono">id</span> de arriba).</p>
       {:else}
@@ -464,6 +538,64 @@
       {/if}
     </Card>
     </div>
+
+    {#if voiceInfo?.reachable}
+      <Card title="Clonar una voz" subtitle="Sube unos segundos de audio + el texto exacto que dice">
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <label class="block">
+            <span class="text-[11px] text-ink-tertiary">Nombre de la voz</span>
+            <input class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink outline-none focus:border-purple-500" placeholder="Voz narrador terror" bind:value={cloneForm.name} />
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-[11px] text-ink-tertiary">Motor</span>
+              <select class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink outline-none focus:border-purple-500" bind:value={cloneForm.engine}>
+                {#each cloneEngines as engine (engine.id)}
+                  <option value={engine.id}>{engine.label}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[11px] text-ink-tertiary">Idioma</span>
+              <select class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink outline-none focus:border-purple-500" bind:value={cloneForm.language}>
+                <option value="es">Español</option>
+                <option value="en">Inglés</option>
+                <option value="pt">Portugués</option>
+                <option value="fr">Francés</option>
+                <option value="it">Italiano</option>
+                <option value="de">Alemán</option>
+              </select>
+            </label>
+          </div>
+          <label class="block lg:col-span-2">
+            <span class="text-[11px] text-ink-tertiary">Audio de referencia (2–30 s · wav/mp3/m4a/ogg/flac)</span>
+            <input
+              type="file"
+              accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.webm,.opus"
+              class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-purple-500/20 file:px-3 file:py-1 file:text-[11px] file:text-purple-200"
+              onchange={(event) => (cloneFile = event.currentTarget.files?.[0] ?? null)}
+            />
+          </label>
+          <label class="block lg:col-span-2">
+            <span class="text-[11px] text-ink-tertiary">Texto exacto que se dice en el audio (obligatorio)</span>
+            <textarea class="mt-1 h-20 w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink outline-none focus:border-purple-500" placeholder="Escribe palabra por palabra lo que se dice en el audio de referencia." bind:value={cloneForm.reference_text}></textarea>
+          </label>
+        </div>
+        {#if cloneNotice}
+          <p class="mt-3 text-[11.5px] text-purple-300">{cloneNotice}</p>
+        {/if}
+        <div class="mt-3 flex items-center gap-2">
+          <button
+            class="rounded-lg bg-purple-500 px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-purple-400 disabled:opacity-60"
+            onclick={cloneVoice}
+            disabled={cloning}
+          >
+            {cloning ? 'Clonando…' : 'Clonar voz'}
+          </button>
+          <span class="text-[11px] text-ink-tertiary">Puedes clonar varias voces; cada programa usará la que elijas.</span>
+        </div>
+      </Card>
+    {/if}
   {:else if activeTab === 'seguridad'}
     <Card title="Seguridad">
       <ul class="space-y-2 text-[12.5px] text-ink-secondary">

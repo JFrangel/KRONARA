@@ -140,6 +140,8 @@ class OperationsService:
             "styles.upsert": self.styles_upsert,
             "styles.delete": self.styles_delete,
             "voice.profiles": self.voice_profiles,
+            "voice.clone": self.voice_clone,
+            "voice.delete_profile": self.voice_delete_profile,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -503,54 +505,139 @@ class OperationsService:
             "styles": list_styles(default_style_library_path(), self._custom_styles_path),
         }
 
-    def voice_profiles(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Fase 2: list the cloned voices / presets from the local VoiceBox
-        server for Configuración → Voces. Best-effort: when VoiceBox isn't
-        running we return ``reachable: false`` (not an error) so the tab can
-        show setup guidance instead of failing."""
-        import json
-        import urllib.request
+    def _voice_state(self) -> dict[str, Any]:
+        """Live VoiceBox state: reachable + cloned/preset profiles + the static
+        engine catalog + configured defaults. Shared by voice.profiles and the
+        clone/delete RPCs so they all return a freshly-listed roster. Goes
+        through VoiceBoxAdmin so a single opener covers listing + clone + delete
+        (keeps tests hermetic)."""
+        from kronara.voice import VoiceBoxAdmin
 
-        base = (os.environ.get("KRONARA_VOICEBOX_URL") or "http://127.0.0.1:17493").rstrip("/")
+        admin = VoiceBoxAdmin()
+        base = admin.base_url
         configured = os.environ.get("KRONARA_VOICEBOX_PROFILE", "")
         profiles: list[dict[str, Any]] = []
         reachable = False
         try:
-            with urllib.request.urlopen(f"{base}/profiles", timeout=5) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            reachable = True
-            for item in payload if isinstance(payload, list) else []:
+            for item in admin.list_profiles():
                 profiles.append(
                     {
                         "id": str(item.get("id", "")),
                         "name": str(item.get("name", "")),
                         "language": str(item.get("language", "")),
                         "voice_type": str(item.get("voice_type", "")),
+                        "default_engine": str(item.get("default_engine", "")),
+                        "sample_count": int(item.get("sample_count", 0) or 0),
                     }
                 )
+            reachable = True
         except Exception:
             reachable = False
         # Static catalog of the TTS engines VoiceBox ships (the "available
         # voices" the user can pick even before the server is up / before
-        # cloning). qwen is multilingual (Spanish) and the default for Kronara;
-        # kokoro ships ready-to-use English preset voices with no cloning.
+        # cloning). ``clone`` marks the engines that support cloned profiles
+        # (VoiceBox CLONING_ENGINES); qwen_custom_voice and kokoro are
+        # preset-only. qwen is multilingual (Spanish) and Kronara's default.
         engines = [
             {"id": "qwen", "label": "Qwen3-TTS", "note": "Multilingüe (español) · recomendado", "clone": True},
-            {"id": "qwen_custom_voice", "label": "Qwen Custom Voice", "note": "Voz personalizada", "clone": True},
             {"id": "luxtts", "label": "LuxTTS", "note": "Clonación de voz", "clone": True},
             {"id": "chatterbox", "label": "Chatterbox", "note": "Clonación expresiva", "clone": True},
             {"id": "chatterbox_turbo", "label": "Chatterbox Turbo", "note": "Clonación rápida", "clone": True},
             {"id": "tada", "label": "HumeAI TADA", "note": "Voz emocional", "clone": True},
+            {"id": "qwen_custom_voice", "label": "Qwen Custom Voice", "note": "Voces preset (sin clonar)", "clone": False},
             {"id": "kokoro", "label": "Kokoro", "note": "Ligero · voces preset en inglés (sin clonar)", "clone": False},
         ]
         return {
-            "schema_version": 1,
             "reachable": reachable,
             "base_url": base,
             "configured_profile": configured,
             "configured_engine": os.environ.get("KRONARA_VOICEBOX_ENGINE", ""),
             "profiles": profiles,
             "engines": engines,
+        }
+
+    def voice_profiles(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 2: list the cloned voices / presets + engine catalog from the
+        local VoiceBox server for Configuración → Voces. Best-effort: when
+        VoiceBox isn't running we return ``reachable: false`` (not an error)."""
+        return {"schema_version": 1, **self._voice_state()}
+
+    def voice_clone(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 3: clone a voice from inside Kronara. Two-step VoiceBox flow --
+        create a ``cloned`` profile, then upload the reference audio + its exact
+        transcript (``reference_text``, required by VoiceBox). The audio arrives
+        base64-encoded in the RPC params; we decode it and hand-roll the
+        multipart upload. A down/failed VoiceBox degrades to status:'error'
+        (never raises past validation)."""
+        import base64
+
+        from kronara.voice import VoiceBoxAdmin, VoiceBoxError
+
+        name = str(params.get("name", "")).strip()
+        reference_text = str(params.get("reference_text", "")).strip()
+        audio_b64 = str(params.get("audio_base64", "")).strip()
+        if not name or not reference_text or not audio_b64:
+            raise ValueError("name, reference_text y audio_base64 son obligatorios")
+        if audio_b64.startswith("data:") and "," in audio_b64:
+            audio_b64 = audio_b64.split(",", 1)[1]
+        try:
+            audio = base64.b64decode(audio_b64)
+        except Exception as error:
+            raise ValueError("audio_base64 no es base64 válido") from error
+        language = str(params.get("language") or os.environ.get("KRONARA_VOICEBOX_LANGUAGE") or "es")
+        engine = str(params.get("engine") or os.environ.get("KRONARA_VOICEBOX_ENGINE") or "qwen")
+        filename = str(params.get("filename") or "reference.wav")
+
+        admin = VoiceBoxAdmin()
+        try:
+            profile = admin.create_cloned_profile(name=name, language=language, engine=engine)
+        except VoiceBoxError as error:
+            return {"schema_version": 1, "status": "error", "error": str(error), **self._voice_state()}
+        except Exception:
+            return {"schema_version": 1, "status": "error", "error": "VoiceBox no responde", **self._voice_state()}
+        profile_id = str(profile.get("id", ""))
+        try:
+            admin.upload_sample(
+                profile_id, audio=audio, filename=filename, reference_text=reference_text
+            )
+        except VoiceBoxError as error:
+            # A cloned profile with no valid sample is useless -> clean it up.
+            try:
+                admin.delete_profile(profile_id)
+            except Exception:
+                pass
+            return {"schema_version": 1, "status": "error", "error": str(error), **self._voice_state()}
+        except Exception:
+            try:
+                admin.delete_profile(profile_id)
+            except Exception:
+                pass
+            return {"schema_version": 1, "status": "error", "error": "VoiceBox no respondió al subir el audio", **self._voice_state()}
+        return {
+            "schema_version": 1,
+            "status": "created",
+            "profile": {"id": profile_id, "name": name, "language": language, "voice_type": "cloned"},
+            **self._voice_state(),
+        }
+
+    def voice_delete_profile(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 3: delete a cloned voice from VoiceBox (and its samples)."""
+        from kronara.voice import VoiceBoxAdmin, VoiceBoxError
+
+        profile_id = str(params.get("profile_id", "")).strip()
+        if not profile_id:
+            raise ValueError("profile_id es obligatorio")
+        try:
+            removed = VoiceBoxAdmin().delete_profile(profile_id)
+        except VoiceBoxError as error:
+            return {"schema_version": 1, "status": "error", "error": str(error), **self._voice_state()}
+        except Exception:
+            return {"schema_version": 1, "status": "error", "error": "VoiceBox no responde", **self._voice_state()}
+        return {
+            "schema_version": 1,
+            "status": "deleted" if removed else "not_found",
+            "profile_id": profile_id,
+            **self._voice_state(),
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:

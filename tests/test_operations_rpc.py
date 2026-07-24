@@ -138,46 +138,154 @@ def test_styles_delete_reverts_override_to_base(tmp_path):
     service.close()
 
 
-def test_voice_profiles_lists_reachable_server_and_degrades_when_down(tmp_path, monkeypatch):
-    """Fase 2: voice.profiles proxies VoiceBox GET /profiles. Down -> reachable
-    False (not an error) so the Voces tab shows setup guidance; up -> the
-    profile list flows through."""
-    import json as _json
+class FakeVoiceBoxAdminServer:
+    """In-memory VoiceBox admin API (create/list/delete profiles + upload
+    samples) so the voice.* RPC tests are hermetic -- no real :17493. Same
+    opener contract VoiceBoxAdmin uses: (url, data, headers, method, timeout)
+    -> (status, bytes), raising HTTPError on non-2xx."""
 
+    def __init__(self):
+        self.profiles: dict[str, dict] = {}
+        self._n = 0
+
+    def __call__(self, url, data=None, headers=None, method="GET", timeout=30):
+        import io
+        import json as _json
+        import urllib.error
+        from urllib.parse import urlparse
+
+        path = urlparse(url).path
+
+        def http_error(code, detail):
+            return urllib.error.HTTPError(
+                url, code, detail, {}, io.BytesIO(_json.dumps({"detail": detail}).encode())
+            )
+
+        if method == "POST" and path == "/profiles":
+            body = _json.loads(data.decode("utf-8"))
+            if any(p["name"] == body["name"] for p in self.profiles.values()):
+                raise http_error(400, f"A profile with the name '{body['name']}' already exists")
+            self._n += 1
+            pid = f"prof-{self._n}"
+            self.profiles[pid] = {
+                "id": pid, "name": body["name"], "language": body.get("language", "es"),
+                "voice_type": body.get("voice_type", "cloned"),
+                "default_engine": body.get("default_engine", ""), "sample_count": 0,
+            }
+            return 200, _json.dumps(self.profiles[pid]).encode("utf-8")
+        if method == "POST" and path.endswith("/samples"):
+            pid = path.split("/")[2]
+            self.profiles[pid]["sample_count"] += 1
+            return 200, _json.dumps({"id": "s1", "profile_id": pid, "reference_text": "t"}).encode()
+        if method == "GET" and path == "/profiles":
+            return 200, _json.dumps(list(self.profiles.values())).encode("utf-8")
+        if method == "DELETE" and path.startswith("/profiles/"):
+            pid = path.split("/")[2]
+            if pid in self.profiles:
+                del self.profiles[pid]
+                return 200, _json.dumps({"message": "deleted"}).encode("utf-8")
+            raise http_error(404, "Profile not found")
+        raise AssertionError(f"unexpected VoiceBox admin call {method} {path}")
+
+
+def _use_fake_voicebox(monkeypatch, server=None):
+    from kronara.voice import VoiceBoxVoiceProvider
+
+    fake = server or FakeVoiceBoxAdminServer()
+    monkeypatch.setattr(VoiceBoxVoiceProvider, "_urlopen", staticmethod(fake))
+    return fake
+
+
+def test_voice_profiles_degrades_when_voicebox_is_down(tmp_path, monkeypatch):
+    """Down -> reachable False (not an error) so the Voces tab shows guidance;
+    the static engine catalog is present even offline."""
+    import urllib.error
+
+    def dead(url, data=None, headers=None, method="GET", timeout=30):
+        raise urllib.error.URLError("connection refused")
+
+    _use_fake_voicebox(monkeypatch, dead)
     server, service = _server(tmp_path)
-
-    # Nothing is serving :17493 in the test env -> reachable False, empty list.
     down = server.handle(_request("voice.profiles", {}))["result"]
     assert down["reachable"] is False
     assert down["profiles"] == []
-    assert down["base_url"]
-    # The engine catalog ("voces disponibles") is static -> present even offline.
-    assert any(engine["id"] == "qwen" for engine in down["engines"])
-    assert any(engine["id"] == "kokoro" and engine["clone"] is False for engine in down["engines"])
+    assert any(e["id"] == "qwen" and e["clone"] is True for e in down["engines"])
+    assert any(e["id"] == "kokoro" and e["clone"] is False for e in down["engines"])
+    service.close()
 
-    class _Resp:
-        def __init__(self, payload):
-            self._payload = payload
 
-        def read(self):
-            return _json.dumps(self._payload).encode("utf-8")
+def test_voice_clone_creates_profile_uploads_sample_and_lists_it(tmp_path, monkeypatch):
+    import base64
 
-        def __enter__(self):
-            return self
+    fake = _use_fake_voicebox(monkeypatch)
+    server, service = _server(tmp_path)
+    audio_b64 = base64.b64encode(b"RIFFfake-wav-bytes").decode("ascii")
 
-        def __exit__(self, *args):
-            return False
+    result = server.handle(
+        _request(
+            "voice.clone",
+            {
+                "name": "Voz Narrador",
+                "reference_text": "Hola, esta es mi voz de prueba.",
+                "engine": "qwen",
+                "language": "es",
+                "audio_base64": audio_b64,
+            },
+        )
+    )["result"]
 
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda url, timeout=5: _Resp(
-            [{"id": "v1", "name": "Mara", "language": "es", "voice_type": "cloned"}]
-        ),
-    )
-    up = server.handle(_request("voice.profiles", {}))["result"]
-    assert up["reachable"] is True
-    assert up["profiles"][0]["id"] == "v1"
-    assert up["profiles"][0]["name"] == "Mara"
+    assert result["status"] == "created"
+    assert result["profile"]["name"] == "Voz Narrador"
+    # The freshly-cloned voice is listed back with its uploaded sample counted.
+    listed = {p["name"]: p for p in result["profiles"]}
+    assert "Voz Narrador" in listed
+    assert listed["Voz Narrador"]["sample_count"] == 1
+    assert fake.profiles  # the fake server actually holds it
+    service.close()
+
+
+def test_voice_clone_requires_name_text_and_audio(tmp_path, monkeypatch):
+    _use_fake_voicebox(monkeypatch)
+    server, service = _server(tmp_path)
+    response = server.handle(_request("voice.clone", {"name": "X"}))  # no text/audio
+    assert "error" in response  # ValueError -> JSON-RPC error, not a save
+    service.close()
+
+
+def test_voice_clone_surfaces_duplicate_name_and_cleans_up(tmp_path, monkeypatch):
+    import base64
+
+    fake = _use_fake_voicebox(monkeypatch)
+    fake.profiles["existing"] = {
+        "id": "existing", "name": "Dup", "language": "es", "voice_type": "cloned",
+        "default_engine": "qwen", "sample_count": 1,
+    }
+    server, service = _server(tmp_path)
+    result = server.handle(
+        _request(
+            "voice.clone",
+            {"name": "Dup", "reference_text": "t", "audio_base64": base64.b64encode(b"a").decode()},
+        )
+    )["result"]
+    assert result["status"] == "error"
+    assert "already exists" in result["error"]
+    service.close()
+
+
+def test_voice_delete_profile_removes_it(tmp_path, monkeypatch):
+    fake = _use_fake_voicebox(monkeypatch)
+    fake.profiles["p1"] = {
+        "id": "p1", "name": "Borrar", "language": "es", "voice_type": "cloned",
+        "default_engine": "qwen", "sample_count": 1,
+    }
+    server, service = _server(tmp_path)
+
+    deleted = server.handle(_request("voice.delete_profile", {"profile_id": "p1"}))["result"]
+    assert deleted["status"] == "deleted"
+    assert all(p["id"] != "p1" for p in deleted["profiles"])
+
+    missing = server.handle(_request("voice.delete_profile", {"profile_id": "nope"}))["result"]
+    assert missing["status"] == "not_found"
     service.close()
 
 

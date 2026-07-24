@@ -281,6 +281,124 @@ class VoiceBoxVoiceProvider:
         return 0
 
 
+def build_multipart(
+    fields: dict[str, str], files: dict[str, tuple[str, bytes]]
+) -> tuple[str, bytes]:
+    """Hand-roll a ``multipart/form-data`` body (Kronara has no ``requests``
+    dependency -- everything is stdlib urllib). Returns (boundary, body)."""
+    import uuid
+
+    boundary = "----KronaraForm" + uuid.uuid4().hex
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n".encode("utf-8")
+        )
+    for name, (filename, content) in files.items():
+        header = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+            f'filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'
+        ).encode("utf-8")
+        parts.append(header + content + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return boundary, b"".join(parts)
+
+
+class VoiceBoxError(RuntimeError):
+    """A VoiceBox admin call failed with a message worth showing the user
+    (e.g. duplicate name, reference audio too short/quiet)."""
+
+
+class VoiceBoxAdmin:
+    """Management calls to a local VoiceBox server: create/list/delete cloned
+    voice *profiles* and upload reference *samples* (audio + transcript). Kept
+    separate from :class:`VoiceBoxVoiceProvider` (which only synthesizes). The
+    ``opener`` is injectable for tests -- same ``(url, data, headers, method,
+    timeout) -> (status, bytes)`` contract as the provider, raising
+    urllib.error.HTTPError on non-2xx so error bodies can be surfaced.
+
+    Cloning in VoiceBox is a two-step, transcript-required flow: create a
+    ``voice_type="cloned"`` profile, then POST one or more reference samples,
+    each a short audio clip WITH its exact transcript (``reference_text``). The
+    clone materializes lazily at first synthesis."""
+
+    CLONING_ENGINES = ("qwen", "luxtts", "chatterbox", "chatterbox_turbo", "tada")
+
+    def __init__(self, base_url: "str | None" = None, *, opener=None):
+        self.base_url = (
+            base_url or os.environ.get("KRONARA_VOICEBOX_URL") or "http://127.0.0.1:17493"
+        ).rstrip("/")
+        self._opener = opener or VoiceBoxVoiceProvider._urlopen
+
+    def _call(self, path, *, data=None, headers=None, method="GET", timeout=30):
+        import urllib.error
+
+        try:
+            return self._opener(
+                f"{self.base_url}{path}", data=data, headers=headers or {}, method=method, timeout=timeout
+            )
+        except urllib.error.HTTPError as error:
+            detail = ""
+            try:
+                import json
+
+                detail = str(json.loads(error.read().decode("utf-8")).get("detail", ""))
+            except Exception:
+                detail = ""
+            raise VoiceBoxError(detail or f"VoiceBox HTTP {error.code}") from error
+
+    def list_profiles(self) -> list[dict]:
+        import json
+
+        _, payload = self._call("/profiles", method="GET", timeout=10)
+        data = json.loads(payload.decode("utf-8"))
+        return list(data) if isinstance(data, list) else []
+
+    def create_cloned_profile(self, *, name: str, language: str, engine: str) -> dict:
+        import json
+
+        body = {
+            "name": name,
+            "language": language,
+            "voice_type": "cloned",
+            "default_engine": engine,
+        }
+        _, payload = self._call(
+            "/profiles",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+            timeout=15,
+        )
+        return json.loads(payload.decode("utf-8"))
+
+    def upload_sample(
+        self, profile_id: str, *, audio: bytes, filename: str, reference_text: str
+    ) -> None:
+        boundary, body = build_multipart(
+            {"reference_text": reference_text}, {"file": (filename, audio)}
+        )
+        self._call(
+            f"/profiles/{profile_id}/samples",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+            timeout=120,
+        )
+
+    def delete_profile(self, profile_id: str) -> bool:
+        import urllib.error
+
+        try:
+            self._call(f"/profiles/{profile_id}", method="DELETE", timeout=15)
+            return True
+        except VoiceBoxError as error:
+            if isinstance(error.__cause__, urllib.error.HTTPError) and error.__cause__.code == 404:
+                return False
+            raise
+
+
 class EstimatingVoiceProvider:
     """No-network fallback: duration from a spoken words-per-minute rate.
 

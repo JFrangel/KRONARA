@@ -31,6 +31,8 @@ const ALLOWED_RPC_METHODS = new Set([
   'styles.upsert',
   'styles.delete',
   'voice.profiles',
+  'voice.clone',
+  'voice.delete_profile',
   'episodes.list',
   'episodes.get',
   'episodes.delete',
@@ -468,7 +470,10 @@ function readRequestBody(req) {
     req.setEncoding('utf8');
     req.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      // 25 MB: base64-encoded voice-clone reference audio (voice.clone RPC)
+      // rides in the JSON body and inflates ~33%; a few-second clip is well
+      // under this, VoiceBox's own 50 MB upload cap is the real ceiling.
+      if (body.length > 25_000_000) {
         reject(new Error('request body is too large'));
         req.destroy();
       }
