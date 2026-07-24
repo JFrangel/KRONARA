@@ -876,7 +876,7 @@
                         {/if}
                         <div class="min-w-0 flex-1">
                           <p class="truncate text-[12.5px] font-medium text-ink">{episode.title}</p>
-                          <p class="mt-0.5 text-[10.5px] text-ink-tertiary">{seasonLabel(episode)} · {formatDate(episode.created_at)}</p>
+                          <p class="mt-0.5 font-mono text-[10px] text-ink-tertiary">{seasonLabel(episode)} · {formatDate(episode.created_at)}</p>
                         </div>
                         <Badge tone={statusTone(episode)}>{episode.narrative_passed && episode.originality_passed ? 'Aprobado' : 'Revisar'}</Badge>
                       </li>
@@ -940,8 +940,9 @@
                   {/if}
                   {#each selectedEpisodes as episode (episode.story_id)}
                     <tr
-                      class="cursor-pointer border-b border-line-subtle transition-colors hover:bg-surface-inset"
-                      class:bg-surface-inset={selectedEpisode?.story_id === episode.story_id}
+                      class="cursor-pointer border-b border-line-subtle transition-colors duration-150 {selectedEpisode?.story_id === episode.story_id
+                        ? 'bg-surface-inset shadow-[inset_2px_0_0_0_#7b5cff]'
+                        : 'hover:bg-surface-hover'}"
                       onclick={() => selectEpisode(episode)}
                     >
                       <td class="py-2.5 pr-4 text-ink">
@@ -956,8 +957,8 @@
                           <span class="truncate">{episode.title}</span>
                         </div>
                       </td>
-                      <td class="py-2.5 pr-4 text-ink-tertiary">{formatDate(episode.created_at)}</td>
-                      <td class="py-2.5 pr-4 text-ink-tertiary">{episode.duration_seconds ? `${Math.round(episode.duration_seconds)}s` : '—'}</td>
+                      <td class="py-2.5 pr-4 font-mono text-[11px] text-ink-tertiary">{formatDate(episode.created_at)}</td>
+                      <td class="py-2.5 pr-4 font-mono tabular-nums text-ink-tertiary">{episode.duration_seconds ? `${Math.round(episode.duration_seconds)}s` : '—'}</td>
                       <td class="py-2.5 pr-4 font-mono text-ink-tertiary">{episode.generator_family ?? '—'} / {episode.critic_family ?? '—'}</td>
                       <td class="py-2.5">
                         <Badge tone={statusTone(episode)}>
@@ -1128,7 +1129,7 @@
               <Badge tone={statusTone(selectedEpisode)}>#{episodeIndex(selectedEpisode)}</Badge>
             </div>
             <dl class="mt-2 grid grid-cols-2 gap-2 text-[11.5px]">
-              <div><dt class="text-ink-tertiary">Fecha</dt><dd class="text-ink">{formatDate(selectedEpisode.created_at)}</dd></div>
+              <div><dt class="text-ink-tertiary">Fecha</dt><dd class="font-mono text-ink">{formatDate(selectedEpisode.created_at)}</dd></div>
               <div><dt class="text-ink-tertiary">Duración real / objetivo</dt><dd class="text-ink">{selectedEpisode.duration_seconds ? `${Math.round(selectedEpisode.duration_seconds)}s` : '—'} / {selected.target_duration_seconds}s</dd></div>
               <div><dt class="text-ink-tertiary">Formato</dt><dd class="text-ink">{selectedEpisode.video_status === 'completed' ? 'Video 9:16' : 'Solo guion'}</dd></div>
               <div><dt class="text-ink-tertiary">Video</dt><dd class="text-ink">{selectedEpisode.video_status ?? 'no_configurado'}</dd></div>
@@ -1337,9 +1338,16 @@
           {/if}
         </div>
       {:else}
-        <div class="rounded-2xl border border-line bg-surface-inset px-5 py-4 text-center">
-          <p class="text-[13px] font-medium text-ink">Cargando programas...</p>
-          <p class="mt-1 text-[12px] text-ink-tertiary">Conectando con la web local.</p>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {#each Array(6) as _}
+            <div class="overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-surface to-surface-inset">
+              <div class="kronara-skeleton h-44 w-full"></div>
+              <div class="space-y-2 p-4">
+                <div class="kronara-skeleton h-3 w-3/4 rounded-full"></div>
+                <div class="kronara-skeleton h-3 w-1/2 rounded-full"></div>
+              </div>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>
