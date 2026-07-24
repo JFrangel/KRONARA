@@ -339,6 +339,55 @@ def test_sensitive_directive_persists_through_revise_without_a_brief_param():
     assert "FUENTE DE EXPERIENCIA REAL SERIA" in revise_call["system"]
 
 
+def test_revise_reinjects_series_canon_so_a_revision_cannot_break_established_facts():
+    """revise() used to send only scenes+revision, dropping the series canon —
+    so a quality/duration revision could silently contradict established
+    characters/facts. It must re-inject the canon cached from concepts()."""
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    series_brief = StoryBrief(
+        story_id="owned-series-1",
+        title="El caso del faro",
+        premise="Ana retoma un caso que dejó abierto.",
+        theme="verdad",
+        target_duration_seconds=90,
+        rights_mode="owned_original",
+        source_uri="kronara://artifacts/owned-series-1",
+        evidence_refs=("ev-owned",),
+        series_context="CANON: Ana es detective; su hermano murió en el incendio del faro.",
+    )
+    provider.concepts(series_brief)
+    blueprint = provider.blueprint(series_brief, StoryConcept("c1", "logline", "promise", "hook", 0.9))
+    scenes = provider.scenes(series_brief, StoryConcept("c1", "logline", "promise", "hook", 0.9), blueprint)
+
+    provider.revise(scenes, {"scene_index": 0})
+
+    revise_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.revise"
+    ][0]
+    assert "hermano murió en el incendio" in revise_call["input"]["series_canon"]
+    assert "canon" in revise_call["input"]["series_instruction"].casefold()
+
+
+def test_revise_keeps_scenes_coherent_even_without_series_canon():
+    """A standalone (non-series) revision still gets a coherence instruction so
+    it doesn't drift characters/place/facts between scenes."""
+    authority = FakeAuthority()
+    provider = RoutedStoryProvider(router(authority))
+    provider.concepts(brief())  # no series_context
+    blueprint = provider.blueprint(brief(), StoryConcept("c1", "logline", "promise", "hook", 0.9))
+    scenes = provider.scenes(brief(), StoryConcept("c1", "logline", "promise", "hook", 0.9), blueprint)
+
+    provider.revise(scenes, {"scene_index": 0})
+
+    revise_call = [
+        args for tool, args in authority.calls
+        if tool == "model.complete" and args["task"] == "story.revise"
+    ][0]
+    assert "coherentes" in revise_call["input"]["series_instruction"].casefold()
+
+
 def test_critic_gets_sensitive_verification_instruction():
     authority = FakeAuthority()
     critic = RoutedIndependentCritic(router(authority))

@@ -363,6 +363,11 @@ class RoutedStoryProvider:
         # apply the sensitive-source directive.
         self._sensitivity: str = "entertainment"
         self._program_id: str | None = None
+        # Stashed from the brief so revise() (a Protocol method with no brief
+        # param) can re-inject the series canon it would otherwise drop -- a
+        # quality/duration revision must not silently contradict established
+        # characters/facts.
+        self._series_context: str = ""
 
     @property
     def family(self) -> str:
@@ -381,6 +386,7 @@ class RoutedStoryProvider:
     def concepts(self, brief: StoryBrief) -> tuple[StoryConcept, ...]:
         self._sensitivity = brief.source_sensitivity
         self._program_id = brief.program_id
+        self._series_context = brief.series_context or ""
         inspiration = self.router.complete(
             alias="experimental_hy3",
             requirements=ModelRequirements(frozenset({"creative"})),
@@ -528,6 +534,16 @@ class RoutedStoryProvider:
                 "revision": revision,
                 "agent_contract": _REVISION_AGENT_CONTRACT,
                 "program_contract": narrative_contract(self._program_id),
+                # Re-inject the series canon the initial draft honored, so this
+                # revision can't contradict established characters/facts.
+                "series_canon": self._series_context,
+                "series_instruction": (
+                    "Conserva el canon de la serie: no contradigas personajes ni "
+                    "hechos ya establecidos y mantén coherentes las escenas entre sí."
+                    if self._series_context
+                    else "Mantén las escenas coherentes entre sí: mismos personajes, "
+                    "lugar y hechos que ya quedaron establecidos."
+                ),
             },
             response_schema=_SCENES_SCHEMA,
             max_tokens=_scene_max_tokens(int(target_word_count)),
