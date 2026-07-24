@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { fly } from 'svelte/transition';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
@@ -126,21 +127,23 @@
           <p class="text-[13px] text-ink-secondary">No se pudo cargar la parrilla. Inicia la web local y verifica que Python esté conectado.</p>
         {:else}
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {#each (loading ? Array.from({ length: 5 }, (_, index) => ({ program_id: `_placeholder_${index}` })) : programs.slice(0, 5)) as program (program.program_id)}
+            {#each (loading ? Array.from({ length: 5 }, (_, index) => ({ program_id: `_placeholder_${index}` })) : programs.slice(0, 5)) as program, index (program.program_id)}
               {@const cover = loading ? null : coverImageFor(program.program_id)}
+              {@const isToday = !loading && TODAY_WEEKDAY === program.weekday}
               <button
-                class="group relative h-56 min-w-0 overflow-hidden rounded-xl border text-left transition duration-200 hover:-translate-y-0.5 hover:border-purple-500"
-                class:border-line={!loading}
-                class:border-purple-500={!loading && TODAY_WEEKDAY === program.weekday}
-                class:border-line-subtle={loading}
-                class:opacity-60={loading}
+                class="group relative h-56 min-w-0 overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500 hover:shadow-[0_20px_44px_rgba(0,0,0,0.45)] {loading
+                  ? 'kronara-skeleton border-line-subtle'
+                  : isToday
+                    ? 'border-purple-500 ring-1 ring-purple-500/40 shadow-[0_0_28px_rgba(123,92,255,0.18)]'
+                    : 'border-line'}"
                 style={loading ? undefined : `background:${programGradient(program.program_id)}`}
                 onclick={() => onNavigate('programas', { programId: program.program_id })}
                 disabled={loading}
+                in:fly={{ y: 8, duration: 300, delay: index * 40 }}
               >
                 {#if !loading}
                   {#if cover}
-                    <img src={cover} alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                    <img src={cover} alt="" class="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]" loading="lazy" />
                   {/if}
                   <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
                   <div class="relative flex h-full flex-col justify-end p-3.5">
@@ -216,23 +219,22 @@
             {@const count = pipelineCount(stage.key)}
             {@const active = isPipelineActive(stage.key)}
             {@const completed = isPipelineCompleted(index)}
+            {@const tone = active ? 'ember' : completed ? 'success' : count > 0 ? 'purple' : 'idle'}
             <div
-              class="rounded-xl border p-3 transition"
-              class:border-ember-500={active}
-              class:border-success={completed && !active}
-              class:border-line={count === 0 && !active && !completed}
-              class:border-purple-500={count > 0 && !active && !completed}
-              class:bg-ember-500={active}
-              class:bg-success={completed && !active}
-              class:bg-purple-500={count > 0 && !active && !completed}
-              class:bg-surface-inset={count === 0 && !active && !completed}
+              class="rounded-xl border p-3 transition-all duration-300 {tone === 'ember'
+                ? 'border-ember-500/50 bg-ember-500/12 shadow-[0_0_20px_rgba(255,154,92,0.15)]'
+                : tone === 'success'
+                  ? 'border-success/50 bg-success/12'
+                  : tone === 'purple'
+                    ? 'border-purple-500/40 bg-purple-500/10'
+                    : 'border-line bg-surface-inset'}"
             >
               <div class="flex items-center justify-between">
-                <Icon name={stage.icon} size={14} class={active || completed || count > 0 ? 'text-white/85' : 'text-ink-tertiary'} />
-                <span class={active || completed || count > 0 ? 'text-[10px] font-semibold text-white/80' : 'text-[10px] text-ink-tertiary'}>0{index + 1}</span>
+                <Icon name={stage.icon} size={14} class={tone === 'ember' ? 'text-ember-400' : tone === 'success' ? 'text-success' : tone === 'purple' ? 'text-purple-200' : 'text-ink-tertiary'} />
+                <span class="font-mono text-[10px] text-ink-tertiary">0{index + 1}</span>
               </div>
-              <p class={active || completed || count > 0 ? 'mt-2 text-[12.5px] font-semibold text-white' : 'mt-2 text-[12.5px] font-medium text-ink'}>{stage.label}</p>
-              <p class={active || completed || count > 0 ? 'mt-1 text-[11.5px] font-medium text-white/85' : 'mt-1 text-[11px] text-ink-tertiary'}>{active ? 'En curso ahora' : completed ? 'Completado en este run' : `${count} ${count === 1 ? 'episodio' : 'episodios'}`}</p>
+              <p class="mt-2 text-[12.5px] font-semibold text-ink">{stage.label}</p>
+              <p class="mt-1 text-[11.5px] {tone === 'ember' ? 'font-medium text-ember-400' : tone === 'success' ? 'font-medium text-success' : tone === 'purple' ? 'font-medium text-purple-200' : 'text-ink-tertiary'}">{active ? 'En curso ahora' : completed ? 'Completado en este run' : `${count} ${count === 1 ? 'episodio' : 'episodios'}`}</p>
             </div>
           {/each}
         </div>
@@ -243,13 +245,16 @@
           <p class="text-[13px] text-ink-secondary">Las llamadas de las herramientas aparecerán aquí con su agente, resultado y evidencia.</p>
         {:else}
           <ul class="space-y-2">
-            {#each recentEvents as event}
-              <li class="flex items-start justify-between gap-3 rounded-lg border border-line bg-surface-inset px-3 py-2.5">
+            {#each recentEvents as event, i}
+              <li
+                class="flex items-start justify-between gap-3 rounded-lg border border-l-2 border-line bg-surface-inset px-3 py-2.5 transition-colors hover:bg-surface-hover {event.status === 'completed' ? 'border-l-success' : event.status === 'failed' || event.status === 'blocked' ? 'border-l-error' : 'border-l-line'}"
+                in:fly={{ y: 6, duration: 250, delay: Math.min(i, 8) * 30 }}
+              >
                 <div class="min-w-0">
-                  <p class="truncate text-[12.5px] font-medium text-ink">{event.tool_id}</p>
+                  <p class="truncate font-mono text-[12px] text-ink">{event.tool_id}</p>
                   <p class="truncate text-[11.5px] text-ink-tertiary">{event.agent_id} · {event.result_summary}</p>
                 </div>
-                <Badge tone={event.status === 'completed' ? 'success' : event.status === 'failed' || event.status === 'blocked' ? 'error' : 'neutral'}>
+                <Badge tone={event.status === 'completed' ? 'success' : event.status === 'failed' || event.status === 'blocked' ? 'error' : 'neutral'} mono>
                   {event.status}
                 </Badge>
               </li>
@@ -266,10 +271,10 @@
           <span class="rounded-lg border border-line bg-surface-inset px-2.5 py-1 text-[10.5px] text-ink-secondary">Esta semana</span>
         </div>
         <dl class="grid grid-cols-2 gap-2.5">
-          <div class="rounded-xl border border-line bg-surface-inset p-3"><dt class="text-[10.5px] text-ink-tertiary">Episodios en biblioteca</dt><dd class="mt-1 font-display text-xl font-semibold text-ink">{loading ? '—' : totalEpisodes}</dd><p class="mt-1 text-[10px] text-success">Datos locales</p></div>
-          <div class="rounded-xl border border-line bg-surface-inset p-3"><dt class="text-[10.5px] text-ink-tertiary">Programas activos</dt><dd class="mt-1 font-display text-xl font-semibold text-ink">{loading ? '—' : programs.length}</dd><p class="mt-1 text-[10px] text-ink-tertiary">Parrilla semanal</p></div>
-          <div class="rounded-xl border border-line bg-surface-inset p-3"><dt class="text-[10.5px] text-ink-tertiary">QC aprobado</dt><dd class="mt-1 font-display text-xl font-semibold text-ink">{loading || totalEpisodes === 0 ? '—' : `${Math.round((approvedEpisodes / totalEpisodes) * 100)}%`}</dd><p class="mt-1 text-[10px] text-success">Narrativa y originalidad</p></div>
-          <div class="rounded-xl border border-line bg-surface-inset p-3"><dt class="text-[10.5px] text-ink-tertiary">Trazas recientes</dt><dd class="mt-1 font-display text-xl font-semibold text-ink">{recentEvents.length}</dd><p class="mt-1 text-[10px] text-ink-tertiary">tools.timeline</p></div>
+          <div class="rounded-xl border border-line bg-surface-inset p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/30 hover:bg-surface-hover"><dt class="text-[10.5px] text-ink-tertiary">Episodios en biblioteca</dt><dd class="mt-1 font-display text-xl font-semibold tabular-nums text-ink">{loading ? '—' : totalEpisodes}</dd><p class="mt-1 text-[10px] text-ink-tertiary">Datos locales</p></div>
+          <div class="rounded-xl border border-line bg-surface-inset p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/30 hover:bg-surface-hover"><dt class="text-[10.5px] text-ink-tertiary">Programas activos</dt><dd class="mt-1 font-display text-xl font-semibold tabular-nums text-ink">{loading ? '—' : programs.length}</dd><p class="mt-1 text-[10px] text-ink-tertiary">Parrilla semanal</p></div>
+          <div class="rounded-xl border border-line bg-surface-inset p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/30 hover:bg-surface-hover"><dt class="text-[10.5px] text-ink-tertiary">QC aprobado</dt><dd class="mt-1 font-display text-xl font-semibold tabular-nums text-ink">{loading || totalEpisodes === 0 ? '—' : `${Math.round((approvedEpisodes / totalEpisodes) * 100)}%`}</dd><p class="mt-1 text-[10px] text-success">Narrativa y originalidad</p></div>
+          <div class="rounded-xl border border-line bg-surface-inset p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/30 hover:bg-surface-hover"><dt class="text-[10.5px] text-ink-tertiary">Trazas recientes</dt><dd class="mt-1 font-display text-xl font-semibold tabular-nums text-ink">{recentEvents.length}</dd><p class="mt-1 text-[10px] text-ink-tertiary">tools.timeline</p></div>
         </dl>
       </Card>
 

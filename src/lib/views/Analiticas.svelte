@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { fly } from 'svelte/transition';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
@@ -130,21 +131,25 @@
     <p class="text-[13px] text-ink-secondary">No se pudo cargar el rendimiento. Inicia la web local y verifica que Python esté conectado.</p>
   {:else if activeTab === 'rendimiento'}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <Card>
-        <p class="text-[11px] text-ink-tertiary">Episodios totales</p>
-        <p class="mt-1 font-display text-2xl font-semibold text-ink">{loading ? '—' : episodes.length}</p>
+      <Card interactive>
+        <span class="block h-0.5 w-6 rounded-full bg-purple-500/50"></span>
+        <p class="mt-2 text-[10px] uppercase tracking-[0.08em] text-ink-tertiary">Episodios totales</p>
+        {#if loading}<span class="mt-1 block h-7 w-16 rounded-md kron-shimmer"></span>{:else}<p class="mt-1 font-display text-2xl font-semibold tabular-nums text-ink">{episodes.length}</p>{/if}
       </Card>
-      <Card>
-        <p class="text-[11px] text-ink-tertiary">Aprobación QC</p>
-        <p class="mt-1 font-display text-2xl font-semibold text-ink">{qcPassRate === null ? '—' : `${qcPassRate}%`}</p>
+      <Card interactive>
+        <span class="block h-0.5 w-6 rounded-full bg-purple-500/50"></span>
+        <p class="mt-2 text-[10px] uppercase tracking-[0.08em] text-ink-tertiary">Aprobación QC</p>
+        {#if loading}<span class="mt-1 block h-7 w-16 rounded-md kron-shimmer"></span>{:else}<p class="mt-1 font-display text-2xl font-semibold tabular-nums {qcPassRate !== null && qcPassRate >= 80 ? 'text-success' : qcPassRate !== null && qcPassRate < 60 ? 'text-warning' : 'text-ink'}">{qcPassRate === null ? '—' : qcPassRate}<span class="ml-0.5 text-[13px] font-normal text-ink-tertiary">%</span></p>{/if}
       </Card>
-      <Card>
-        <p class="text-[11px] text-ink-tertiary">Duración promedio</p>
-        <p class="mt-1 font-display text-2xl font-semibold text-ink">{avgDurationSeconds === null ? '—' : `${avgDurationSeconds}s`}</p>
+      <Card interactive>
+        <span class="block h-0.5 w-6 rounded-full bg-purple-500/50"></span>
+        <p class="mt-2 text-[10px] uppercase tracking-[0.08em] text-ink-tertiary">Duración promedio</p>
+        {#if loading}<span class="mt-1 block h-7 w-16 rounded-md kron-shimmer"></span>{:else}<p class="mt-1 font-display text-2xl font-semibold tabular-nums text-ink">{avgDurationSeconds === null ? '—' : avgDurationSeconds}<span class="ml-0.5 text-[13px] font-normal text-ink-tertiary">s</span></p>{/if}
       </Card>
-      <Card>
-        <p class="text-[11px] text-ink-tertiary">Herramientas trazadas</p>
-        <p class="mt-1 font-display text-2xl font-semibold text-ink">{(operations.toolEvents ?? []).length}</p>
+      <Card interactive>
+        <span class="block h-0.5 w-6 rounded-full bg-purple-500/50"></span>
+        <p class="mt-2 text-[10px] uppercase tracking-[0.08em] text-ink-tertiary">Herramientas trazadas</p>
+        <p class="mt-1 font-display text-2xl font-semibold tabular-nums text-ink">{(operations.toolEvents ?? []).length}</p>
       </Card>
     </div>
 
@@ -162,11 +167,11 @@
       {#if pulseError}<p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">{pulseError}</p>{/if}
       {#if pulse}
         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {#each [['Qué funciona', pulse.what_works], ['Qué cambiar', pulse.what_to_change], ['Fórmulas de título', pulse.title_formulas], ['Próximos temas', pulse.next_topics]] as [label, items]}
-            <div class="rounded-xl border border-line bg-surface-inset p-3">
+          {#each [['Qué funciona', pulse.what_works, 'border-l-success'], ['Qué cambiar', pulse.what_to_change, 'border-l-warning'], ['Fórmulas de título', pulse.title_formulas, 'border-l-purple-500'], ['Próximos temas', pulse.next_topics, 'border-l-info']] as [label, items, accent], i}
+            <div class="rounded-xl border border-l-2 border-line bg-surface-inset p-3 {accent}" in:fly={{ y: 8, duration: 280, delay: i * 60 }}>
               <p class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">{label}</p>
               <ul class="mt-1.5 space-y-1">
-                {#each items ?? [] as item}<li class="text-[12px] leading-relaxed text-ink-secondary">• {item}</li>{/each}
+                {#each items ?? [] as item}<li class="flex gap-2 text-[12px] leading-relaxed text-ink-secondary"><span class="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-purple-400/60"></span><span>{item}</span></li>{/each}
               </ul>
             </div>
           {/each}
@@ -182,14 +187,14 @@
           <p class="text-[13px] text-ink-secondary">Sin programas cargados.</p>
         {:else}
           <ul class="space-y-2.5">
-            {#each byProgram as row (row.id)}
-              <li>
+            {#each byProgram as row, i (row.id)}
+              <li in:fly={{ y: 6, duration: 300, delay: Math.min(i, 8) * 45 }}>
                 <div class="flex items-center justify-between text-[12.5px]">
                   <span class="text-ink">{row.name}</span>
-                  <span class="text-ink-tertiary">{row.count}</span>
+                  <span class="font-mono text-[11px] tabular-nums text-ink-secondary">{row.count}</span>
                 </div>
                 <div class="mt-1.5 h-1.5 rounded-full bg-line-subtle">
-                  <div class="h-full rounded-full bg-purple-500" style={`width:${(row.count / maxProgramCount) * 100}%`}></div>
+                  <div class="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-[width] duration-700 ease-out" style={`width:${(row.count / maxProgramCount) * 100}%`}></div>
                 </div>
               </li>
             {/each}
@@ -223,12 +228,15 @@
           Sin episodios todavía. Créalos desde Estudio o espera a que el Agente B produzca la parrilla automáticamente.
         </p>
       {:else}
-        <ul class="divide-y divide-line-subtle">
-          {#each recentEpisodes as episode (episode.story_id)}
-            <li class="flex items-center justify-between gap-3 py-2.5 text-[12.5px]">
+        <ul class="space-y-0.5">
+          {#each recentEpisodes as episode, i (episode.story_id)}
+            <li
+              class="group -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-[12.5px] transition-colors hover:bg-surface-inset"
+              in:fly={{ y: 6, duration: 260, delay: Math.min(i, 8) * 40 }}
+            >
               <div class="min-w-0">
-                <p class="truncate text-ink">{episode.title}</p>
-                <p class="mt-0.5 truncate text-[11px] text-ink-tertiary">{episode.program_id ?? 'sin programa'}</p>
+                <p class="truncate font-display text-[13.5px] text-ink transition-colors group-hover:text-purple-200">{episode.title}</p>
+                <p class="mt-0.5 truncate font-mono text-[10.5px] text-ink-tertiary">{episode.program_id ?? 'sin programa'}</p>
               </div>
               <Badge tone={episode.narrative_passed && episode.originality_passed ? 'success' : 'neutral'}>
                 {episode.narrative_passed && episode.originality_passed ? 'Aprobado' : 'Revisar'}
