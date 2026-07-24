@@ -3,6 +3,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
+  import Skeleton from '../components/Skeleton.svelte';
   import { assetSrc, callOperations } from '../local-operations.js';
 
   let { operations = {} } = $props();
@@ -151,7 +152,7 @@
     </div>
 
     {#if loading}
-      <p class="text-[13px] text-ink-tertiary">Cargando biblioteca…</p>
+      <Skeleton lines={6} class="text-ink" />
     {:else if selectedTab === 'episodios'}
       {#if filteredEpisodes.length === 0}
         <Card>

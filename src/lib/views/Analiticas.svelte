@@ -3,6 +3,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
+  import Skeleton from '../components/Skeleton.svelte';
   import { callOperations } from '../local-operations.js';
   import { CHANNELS } from '../nav.js';
 
@@ -173,7 +174,7 @@
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
       <Card title="Episodios por programa" subtitle="episodes.list">
         {#if loading}
-          <p class="text-[13px] text-ink-secondary">Cargando…</p>
+          <Skeleton lines={4} class="text-ink" />
         {:else if byProgram.length === 0}
           <p class="text-[13px] text-ink-secondary">Sin programas cargados.</p>
         {:else}
@@ -195,7 +196,7 @@
 
       <Card title="Generador / crítico" subtitle="Diversidad de enrutado de modelos">
         {#if loading}
-          <p class="text-[13px] text-ink-secondary">Cargando…</p>
+          <Skeleton lines={4} class="text-ink" />
         {:else if byModelPair.length === 0}
           <p class="text-[13px] text-ink-secondary">Sin episodios todavía -- esta vista se llena con cada ejecución de <code>content.run</code>.</p>
         {:else}
@@ -213,7 +214,7 @@
 
     <Card title="Episodios recientes" subtitle={loading ? undefined : `${episodes.length} en total`}>
       {#if loading}
-        <p class="text-[13px] text-ink-secondary">Cargando…</p>
+        <Skeleton lines={4} class="text-ink" />
       {:else if recentEpisodes.length === 0}
         <p class="text-[13px] text-ink-secondary">
           Sin episodios todavía. Créalos desde Estudio o espera a que el Agente B produzca la parrilla automáticamente.
