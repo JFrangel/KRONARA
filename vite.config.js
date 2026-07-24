@@ -253,7 +253,17 @@ async function completeModel(argumentsValue, providers, health) {
       lastError = `provider unavailable: ${candidate.provider}`;
       continue;
     }
-    const responseFormat = candidate.model_id === 'tencent/hy3:free' || !request.response_schema.properties
+    // Groq rechaza response_format json_schema con 400 ("This model does not
+    // support response format json_schema") -- solo soporta json_object. Ese
+    // era el bug del guion vacío: creative_primary lidera con Groq, fallaba el
+    // 400, los demás candidatos estaban agotados (OpenRouter :free / Qwen-Kimi
+    // 402) y el router se quedaba sin texto. Usamos json_object para Groq (y
+    // cuando el schema no tiene properties); el esquema se sigue validando
+    // localmente con payloadMatchesSchema.
+    const useJsonObject = candidate.model_id === 'tencent/hy3:free'
+      || !request.response_schema.properties
+      || candidate.provider === 'groq';
+    const responseFormat = useJsonObject
       ? { type: 'json_object' }
       : {
           type: 'json_schema',
@@ -263,10 +273,15 @@ async function completeModel(argumentsValue, providers, health) {
             schema: request.response_schema,
           },
         };
+    // json_object exige la palabra "json" en el prompt (Groq/OpenAI); si el
+    // system no la menciona, la añadimos para no romper la llamada.
+    const systemContent = useJsonObject && !/json/i.test(request.system)
+      ? `${request.system}\n\nResponde ÚNICAMENTE con un objeto JSON válido acorde al esquema pedido.`
+      : request.system;
     const body = {
       model: candidate.model_id,
       messages: [
-        { role: 'system', content: request.system },
+        { role: 'system', content: systemContent },
         { role: 'user', content: JSON.stringify(request.input) },
       ],
       response_format: responseFormat,
