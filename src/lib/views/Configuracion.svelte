@@ -387,6 +387,7 @@
       </Card>
     </div>
   {:else if activeTab === 'voces'}
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_1fr]">
     <Card title="Motor de voz — VoiceBox" subtitle="Voz clonada, auto-hospedada (reemplaza edge-tts)">
       {#if !voicesLoaded}
         <p class="text-[13px] text-ink-secondary">Comprobando el servidor VoiceBox…</p>
@@ -435,6 +436,34 @@
         </button>
       {/if}
     </Card>
+
+    <Card title="Voces y motores disponibles" subtitle="Qué puedes usar en VoiceBox">
+      {#if voiceInfo?.engines?.length}
+        <ul class="space-y-2">
+          {#each voiceInfo.engines as engine (engine.id)}
+            <li class="flex items-center gap-3 rounded-xl border border-line bg-surface-inset p-2.5">
+              <div class="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-purple-500/15 text-purple-300"><Icon name="wand" size={13} /></div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[12px] font-medium text-ink">{engine.label}</p>
+                <p class="truncate text-[10.5px] text-ink-tertiary">{engine.note}</p>
+              </div>
+              {#if engine.clone}
+                <Badge tone="neutral">Clonable</Badge>
+              {:else}
+                <Badge tone="success">Sin clonar</Badge>
+              {/if}
+              {#if engine.id === voiceInfo.configured_engine}<Badge tone="warning">En uso</Badge>{/if}
+            </li>
+          {/each}
+        </ul>
+        <p class="mt-3 text-[11px] leading-relaxed text-ink-tertiary">
+          Para español usa <span class="font-mono">qwen</span> (multilingüe) y clona tu voz, o <span class="font-mono">kokoro</span> para voces preset listas (inglés). El motor se fija con <code class="text-purple-300">KRONARA_VOICEBOX_ENGINE</code>.
+        </p>
+      {:else}
+        <p class="text-[13px] text-ink-secondary">Cargando motores…</p>
+      {/if}
+    </Card>
+    </div>
   {:else if activeTab === 'seguridad'}
     <Card title="Seguridad">
       <ul class="space-y-2 text-[12.5px] text-ink-secondary">

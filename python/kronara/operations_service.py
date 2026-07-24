@@ -530,12 +530,27 @@ class OperationsService:
                 )
         except Exception:
             reachable = False
+        # Static catalog of the TTS engines VoiceBox ships (the "available
+        # voices" the user can pick even before the server is up / before
+        # cloning). qwen is multilingual (Spanish) and the default for Kronara;
+        # kokoro ships ready-to-use English preset voices with no cloning.
+        engines = [
+            {"id": "qwen", "label": "Qwen3-TTS", "note": "Multilingüe (español) · recomendado", "clone": True},
+            {"id": "qwen_custom_voice", "label": "Qwen Custom Voice", "note": "Voz personalizada", "clone": True},
+            {"id": "luxtts", "label": "LuxTTS", "note": "Clonación de voz", "clone": True},
+            {"id": "chatterbox", "label": "Chatterbox", "note": "Clonación expresiva", "clone": True},
+            {"id": "chatterbox_turbo", "label": "Chatterbox Turbo", "note": "Clonación rápida", "clone": True},
+            {"id": "tada", "label": "HumeAI TADA", "note": "Voz emocional", "clone": True},
+            {"id": "kokoro", "label": "Kokoro", "note": "Ligero · voces preset en inglés (sin clonar)", "clone": False},
+        ]
         return {
             "schema_version": 1,
             "reachable": reachable,
             "base_url": base,
             "configured_profile": configured,
+            "configured_engine": os.environ.get("KRONARA_VOICEBOX_ENGINE", ""),
             "profiles": profiles,
+            "engines": engines,
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:

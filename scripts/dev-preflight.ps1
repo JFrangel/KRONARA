@@ -38,3 +38,9 @@ if ($killedNames.Count -gt 0) {
         Write-Host "  - $name" -ForegroundColor DarkYellow
     }
 }
+
+# v0.8 Fase 2: bring the VoiceBox voice engine up with Kronara so a generated
+# video already has a real cloned voice. Best-effort, never blocks the dev
+# server (see scripts/start-voicebox.ps1).
+$startVoicebox = Join-Path $PSScriptRoot 'start-voicebox.ps1'
+if (Test-Path $startVoicebox) { & $startVoicebox }

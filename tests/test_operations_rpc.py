@@ -151,6 +151,9 @@ def test_voice_profiles_lists_reachable_server_and_degrades_when_down(tmp_path, 
     assert down["reachable"] is False
     assert down["profiles"] == []
     assert down["base_url"]
+    # The engine catalog ("voces disponibles") is static -> present even offline.
+    assert any(engine["id"] == "qwen" for engine in down["engines"])
+    assert any(engine["id"] == "kokoro" and engine["clone"] is False for engine in down["engines"])
 
     class _Resp:
         def __init__(self, payload):
