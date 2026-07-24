@@ -149,6 +149,8 @@ class OperationsService:
             "library.harvest_freesound": self.harvest_freesound,
             "media.animate_scene": self.animate_scene,
             "accounts.list": self.accounts_list,
+            "social.packaging": self.social_packaging,
+            "social.comment_reply": self.social_comment_reply,
             "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
@@ -257,6 +259,43 @@ class OperationsService:
             reports["sfx"] = result["reports"]
             seeded += result["seeded"]
         return {"schema_version": 1, "seeded": seeded, "reports": reports}
+
+    def social_packaging(self, params: dict[str, Any]) -> dict[str, Any]:
+        """El agente genera packaging por plataforma (título/descripción/hashtags)
+        desde el guion. NO publica: produce lo que se adjuntaría al publicar. La
+        publicación real la hace la conexión de red (nativa o agregador)."""
+        from kronara.routed_story_provider import AuthorityModelRouter
+        from kronara.social_agent import packaging_for_platforms
+
+        script = str(params.get("script") or "")
+        if not script:
+            return {"status": "error", "detail": "Falta el guion (script)."}
+        platforms = [str(p) for p in (params.get("platforms") or ["facebook", "instagram", "youtube", "tiktok"])]
+        router = AuthorityModelRouter(authority=self.authority, registry=self._model_registry)
+        return {
+            "schema_version": 1,
+            "packaging": packaging_for_platforms(
+                router, script=script, base_title=str(params.get("title") or ""),
+                platforms=platforms, program=str(params.get("program") or ""),
+            ),
+        }
+
+    def social_comment_reply(self, params: dict[str, Any]) -> dict[str, Any]:
+        """El agente redacta una respuesta a un comentario ANCLADA en el guion
+        (sabe lo que hay gracias al guion). NO la publica -- devuelve el borrador
+        para aprobación; publicarlo lo hace la conexión de red."""
+        from kronara.routed_story_provider import AuthorityModelRouter
+        from kronara.social_agent import draft_comment_reply
+
+        script = str(params.get("script") or "")
+        comment = str(params.get("comment") or "")
+        if not script or not comment:
+            return {"status": "error", "detail": "Faltan script o comment."}
+        router = AuthorityModelRouter(authority=self.authority, registry=self._model_registry)
+        return {
+            "schema_version": 1,
+            **draft_comment_reply(router, script=script, comment=comment, program=str(params.get("program") or "")),
+        }
 
     def accounts_list(self, params: dict[str, Any]) -> dict[str, Any]:
         """Multi-cuenta (Fase 5): qué canal/plataforma publica cada modo. Vista

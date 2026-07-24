@@ -39,6 +39,8 @@ const ALLOWED_RPC_METHODS = new Set([
   'library.harvest_freesound',
   'media.animate_scene',
   'accounts.list',
+  'social.packaging',
+  'social.comment_reply',
   'agents.overview',
   'episodes.list',
   'episodes.get',
