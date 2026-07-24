@@ -165,12 +165,20 @@ export function clearEpisodeGeneration() {
 export function generationPercent(run) {
   if (!run) return 0;
   if (run.status === 'completed') return 100;
-  if (run.status === 'failed') return Math.max(8, Math.round((run.stageIndex / GENERATION_STAGES.length) * 100));
-  const stage = GENERATION_STAGES[run.stageIndex];
-  const next = GENERATION_STAGES[run.stageIndex + 1];
-  if (!next) return 94;
-  const local = Math.max(0, Math.min(1, (run.elapsedSeconds - stage.at) / (next.at - stage.at)));
-  return Math.min(94, Math.round(((run.stageIndex + local) / GENERATION_STAGES.length) * 100));
+  // % REAL: se calcula desde las fases que el backend REPORTA de verdad
+  // (run.diagnostics.phases), no desde un timer local. Cada fase completada
+  // cuenta entera; la fase en curso cuenta a la mitad. Si el backend deja de
+  // reportar (proceso muerto), el % se congela en el último valor real en vez
+  // de seguir subiendo "fantasma".
+  const total = GENERATION_STAGES.length;
+  const phases = run?.diagnostics?.phases ?? [];
+  const completed = phases.filter((p) => p.status === 'completed').length;
+  const running = phases.some((p) => p.status === 'running') ? 0.5 : 0;
+  if (run.status === 'failed') {
+    return Math.max(8, Math.round((completed / total) * 100));
+  }
+  if (!phases.length) return run.status === 'running' ? 3 : 0;
+  return Math.min(98, Math.round(((completed + running) / total) * 100));
 }
 
 export function formatElapsed(seconds) {
