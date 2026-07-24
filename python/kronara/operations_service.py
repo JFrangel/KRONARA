@@ -145,6 +145,7 @@ class OperationsService:
             "voice.add_sample": self.voice_add_sample,
             "voice.delete_profile": self.voice_delete_profile,
             "voice.settings": self.voice_settings,
+            "library.harvest_video_loops": self.harvest_video_loops,
             "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
@@ -152,6 +153,30 @@ class OperationsService:
             "schedule.tick": self.schedule_tick,
             "action.approve": self.action_approve,
         }
+
+    def harvest_video_loops(self, params: dict[str, Any]) -> dict[str, Any]:
+        """V7 real: puebla la biblioteca con video-loops de Pexels (fuente
+        video_loop) para que las escenas usen metraje real en movimiento en vez
+        de solo imágenes fijas. La API key la custodia la autoridad Node
+        (pexels.search_videos, gated por KRONARA_PEXELS_ENABLED); aquí solo se
+        orquesta la búsqueda por tag y el sembrado con su licencia."""
+        if self._asset_library is None:
+            return {"status": "library_unavailable"}
+        from kronara.pexels_harvest import (
+            DEFAULT_VIDEO_LOOP_TAGS,
+            authority_search,
+            harvest_video_loops,
+        )
+
+        tags = [str(tag) for tag in (params.get("tags") or DEFAULT_VIDEO_LOOP_TAGS)]
+        result = harvest_video_loops(
+            search=authority_search(self.authority, per_page=int(params.get("per_page", 5))),
+            library=self._asset_library,
+            tags=tags,
+            video_dir=self.data_dir / "assets" / "video_loop",
+            now=int(datetime.now(UTC).timestamp()),
+        )
+        return {"schema_version": 1, **result}
 
     def schedule_tick(self, params: dict[str, Any]) -> dict[str, Any]:
         """B1: the autonomous weekly grid's real trigger. Rust's background

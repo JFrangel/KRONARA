@@ -35,6 +35,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'voice.add_sample',
   'voice.delete_profile',
   'voice.settings',
+  'library.harvest_video_loops',
   'agents.overview',
   'episodes.list',
   'episodes.get',
@@ -302,6 +303,50 @@ async function completeModel(argumentsValue, providers, health) {
   throw new Error(lastError);
 }
 
+async function searchPexelsVideos(argumentsValue, env) {
+  const enabled = ['1', 'true', 'yes', 'on'].includes(
+    String(env.KRONARA_PEXELS_ENABLED ?? '').toLowerCase().trim()
+  );
+  if (!enabled) throw new Error('pexels_disabled_by_policy');
+  const apiKey = env.KRONARA_PEXELS_API_KEY;
+  if (!apiKey) throw new Error('pexels_missing_credential');
+  const request = argumentsValue ?? {};
+  const query = String(request.query ?? '').trim();
+  if (!query || query.length > 200) throw new Error('invalid pexels query');
+  const perPage = Math.min(80, Math.max(1, Number.parseInt(request.per_page, 10) || 5));
+  const page = Math.max(1, Number.parseInt(request.page, 10) || 1);
+  const orientation = ['portrait', 'landscape', 'square'].includes(request.orientation)
+    ? request.orientation
+    : 'portrait';
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}`
+    + `&orientation=${orientation}&per_page=${perPage}&page=${page}`;
+  const response = await fetch(url, {
+    headers: { Authorization: apiKey, 'User-Agent': 'Mozilla/5.0 (Kronara video-loop harvester)' },
+  });
+  if (response.status === 429) throw new Error('pexels_rate_limited');
+  if (!response.ok) throw new Error(`pexels search failed with status ${response.status}`);
+  const json = await response.json();
+  const videos = (json.videos ?? [])
+    .map((video) => {
+      const files = (video.video_files ?? []).filter((file) =>
+        String(file.file_type ?? '').includes('mp4')
+      );
+      // Prefer an HD portrait file; fall back to the first mp4.
+      const chosen = files.find((file) => file.quality === 'hd') ?? files[0];
+      return {
+        source_id: video.id,
+        source_uri: video.url,
+        download_url: chosen?.link ?? '',
+        width: chosen?.width ?? video.width,
+        height: chosen?.height ?? video.height,
+        duration_seconds: video.duration,
+        photographer: video.user?.name ?? '',
+      };
+    })
+    .filter((video) => video.download_url);
+  return { schema_version: 1, videos, next_page: json.next_page ? page + 1 : null };
+}
+
 function jsonRpcResult(id, result) {
   return { jsonrpc: '2.0', id, result };
 }
@@ -457,7 +502,7 @@ class LocalSidecarHost {
       if (toolId === 'model.complete') return jsonRpcResult(id, await completeModel(args, this.providers, this.health));
       if (toolId === 'reddit.list_signals') throw new Error('reddit_disabled_by_policy');
       if (toolId === 'meta.metrics.read') throw new Error('meta_disabled_by_policy');
-      if (toolId === 'pexels.search_videos') throw new Error('pexels_disabled_by_policy');
+      if (toolId === 'pexels.search_videos') return jsonRpcResult(id, await searchPexelsVideos(args, this.env));
       if (toolId === 'voice.synthesize') throw new Error('voice_authority_unavailable_in_web_mode');
       if (toolId === 'publication.publish') return jsonRpcResult(id, { status: 'not_configured', external_effect: false });
       return jsonRpcError(id, -32601, 'authority tool is not allowed');
