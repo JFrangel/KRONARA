@@ -203,14 +203,8 @@ def _episode_visual_context(
     return ". ".join(dict.fromkeys(parts))
 
 
-def _dominant_characters(scenes: Sequence, limit: int = 3) -> str:
-    """Extract the top-N recurring character names across every scene so
-    every shot prompt carries the same protagonist(s). Without this,
-    hosted image providers (Flux via Pollinations/Cloudflare) generate a
-    new face per shot even for the same character -- these are freeze-
-    seeded but the model interprets a fresh prompt each time. Prepending
-    the character name(s) is the cheapest anchor a text-only prompt
-    supports."""
+def _dominant_character_names(scenes: Sequence, limit: int = 3) -> list[str]:
+    """Top-N recurring character names across every scene, most frequent first."""
     from collections import Counter
 
     tally: Counter[str] = Counter()
@@ -219,7 +213,42 @@ def _dominant_characters(scenes: Sequence, limit: int = 3) -> str:
             clean = str(name).strip()
             if clean:
                 tally[clean] += 1
-    return ", ".join(name for name, _ in tally.most_common(limit))
+    return [name for name, _ in tally.most_common(limit)]
+
+
+def _dominant_characters(scenes: Sequence, limit: int = 3) -> str:
+    """Extract the top-N recurring character names across every scene so
+    every shot prompt carries the same protagonist(s). Without this,
+    hosted image providers (Flux via Pollinations/Cloudflare) generate a
+    new face per shot even for the same character -- these are freeze-
+    seeded but the model interprets a fresh prompt each time. Prepending
+    the character name(s) is the cheapest anchor a text-only prompt
+    supports."""
+    return ", ".join(_dominant_character_names(scenes, limit))
+
+
+def _character_seeds(scenes: Sequence, namespace: str, limit: int = 3) -> dict[str, int]:
+    """A stable image seed per recurring character (keyed by casefolded name).
+    Scenes sharing a protagonist reuse that seed so the SAME character keeps a
+    consistent face across shots -- the prompt still varies per scene, so the
+    seed anchors identity without freezing composition. See character_visual.py
+    for the wider consistency mechanism this is the cheapest slice of."""
+    from kronara.character_visual import derive_seed
+
+    return {
+        name.casefold(): derive_seed(namespace, name)
+        for name in _dominant_character_names(scenes, limit)
+    }
+
+
+def _scene_character_seed(scene, character_seeds: dict[str, int]) -> int | None:
+    """The stable seed for this scene's primary recurring character, if any --
+    the first of the scene's characters that is a dominant character."""
+    for name in getattr(scene, "characters", ()) or ():
+        seed = character_seeds.get(str(name).strip().casefold())
+        if seed is not None:
+            return seed
+    return None
 
 
 def render_graphic_overlay_card(text: str, output_path: str, *, width: int, height: int) -> None:
@@ -328,6 +357,7 @@ def _resolve_scene_asset(
     scene_index: int = 0,
     total_scenes: int = 0,
     reference_image_path: str | None = None,
+    character_seed: int | None = None,
 ) -> VisualAsset:
     if assignment.source_kind == "video_loop" and assignment.video_loop_asset is not None:
         video = assignment.video_loop_asset
@@ -346,7 +376,10 @@ def _resolve_scene_asset(
         scene_position=f"scene {scene_index}/{total_scenes}" if scene_index and total_scenes else "",
     )
     request = ImageGenerationRequest(
-        prompt=prompt, negative_prompt=negative, seed=_seed_for_shot(scene.scene_id),
+        prompt=prompt, negative_prompt=negative,
+        # Stable per-character seed anchors identity across scenes; falls back
+        # to the per-scene seed when the scene has no recurring protagonist.
+        seed=character_seed if character_seed is not None else _seed_for_shot(scene.scene_id),
         quality_tier=tier,
         reference_image_path=reference_image_path,
         reference_strength=0.45,
@@ -517,6 +550,9 @@ def produce_episode_video(
     all_shots: list[Shot] = []
     source_counts = {"ai_image": 0, "video_loop": 0, "graphic_overlay": 0}
     motion_bias = visual_style.motion_bias if visual_style else "standard"
+    # Stable seed per recurring character so the same protagonist keeps a
+    # consistent face across scenes (keyed by episode so it's deterministic).
+    character_seeds = _character_seeds(scenes, episode_id)
     for index, scene in enumerate(scenes):
         tier = tier_for_scene(index, voice_duration.per_scene_ms)
         assignment = assignments[scene.scene_id]
@@ -540,6 +576,7 @@ def produce_episode_video(
             scene_index=index + 1,
             total_scenes=total_scenes,
             reference_image_path=cover_image_path if Path(cover_image_path).exists() else None,
+            character_seed=_scene_character_seed(scene, character_seeds),
         )
         all_shots.extend(
             plan_shots_for_scene(

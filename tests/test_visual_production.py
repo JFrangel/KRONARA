@@ -277,3 +277,34 @@ def test_scene_count_mismatch_raises_a_clear_error(tmp_path):
             renderer=FfmpegRenderer(ffmpeg="ffmpeg"),
             image_provider=_Placeholder(output_dir=str(tmp_path)),
         )
+
+
+def test_recurring_character_gets_a_stable_seed_across_scenes():
+    from kronara.visual_production import _character_seeds, _scene_character_seed
+
+    scenes = (
+        StoryScene("s0", "hook", "Ana y Luis discuten.", 5, ("Ana", "Luis"), (), ()),
+        StoryScene("s1", "mid", "Ana camina sola.", 5, ("Ana",), (), ()),
+        StoryScene("s2", "end", "Bruno aparece.", 5, ("Bruno",), (), ()),
+    )
+    seeds = _character_seeds(scenes, "ep-1")
+    assert "ana" in seeds
+    # Ana keeps the SAME seed across both her scenes -> consistent face.
+    assert (
+        _scene_character_seed(scenes[0], seeds)
+        == _scene_character_seed(scenes[1], seeds)
+        == seeds["ana"]
+    )
+    # A scene with no recurring dominant character keeps the per-scene seed.
+    assert _scene_character_seed(StoryScene("x", "p", "t", 5, ("Nadie",), (), ()), seeds) is None
+
+
+def test_character_seed_is_deterministic_per_episode_and_name():
+    from kronara.visual_production import _character_seeds
+
+    scenes = (
+        StoryScene("s0", "p", "t", 5, ("Ana",), (), ()),
+        StoryScene("s1", "p", "t", 5, ("Ana",), (), ()),
+    )
+    assert _character_seeds(scenes, "ep-1")["ana"] == _character_seeds(scenes, "ep-1")["ana"]
+    assert _character_seeds(scenes, "ep-1")["ana"] != _character_seeds(scenes, "ep-2")["ana"]
