@@ -657,6 +657,22 @@ def produce_episode_video(
     output_path = os.path.join(output_dir, f"{episode_id}.mp4")
     progress("loudness", "Normalizando volumen del episodio.")
     loudness = renderer.normalize_loudness(raw_output_path, output_path)
+    # Grade documental por programa (edición): contraste/desaturación/viñeta/grano
+    # según el mood. Pasada aparte (no toca el filter_complex); best-effort -- si
+    # falla, se conserva el video sin grade.
+    try:
+        from kronara.video_grade import apply_grade, grade_key_for
+
+        mood = grade_key_for(
+            (visual_style.program_id if visual_style else "")
+            or (visual_style.display_name if visual_style else "")
+        )
+        graded_path = os.path.join(output_dir, f"{episode_id}_graded.mp4")
+        apply_grade(output_path, graded_path, mood=mood, ffmpeg=renderer.ffmpeg)
+        output_path = graded_path
+        progress("grade", f"Grade documental aplicado ({mood}).")
+    except Exception:
+        progress("grade", "Grade documental omitido (se conserva el video base).")
     progress("qc", "Revisando formato, audio, duración y cuadros negros.")
     qc = renderer.qc(output_path, preset, max_black_seconds=0.5, loudness_range_lufs=(-19.0, -13.0))
     progress("completed", "Producción visual completada.", qc_passed=qc.passed)
