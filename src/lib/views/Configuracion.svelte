@@ -822,15 +822,18 @@
           {#each accounts as account (account.id)}
             <li class="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-inset p-3">
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <p class="truncate text-[12.5px] font-medium text-ink">{account.label}</p>
-                  <Badge tone="neutral">{PLATFORM_LABEL[account.platform] ?? account.platform}</Badge>
+                  <Badge tone={account.via === 'aggregator' ? 'purple' : 'neutral'}>{account.via === 'aggregator' ? 'Agregador' : (PLATFORM_LABEL[account.platform] ?? account.platform)}</Badge>
                 </div>
                 <div class="mt-1.5 flex flex-wrap gap-1.5">
                   {#each account.content_kinds as kind}
                     <span class="rounded-full border border-line px-2 py-0.5 text-[10.5px] text-ink-tertiary">{KIND_LABEL[kind] ?? kind}</span>
                   {/each}
                 </div>
+                {#if account.note}
+                  <p class="mt-1 text-[11px] leading-relaxed text-ink-tertiary">{account.note}</p>
+                {/if}
                 <p class="mt-1 font-mono text-[10px] text-ink-tertiary">{account.token_env}</p>
               </div>
               {#if account.configured}

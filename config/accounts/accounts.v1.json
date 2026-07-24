@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "_comment": "Cuentas de publicación por plataforma/modo. SEGURIDAD: los tokens NUNCA se guardan aquí, solo el NOMBRE de la variable de entorno que los custodia (la autoridad Node los lee). content_kinds indica qué modos publica cada cuenta.",
+  "_comment": "Cuentas de publicación por plataforma/modo. SEGURIDAD: los tokens NUNCA se guardan aquí, solo el NOMBRE de la variable de entorno que los custodia (la autoridad Node los lee). 'via' = native (API oficial de la plataforma) | aggregator (una sola API que publica a muchas redes, p.ej. Ayrshare/Postiz). content_kinds indica qué modos publica cada cuenta.",
   "accounts": [
     {
       "id": "meta_historias",
@@ -9,15 +9,29 @@
       "token_env": "KRONARA_META_PAGE_TOKEN",
       "id_env": "KRONARA_META_PAGE_ID",
       "content_kinds": ["narrative_story"],
+      "via": "native",
       "enabled": true
+    },
+    {
+      "id": "instagram_reels",
+      "platform": "instagram",
+      "label": "Instagram — Reels",
+      "token_env": "KRONARA_META_PAGE_TOKEN",
+      "id_env": "KRONARA_IG_BUSINESS_ID",
+      "content_kinds": ["narrative_story", "reflection", "quote"],
+      "via": "native",
+      "note": "Reels vía Meta Graph API (misma app que Facebook; cuenta de empresa).",
+      "enabled": false
     },
     {
       "id": "youtube_reflexiones",
       "platform": "youtube",
-      "label": "YouTube — Reflexiones y Bíblico",
+      "label": "YouTube — Shorts (Reflexión y Bíblico)",
       "token_env": "KRONARA_YOUTUBE_API_KEY",
       "id_env": "",
       "content_kinds": ["reflection", "scripture"],
+      "via": "native",
+      "note": "Conexión con Google (OAuth de YouTube Data API).",
       "enabled": false
     },
     {
@@ -26,7 +40,31 @@
       "label": "TikTok — Frases",
       "token_env": "KRONARA_TIKTOK_CLIENT_KEY",
       "id_env": "",
-      "content_kinds": ["quote"],
+      "content_kinds": ["quote", "narrative_story"],
+      "via": "native",
+      "note": "Content Posting API; requiere auditoría de app (posts privados hasta aprobar).",
+      "enabled": false
+    },
+    {
+      "id": "spotify_audio",
+      "platform": "spotify",
+      "label": "Spotify — Audio / Pódcast",
+      "token_env": "KRONARA_SPOTIFY_RSS_URL",
+      "id_env": "",
+      "content_kinds": ["reflection", "scripture"],
+      "via": "native",
+      "note": "Spotify NO recibe reels de video: distribuye AUDIO vía Spotify for Podcasters (RSS). Sirve para versiones de audio de reflexión/bíblico.",
+      "enabled": false
+    },
+    {
+      "id": "aggregator_multi",
+      "platform": "aggregator",
+      "label": "Agregador (Ayrshare / Postiz) — todas las redes con una sola API",
+      "token_env": "KRONARA_AGGREGATOR_API_KEY",
+      "id_env": "",
+      "content_kinds": ["narrative_story", "reflection", "scripture", "quote"],
+      "via": "aggregator",
+      "note": "Una sola API publica a FB/IG/TikTok/YouTube/X/etc. Evita el OAuth y la auditoría de cada plataforma. Postiz es open-source/auto-hospedable.",
       "enabled": false
     }
   ]

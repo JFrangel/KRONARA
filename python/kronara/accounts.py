@@ -30,6 +30,10 @@ class Account:
     id_env: str
     content_kinds: tuple[str, ...]
     enabled: bool
+    # "native" (API oficial de la plataforma, OAuth propio) | "aggregator" (una
+    # sola API que publica a muchas redes, p.ej. Ayrshare/Postiz).
+    via: str = "native"
+    note: str = ""
 
 
 def _account(raw: dict[str, Any]) -> Account:
@@ -41,6 +45,8 @@ def _account(raw: dict[str, Any]) -> Account:
         id_env=str(raw.get("id_env", "")),
         content_kinds=tuple(str(k) for k in raw.get("content_kinds", ())),
         enabled=bool(raw.get("enabled", False)),
+        via=str(raw.get("via", "native")),
+        note=str(raw.get("note", "")),
     )
 
 
@@ -68,6 +74,8 @@ def account_status(account: Account, env: dict[str, str]) -> dict[str, Any]:
         "token_env": account.token_env,
         "token_present": token_present,
         "id_present": id_present,
+        "via": account.via,
+        "note": account.note,
         "configured": account.enabled and token_present and id_present,
     }
 
