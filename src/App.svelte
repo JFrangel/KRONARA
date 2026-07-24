@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import Sidebar from './lib/components/Sidebar.svelte';
   import TopBar from './lib/components/TopBar.svelte';
   import AssistantPanel from './lib/components/AssistantPanel.svelte';
@@ -108,25 +109,29 @@
 
     <main class="min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
       <div class="mx-auto w-full max-w-[1780px]">
-      {#if activeView === 'panel'}
-        <Panel {operations} {control} onNavigate={(id, params = {}) => { activeView = id; selectedProgramId = params.programId ?? null; }} />
-      {:else if activeView === 'programas'}
-        <Programas connection={operations.connection} initialProgramId={selectedProgramId} openToken={programOpenToken} />
-      {:else if activeView === 'calendario'}
-        <Calendario />
-      {:else if activeView === 'estudio'}
-        <Estudio bind:operations connection={operations.connection} />
-      {:else if activeView === 'analiticas'}
-        <Analiticas {operations} onNavigate={(id) => (activeView = id)} />
-      {:else if activeView === 'biblioteca'}
-        <Biblioteca {operations} />
-      {:else if activeView === 'configuracion'}
-        <Configuracion />
-      {:else if activeView === 'agentes'}
-        <Agentes />
-      {:else}
-        <StubView icon={VIEW_META[activeView]?.icon} title={VIEW_META[activeView]?.title} description={VIEW_META[activeView]?.description} />
-      {/if}
+      {#key activeView}
+        <div in:fade={{ duration: 150 }}>
+          {#if activeView === 'panel'}
+            <Panel {operations} {control} onNavigate={(id, params = {}) => { activeView = id; selectedProgramId = params.programId ?? null; }} />
+          {:else if activeView === 'programas'}
+            <Programas connection={operations.connection} initialProgramId={selectedProgramId} openToken={programOpenToken} />
+          {:else if activeView === 'calendario'}
+            <Calendario />
+          {:else if activeView === 'estudio'}
+            <Estudio bind:operations connection={operations.connection} />
+          {:else if activeView === 'analiticas'}
+            <Analiticas {operations} onNavigate={(id) => (activeView = id)} />
+          {:else if activeView === 'biblioteca'}
+            <Biblioteca {operations} />
+          {:else if activeView === 'configuracion'}
+            <Configuracion />
+          {:else if activeView === 'agentes'}
+            <Agentes />
+          {:else}
+            <StubView icon={VIEW_META[activeView]?.icon} title={VIEW_META[activeView]?.title} description={VIEW_META[activeView]?.description} />
+          {/if}
+        </div>
+      {/key}
       </div>
     </main>
   </div>
