@@ -279,7 +279,27 @@
     loadStyles();
     loadVoices();
     loadVoiceSettings();
+    loadAccounts();
   });
+
+  // Fase 5: multi-cuenta. Vista SEGURA -- el backend solo dice si el token de
+  // cada cuenta está presente, nunca el valor.
+  let accounts = $state([]);
+  let accountsLoaded = $state(false);
+  let accountsError = $state('');
+  const PLATFORM_LABEL = { facebook: 'Facebook', youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', spotify: 'Spotify' };
+  const KIND_LABEL = { narrative_story: 'Historia', reflection: 'Reflexión', scripture: 'Bíblico', quote: 'Frase' };
+
+  async function loadAccounts() {
+    try {
+      const result = await callOperations('accounts.list', {});
+      accounts = result.accounts ?? [];
+      accountsLoaded = true;
+    } catch (error) {
+      accountsError = 'No se pudieron cargar las cuentas.';
+      accountsLoaded = true;
+    }
+  }
 
   const PROVIDERS = [
     { id: 'openrouter', label: 'OpenRouter (Qwen / Kimi / Nemotron / Hy3)', envVar: 'KRONARA_OPENROUTER_API_KEY' },
@@ -741,6 +761,48 @@
         <p class="mt-2 text-[11px] text-ink-tertiary">Se aplica con ffmpeg (mantiene el tono) sobre la narración generada. El cambio afecta la próxima generación.</p>
       </Card>
     {/if}
+  {:else if activeTab === 'publicacion'}
+    <Card title="Cuentas de publicación" subtitle="Multi-cuenta por plataforma y modo — los tokens viven en .env, aquí solo se lee su estado">
+      {#if accountsError}
+        <p class="text-[13px] text-ink-secondary">{accountsError}</p>
+      {:else if !accountsLoaded}
+        <p class="text-[13px] text-ink-secondary">Cargando cuentas…</p>
+      {:else if accounts.length === 0}
+        <p class="text-[13px] text-ink-secondary">Sin cuentas configuradas en <code class="text-purple-300">config/accounts/accounts.v1.json</code>.</p>
+      {:else}
+        <ul class="space-y-2">
+          {#each accounts as account (account.id)}
+            <li class="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-inset p-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <p class="truncate text-[12.5px] font-medium text-ink">{account.label}</p>
+                  <Badge tone="neutral">{PLATFORM_LABEL[account.platform] ?? account.platform}</Badge>
+                </div>
+                <div class="mt-1.5 flex flex-wrap gap-1.5">
+                  {#each account.content_kinds as kind}
+                    <span class="rounded-full border border-line px-2 py-0.5 text-[10.5px] text-ink-tertiary">{KIND_LABEL[kind] ?? kind}</span>
+                  {/each}
+                </div>
+                <p class="mt-1 font-mono text-[10px] text-ink-tertiary">{account.token_env}</p>
+              </div>
+              {#if account.configured}
+                <Badge tone="success">Configurada</Badge>
+              {:else if !account.enabled}
+                <Badge tone="neutral">Deshabilitada</Badge>
+              {:else if !account.token_present}
+                <Badge tone="warning">Falta credencial</Badge>
+              {:else}
+                <Badge tone="warning">Falta ID de página</Badge>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <p class="mt-3 text-[11.5px] text-ink-tertiary">
+          El scheduler enruta cada modo a las cuentas <strong class="text-ink-secondary">configuradas</strong> que lo publican.
+          La publicación real en redes se conecta en su propia fase; hasta entonces no se afirma que se publica.
+        </p>
+      {/if}
+    </Card>
   {:else if activeTab === 'seguridad'}
     <Card title="Seguridad">
       <ul class="space-y-2 text-[12.5px] text-ink-secondary">

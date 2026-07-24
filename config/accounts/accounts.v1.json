@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "_comment": "Cuentas de publicación por plataforma/modo. SEGURIDAD: los tokens NUNCA se guardan aquí, solo el NOMBRE de la variable de entorno que los custodia (la autoridad Node los lee). content_kinds indica qué modos publica cada cuenta.",
+  "accounts": [
+    {
+      "id": "meta_historias",
+      "platform": "facebook",
+      "label": "Facebook — Historias",
+      "token_env": "KRONARA_META_PAGE_TOKEN",
+      "id_env": "KRONARA_META_PAGE_ID",
+      "content_kinds": ["narrative_story"],
+      "enabled": true
+    },
+    {
+      "id": "youtube_reflexiones",
+      "platform": "youtube",
+      "label": "YouTube — Reflexiones y Bíblico",
+      "token_env": "KRONARA_YOUTUBE_API_KEY",
+      "id_env": "",
+      "content_kinds": ["reflection", "scripture"],
+      "enabled": false
+    },
+    {
+      "id": "tiktok_frases",
+      "platform": "tiktok",
+      "label": "TikTok — Frases",
+      "token_env": "KRONARA_TIKTOK_CLIENT_KEY",
+      "id_env": "",
+      "content_kinds": ["quote"],
+      "enabled": false
+    }
+  ]
+}

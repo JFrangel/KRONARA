@@ -37,6 +37,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'voice.settings',
   'library.harvest_video_loops',
   'media.animate_scene',
+  'accounts.list',
   'agents.overview',
   'episodes.list',
   'episodes.get',

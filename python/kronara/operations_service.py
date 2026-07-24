@@ -147,6 +147,7 @@ class OperationsService:
             "voice.settings": self.voice_settings,
             "library.harvest_video_loops": self.harvest_video_loops,
             "media.animate_scene": self.animate_scene,
+            "accounts.list": self.accounts_list,
             "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
@@ -209,6 +210,18 @@ class OperationsService:
         if out is None:
             return {"status": "failed", "detail": "La animación no se completó; se conserva la imagen fija."}
         return {"status": "completed", "video_path": out}
+
+    def accounts_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Multi-cuenta (Fase 5): qué canal/plataforma publica cada modo. Vista
+        SEGURA -- por cada cuenta reporta si su token/credencial está PRESENTE
+        (bool), nunca el valor; el valor real solo lo lee la autoridad al publicar."""
+        from kronara.accounts import account_status, load_accounts
+
+        env = dict(os.environ)
+        return {
+            "schema_version": 1,
+            "accounts": [account_status(account, env) for account in load_accounts()],
+        }
 
     def schedule_tick(self, params: dict[str, Any]) -> dict[str, Any]:
         """B1: the autonomous weekly grid's real trigger. Rust's background
