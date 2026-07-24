@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
+  import { fly, fade, slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
-  import Skeleton from '../components/Skeleton.svelte';
   import { assetSrc, callOperations } from '../local-operations.js';
 
   let { operations = {} } = $props();
@@ -130,17 +131,17 @@
       </p>
     </div>
     <div class="flex gap-3 text-right">
-      <div class="rounded-lg border border-line bg-surface px-3 py-2">
+      <div class="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-inset px-3.5 py-2.5 shadow-card">
         <p class="text-[10.5px] uppercase tracking-wide text-ink-tertiary">Episodios</p>
-        <p class="font-display text-lg font-semibold text-ink">{episodes.length}</p>
+        <p class="font-display text-lg font-semibold tabular-nums text-ink">{episodes.length}</p>
       </div>
-      <div class="rounded-lg border border-line bg-surface px-3 py-2">
+      <div class="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-inset px-3.5 py-2.5 shadow-card">
         <p class="text-[10.5px] uppercase tracking-wide text-ink-tertiary">Programas</p>
-        <p class="font-display text-lg font-semibold text-ink">{programs.length}</p>
+        <p class="font-display text-lg font-semibold tabular-nums text-ink">{programs.length}</p>
       </div>
-      <div class="rounded-lg border border-line bg-surface px-3 py-2">
+      <div class="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-inset px-3.5 py-2.5 shadow-card">
         <p class="text-[10.5px] uppercase tracking-wide text-ink-tertiary">Minutos totales</p>
-        <p class="font-display text-lg font-semibold text-ink">{totalDurationMinutes}</p>
+        <p class="font-display text-lg font-semibold tabular-nums text-ink">{totalDurationMinutes}</p>
       </div>
     </div>
   </header>
@@ -152,7 +153,7 @@
       <div class="flex gap-1 rounded-full border border-line bg-surface p-1">
         {#each TABS as tab}
           <button
-            class={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition ${selectedTab === tab ? 'bg-purple-500 text-ink' : 'text-ink-tertiary hover:text-ink'}`}
+            class={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition ${selectedTab === tab ? 'bg-purple-500 text-ink shadow-[0_2px_12px_rgba(123,92,255,0.35)]' : 'text-ink-tertiary hover:bg-surface-hover hover:text-ink'}`}
             onclick={() => (selectedTab = tab)}
           >
             <Icon name={TAB_ICONS[tab]} size={13} />
@@ -173,7 +174,17 @@
     </div>
 
     {#if loading}
-      <Skeleton lines={6} class="text-ink" />
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {#each Array(8) as _}
+          <div class="overflow-hidden rounded-xl border border-line bg-surface">
+            <span class="kronara-skeleton block aspect-[9/16] w-full"></span>
+            <div class="space-y-2 p-3">
+              <span class="kronara-skeleton block h-3 w-3/4 rounded-full"></span>
+              <span class="kronara-skeleton block h-3 w-1/2 rounded-full"></span>
+            </div>
+          </div>
+        {/each}
+      </div>
     {:else if selectedTab === 'episodios'}
       {#if filteredEpisodes.length === 0}
         <Card>
@@ -183,37 +194,39 @@
         </Card>
       {:else}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {#each filteredEpisodes as episode}
+          {#each filteredEpisodes as episode, i}
             <button
-              class="flex flex-col overflow-hidden rounded-xl border border-line bg-surface text-left transition hover:border-purple-500"
+              class="group flex flex-col overflow-hidden rounded-xl border border-line bg-gradient-to-br from-surface to-surface-inset text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/70 hover:shadow-card-hover"
               onclick={() => loadEpisodeDetail(episode.story_id)}
+              in:fly={{ y: 10, duration: 260, delay: Math.min(i, 12) * 28, easing: cubicOut }}
             >
-              {#if episode.cover_image_path && assetSrc(episode.cover_image_path)}
-                <img
-                  src={assetSrc(episode.cover_image_path)}
-                  alt={episode.title}
-                  class="aspect-[9/16] w-full object-cover"
-                  loading="lazy"
-                />
-              {:else}
-                <div class="grid aspect-[9/16] w-full place-items-center bg-surface-inset text-ink-tertiary">
-                  <Icon name="film" size={32} />
-                </div>
-              {/if}
+              <div class="relative overflow-hidden">
+                {#if episode.cover_image_path && assetSrc(episode.cover_image_path)}
+                  <img
+                    src={assetSrc(episode.cover_image_path)}
+                    alt={episode.title}
+                    class="aspect-[9/16] w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div class="grid aspect-[9/16] w-full place-items-center bg-surface-inset text-ink-tertiary">
+                    <Icon name="film" size={32} />
+                  </div>
+                {/if}
+                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent"></div>
+                {#if episode.video_qc_passed === true}
+                  <span class="absolute right-2 top-2 rounded-full bg-black/45 px-2 py-0.5 font-mono text-[10px] text-success backdrop-blur-sm">QC ✓</span>
+                {:else if episode.video_qc_passed === false}
+                  <span class="absolute right-2 top-2 rounded-full bg-black/45 px-2 py-0.5 font-mono text-[10px] text-error backdrop-blur-sm">QC ✗</span>
+                {/if}
+                {#if episode.duration_seconds}
+                  <span class="absolute bottom-2 left-2 rounded-full bg-black/45 px-2 py-0.5 font-mono text-[10px] tabular-nums text-ink backdrop-blur-sm">{Math.round(episode.duration_seconds)}s</span>
+                {/if}
+              </div>
               <div class="p-3">
                 <p class="line-clamp-2 font-display text-[13px] font-semibold text-ink">{episode.title}</p>
                 <p class="mt-1 text-[11px] text-ink-tertiary">{programName(episode.program_id)}</p>
-                <div class="mt-2 flex items-center justify-between text-[11px]">
-                  <span class="text-ink-tertiary">{formatDate(episode.created_at)}</span>
-                  {#if episode.duration_seconds}
-                    <span class="rounded-full bg-surface-inset px-2 py-0.5 text-ink">{Math.round(episode.duration_seconds)}s</span>
-                  {/if}
-                </div>
-                {#if episode.video_qc_passed === true}
-                  <Badge tone="success">QC ✓</Badge>
-                {:else if episode.video_qc_passed === false}
-                  <Badge tone="error">QC ✗</Badge>
-                {/if}
+                <p class="mt-1 font-mono text-[10.5px] tabular-nums text-ink-tertiary">{formatDate(episode.created_at)}</p>
               </div>
             </button>
           {/each}
