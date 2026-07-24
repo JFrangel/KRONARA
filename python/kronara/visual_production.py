@@ -102,8 +102,12 @@ def build_shot_prompt(
     context = " ".join(episode_context.split())
     anchors, contradictions = _visual_anchors_for(f"{context} {base}")
     visual_text = " ".join(base.split()[:70])
+    # A named master style (anime, watercolor, pixel art...) already fixes its
+    # own medium in style_prompt; forcing "cinematic photograph" on top would
+    # fight it, so only the legacy additive styles get the photographic default.
+    master_style = getattr(style, "is_master_style", False)
     parts = [
-        "cinematic photograph",
+        *([] if master_style else ["cinematic photograph"]),
         "vertical composition",
         "scene-matched literal visual",
         "consistent episode setting and recurring characters",
@@ -166,10 +170,17 @@ def _episode_visual_context(
     )
     anchors, _ = _visual_anchors_for(narrations)
     story_world = " ".join(narrations.split()[:max_words])
+    master_style = getattr(visual_style, "is_master_style", False)
     parts: list[str] = []
     if visual_style is not None:
-        parts.append(f"{visual_style.display_name} visual identity")
-        if visual_style.program_id == "viernes-paranormal":
+        # Legacy descriptors expose display_name; named styles expose name.
+        label = getattr(visual_style, "display_name", None) or getattr(visual_style, "name", "")
+        if label:
+            parts.append(f"{label} visual identity")
+        # program_id only exists on legacy per-program descriptors; named
+        # horror styles (analog-horror-vhs) already encode the threat/silhouette
+        # in their own style_prompt, so this special-case is legacy-only.
+        if getattr(visual_style, "program_id", None) == "viernes-paranormal":
             parts.append("supernatural horror with a visible ghost, entity or shadow presence")
     # Consistency anchors: every scene share these so hosted providers
     # (Pollinations/Cloudflare Flux) that don't take a reference image
@@ -181,7 +192,11 @@ def _episode_visual_context(
         parts.append(f"recurring characters throughout the episode: {characters}")
         parts.append("same faces, same wardrobe, same age and features across every shot")
     parts.append("consistent color palette, consistent lighting mood, consistent location")
-    parts.append("shot on 35mm film stock, warm shadows, filmic grain, cinematic depth")
+    # Film-stock/grain wording is a photographic-realism default: keep it for
+    # legacy styles but drop it for named master styles so pixel-art, watercolor
+    # or paper-cutout episodes aren't pushed back toward looking like film.
+    if not master_style:
+        parts.append("shot on 35mm film stock, warm shadows, filmic grain, cinematic depth")
     if anchors:
         parts.append(anchors)
     if story_world:

@@ -103,25 +103,31 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
     image_provider = None
     visual_style_registry = None
+    style_resolver = None
     asset_library = None
     if renderer is not None:
         try:
             from kronara.asset_library import AssetLibraryStore
-            from kronara.visual_style import VisualStyleRegistry, default_registry_path
+            from kronara.visual_style import (
+                VisualStyleRegistry,
+                default_registry_path,
+                default_style_resolver,
+            )
 
             # KRONARA_IMAGE_PROVIDER selects the backend:
-            #   cascade (default when any hosted provider has credentials) --
-            #     tries pollinations -> cloudflare workers ai -> local sdxl
-            #     -> placeholder in order, first success wins. Failover is
-            #     silent (see ImageProviderCascade); only the final total
-            #     failure surfaces to the user. Best for production: fast
-            #     hosted first, expensive slow local only as backup.
+            #   cascade (the DEFAULT, v0.8) -- API-only: tries pollinations ->
+            #     cloudflare workers ai -> placeholder in order, first success
+            #     wins. Failover is silent (see ImageProviderCascade); only the
+            #     final total failure surfaces to the user. Local SDXL is NOT in
+            #     the default chain -- at ~7min/image (docs/BUGS_CONOCIDOS.md)
+            #     it was the production bottleneck; opt it back in with
+            #     KRONARA_ENABLE_SDXL=1 or force it with the sdxl choice below.
             #   pollinations -- force pollinations.ai only, ~5-10s/image.
             #   cloudflare -- force Cloudflare Workers AI Flux only, ~3s/image.
             #     Free tier: 10 000 Neurons/day.
-            #   sdxl -- local SDXL/Diffusers (slow on 8GB VRAM: measured
-            #     ~7min/image, see docs/BUGS_CONOCIDOS.md). Kept for the
-            #     cover-image premium tier where full control matters.
+            #   sdxl -- local SDXL/Diffusers only (slow on 8GB VRAM: measured
+            #     ~7min/image). Opt-in for the premium cover tier where full
+            #     control matters and the wait is acceptable.
             #   placeholder -- Pillow-drawn stand-in, no network/GPU (fast
             #     iteration for composition/render debugging).
             provider_choice = os.environ.get("KRONARA_IMAGE_PROVIDER", "").lower().strip()
@@ -133,8 +139,14 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
                 os.environ.get("KRONARA_CLOUDFLARE_ACCOUNT_ID")
                 and os.environ.get("KRONARA_CLOUDFLARE_API_TOKEN")
             )
+            include_sdxl = os.environ.get("KRONARA_ENABLE_SDXL", "").lower().strip() in (
+                "1", "true", "yes", "on"
+            )
             if not provider_choice:
-                provider_choice = "cascade" if (has_pollinations or has_cloudflare) else "sdxl"
+                # v0.8: images are API-only by default. With no hosted
+                # credentials the cascade still resolves to placeholder frames
+                # (fast, honest) instead of a 7-minute-per-image local GPU run.
+                provider_choice = "cascade"
 
             from kronara.image_gen import (
                 CloudflareWorkersAiImageProvider,
@@ -154,27 +166,34 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
             elif provider_choice == "sdxl":
                 image_provider = DiffusersImageProvider(output_dir=images_dir)
             else:
-                # cascade: try every provider we have credentials for, in
-                # order of speed. Local SDXL and placeholder are always
-                # eligible as final fallbacks. See ImageProviderCascade for
-                # the failover semantics -- first success wins, all failures
-                # re-raise the last one so the user sees a real error.
+                # cascade (default): API providers we have credentials for, in
+                # order of speed, then placeholder as the always-eligible final
+                # rung. Local SDXL is excluded unless KRONARA_ENABLE_SDXL is set
+                # -- it's the 7min/image bottleneck we moved off the hot path.
+                # See ImageProviderCascade for the failover semantics -- first
+                # success wins, all failures re-raise the last one.
                 chain: list = []
                 if has_pollinations:
                     chain.append(PollinationsImageProvider(output_dir=images_dir))
                 if has_cloudflare:
                     chain.append(CloudflareWorkersAiImageProvider(output_dir=images_dir))
-                try:
-                    chain.append(DiffusersImageProvider(output_dir=images_dir))
-                except Exception:
-                    pass  # no SDXL weights -- skip that rung
+                if include_sdxl:
+                    try:
+                        chain.append(DiffusersImageProvider(output_dir=images_dir))
+                    except Exception:
+                        pass  # no SDXL weights -- skip that rung
                 chain.append(PlaceholderImageProvider(output_dir=images_dir))
                 image_provider = ImageProviderCascade(chain, label=provider_choice)
             visual_style_registry = VisualStyleRegistry.load(default_registry_path())
+            # v0.8 Fase 1: the named-style resolver (10-style library +
+            # program->style_id map + legacy registry fallback). The pipeline
+            # prefers this over visual_style_registry when present.
+            style_resolver = default_style_resolver()
             asset_library = AssetLibraryStore(data_dir / "asset_library.db").initialize()
         except Exception:
             image_provider = None
             visual_style_registry = None
+            style_resolver = None
             asset_library = None
 
     return {
@@ -183,6 +202,7 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
         "renderer": renderer,
         "image_provider": image_provider,
         "visual_style_registry": visual_style_registry,
+        "style_resolver": style_resolver,
         "asset_library": asset_library,
     }
 

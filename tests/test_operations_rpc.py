@@ -65,6 +65,79 @@ def test_resolve_program_defaults_is_a_no_op_without_a_program_id():
     assert OperationsService._resolve_program_defaults(params) == params
 
 
+def test_styles_list_returns_the_ten_shipped_styles(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(_request("styles.list", {}))
+
+    styles = response["result"]["styles"]
+    ids = {s["style_id"] for s in styles}
+    assert {"anime-neo-noir", "analog-horror-vhs", "editorial-minimalista"} <= ids
+    assert all(s["source"] == "base" for s in styles)
+    service.close()
+
+
+def test_styles_upsert_then_list_shows_custom_style(tmp_path):
+    server, service = _server(tmp_path)
+
+    saved = server.handle(
+        _request(
+            "styles.upsert",
+            {
+                "style_id": "mi-estilo",
+                "name": "Mi Estilo",
+                "style_prompt": "custom look, dreamy pastel gradients",
+                "motion_bias": "subtle",
+            },
+        )
+    )
+    assert saved["result"]["status"] == "saved"
+
+    listed = server.handle(_request("styles.list", {}))
+    by_id = {s["style_id"]: s for s in listed["result"]["styles"]}
+    assert by_id["mi-estilo"]["source"] == "custom"
+    assert by_id["mi-estilo"]["name"] == "Mi Estilo"
+    service.close()
+
+
+def test_styles_upsert_rejects_invalid_style(tmp_path):
+    server, service = _server(tmp_path)
+
+    response = server.handle(
+        _request("styles.upsert", {"style_id": "x", "name": "X", "motion_bias": "bad"})
+    )
+    # style_prompt missing AND motion_bias invalid -> JSON-RPC error, not a save.
+    assert "error" in response
+    service.close()
+
+
+def test_styles_delete_reverts_override_to_base(tmp_path):
+    server, service = _server(tmp_path)
+
+    server.handle(
+        _request(
+            "styles.upsert",
+            {
+                "style_id": "anime-neo-noir",
+                "name": "Editado",
+                "style_prompt": "my own edited anime look",
+            },
+        )
+    )
+    assert any(
+        s["style_id"] == "anime-neo-noir" and s["source"] == "custom-override"
+        for s in server.handle(_request("styles.list", {}))["result"]["styles"]
+    )
+
+    deleted = server.handle(_request("styles.delete", {"style_id": "anime-neo-noir"}))
+    assert deleted["result"]["status"] == "deleted"
+    assert any(
+        s["style_id"] == "anime-neo-noir" and s["source"] == "base"
+        for s in deleted["result"]["styles"]
+    )
+    service.close()
+
+
 def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path):
     server, service = _server(tmp_path)
 
@@ -96,7 +169,9 @@ def test_programs_list_returns_all_seven_programs_with_visual_style_linkage(tmp_
     assert len(programs) == 7
     viernes = next(p for p in programs if p["program_id"] == "viernes-paranormal")
     assert viernes["weekday"] == "viernes"
-    assert viernes["visual_style_id"] == "viernes-paranormal"
+    # v0.8: programs link to one of the 10 named visual styles (styles.v1.json)
+    # rather than a self-referential program_id. Viernes Paranormal -> horror.
+    assert viernes["visual_style_id"] == "analog-horror-vhs"
     assert "youtube" in viernes["platforms"]
     assert viernes["narrative_template"]
     assert viernes["narrative_template_source"] == "base"

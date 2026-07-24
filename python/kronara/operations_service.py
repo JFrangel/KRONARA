@@ -66,6 +66,7 @@ class OperationsService:
         image_provider: "object | None" = None,
         renderer: "object | None" = None,
         visual_style_registry: "object | None" = None,
+        style_resolver: "object | None" = None,
         asset_library: "object | None" = None,
         opportunity_store: "object | None" = None,
         rate_learner: "object | None" = None,
@@ -79,6 +80,9 @@ class OperationsService:
         self.database_path = self.data_dir / "kronara.db"
         self._program_template_path = self.data_dir / "program_narrative_templates.v1.json"
         self._program_story_resource_path = self.data_dir / "program_story_resources.v1.json"
+        # v0.8 Fase 1: user-added / edited visual styles (base 10 ship in
+        # config/visual_styles/styles.v1.json; these are the runtime overrides).
+        self._custom_styles_path = self.data_dir / "custom_visual_styles.v1.json"
         os.environ["KRONARA_PROGRAM_TEMPLATE_OVERRIDES"] = str(self._program_template_path)
         self.store = KronaraStore(self.database_path)
         self.store.initialize()
@@ -108,6 +112,7 @@ class OperationsService:
         self._image_provider = image_provider
         self._renderer = renderer
         self._visual_style_registry = visual_style_registry
+        self._style_resolver = style_resolver
         self._asset_library = asset_library
         self._opportunity_store = opportunity_store
         self._rate_learner = rate_learner
@@ -131,6 +136,9 @@ class OperationsService:
             "programs.template.reset": self.programs_template_reset,
             "programs.resources.save": self.programs_resources_save,
             "programs.resources.reset": self.programs_resources_reset,
+            "styles.list": self.styles_list,
+            "styles.upsert": self.styles_upsert,
+            "styles.delete": self.styles_delete,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -433,6 +441,67 @@ class OperationsService:
             "story_resource_items": story_resource_items(text),
         }
 
+    def styles_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 1d: the visual-style catalog for Configuración → Estilos and
+        the Estudio selector -- the shipped 10 plus any custom styles, RAW so
+        the editor round-trips exactly what was typed. Each row is tagged
+        source = base | custom | custom-override."""
+        from kronara.visual_style import default_style_library_path, list_styles
+
+        return {
+            "schema_version": 1,
+            "styles": list_styles(default_style_library_path(), self._custom_styles_path),
+        }
+
+    def styles_upsert(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Add or edit a custom style. A style_id matching a shipped one edits
+        (shadows) that built-in; a new style_id adds a style. Validation
+        mirrors NamedVisualStyle (non-empty id/name/prompt, known motion_bias)."""
+        from kronara.visual_style import (
+            default_style_library_path,
+            list_styles,
+            upsert_custom_style,
+        )
+
+        style = params.get("style")
+        if not isinstance(style, dict):
+            # Accept either a nested "style" object or the fields at top level.
+            style = {
+                key: params.get(key)
+                for key in (
+                    "style_id", "name", "identidad", "style_prompt",
+                    "negative_prompt", "motion_bias", "music_moods", "asset_tags",
+                )
+                if key in params
+            }
+        saved = upsert_custom_style(self._custom_styles_path, style)
+        return {
+            "schema_version": 1,
+            "status": "saved",
+            "style": saved,
+            "styles": list_styles(default_style_library_path(), self._custom_styles_path),
+        }
+
+    def styles_delete(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Remove a custom style. Base styles can't be deleted; deleting a
+        custom-override reverts that style_id to its shipped built-in."""
+        from kronara.visual_style import (
+            default_style_library_path,
+            delete_custom_style,
+            list_styles,
+        )
+
+        style_id = str(params.get("style_id", "")).strip()
+        if not style_id:
+            raise ValueError("style_id is required")
+        removed = delete_custom_style(self._custom_styles_path, style_id)
+        return {
+            "schema_version": 1,
+            "status": "deleted" if removed else "not_found",
+            "style_id": style_id,
+            "styles": list_styles(default_style_library_path(), self._custom_styles_path),
+        }
+
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:
         request = OperationsChatRequest(
             schema_version=int(params.get("schema_version", 1)),
@@ -557,6 +626,17 @@ class OperationsService:
         return result
 
     def _content_pipeline(self) -> "ProductionContentPipeline":
+        # Rebuild the style resolver per run from disk so a style the user just
+        # added/edited in Configuración takes effect on the very next content.run
+        # without restarting the sidecar. Falls back to whatever was injected
+        # (or None) if the configs can't be read.
+        style_resolver = self._style_resolver
+        try:
+            from kronara.visual_style import default_style_resolver
+
+            style_resolver = default_style_resolver(custom_styles_path=self._custom_styles_path)
+        except Exception:
+            pass
         return ProductionContentPipeline(
             authority=self.authority,
             store=self.store,
@@ -568,6 +648,7 @@ class OperationsService:
             image_provider=self._image_provider,
             renderer=self._renderer,
             visual_style_registry=self._visual_style_registry,
+            style_resolver=self._style_resolver,
             asset_library=self._asset_library,
             opportunity_store=self._opportunity_store,
             rate_learner=self._rate_learner,
@@ -888,6 +969,17 @@ class OperationsService:
 
         registry = ProgramRegistry.load(default_registry_path())
         programs = tuple(registry.get(pid) for pid in registry.program_ids)
+
+        def styles_provider() -> list[dict[str, Any]]:
+            # Fresh each call so the guided flow lists custom styles the user
+            # added without restarting the sidecar. Best-effort: empty on error.
+            try:
+                from kronara.visual_style import default_style_library_path, list_styles
+
+                return list_styles(default_style_library_path(), self._custom_styles_path)
+            except Exception:
+                return []
+
         return OperationsChatAgent(
             tools=tools,
             store=self.store,
@@ -896,6 +988,7 @@ class OperationsService:
             responder=LocalOperationsResponder(),
             narrative_profile=narrative_profile,
             programs=programs,
+            styles_provider=styles_provider,
         )
 
     def _build_rag(self) -> RAGV3Index:

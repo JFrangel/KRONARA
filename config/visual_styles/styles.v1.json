@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "universal_base": "cohesive narrative scene, cinematic composition, vertical 9:16 format, strong atmosphere, detailed but clean background, consistent characters, uniform visual aesthetic, careful lighting, professional framing",
+  "universal_negative": "text, letters, captions, watermark, logo, signature, extra fingers, deformed hands, bad anatomy, distorted face, low quality, blurry, jpeg artifacts, cluttered composition",
+  "consistency_note": "Keep the same visual style, the same overall palette, the same lighting quality and the same base character design across every scene of one episode.",
+  "styles": [
+    {
+      "style_id": "anime-neo-noir",
+      "name": "Anime Neo-Noir",
+      "identidad": "Anime maduro y cinematográfico, urbano, melancólico y oscuro. Drama emocional + thriller visual. Ideal para engaños, secretos, relaciones tóxicas, traiciones, confesiones.",
+      "style_prompt": "cinematic neo-noir anime illustration, nocturnal urban scene under rain, solitary character in dark clothing with a melancholic contained expression, dramatic side lighting with neon reflections on wet pavement, deep shadows, asymmetric composition with negative space, night-blue charcoal-grey and muted orange palette with small magenta and cyan neon accents, silent city background, mature refined digital painting, mystery and drama atmosphere",
+      "negative_prompt": "childish cartoon, oversaturated colors, cheap 3d render, distorted face, messy background, bad anatomy, extra fingers",
+      "motion_bias": "subtle",
+      "music_moods": ["dramatico-emocional", "misterio-investigativo"],
+      "asset_tags": ["urban-night", "rain", "neon", "silhouette"]
+    },
+    {
+      "style_id": "acuarela-melancolica",
+      "name": "Acuarela Melancólica",
+      "identidad": "Estética sensible, suave y emocional. Para pérdida, amor, recuerdos, arrepentimiento, familia, nostalgia.",
+      "style_prompt": "melancholic digital watercolor illustration, quiet room beside a window on an overcast day, a contemplative character sitting in silence looking outside, soft desaturated colors, visible paper texture, diluted watercolor edges, diffuse natural lighting, nostalgic emotional atmosphere, intimate composition, delicate artistic aesthetic, greyish-blue pale-pink beige sage-green and muted lavender palette",
+      "negative_prompt": "harsh lighting, neon colors, photorealistic skin, comic style, ugly anatomy, sharp 3d edges, noisy image, cluttered composition",
+      "motion_bias": "subtle",
+      "music_moods": ["confesion-intimo", "dramatico-emocional"],
+      "asset_tags": ["window-light", "interior", "rain-on-glass", "nostalgia"]
+    },
+    {
+      "style_id": "comic-cinematografico",
+      "name": "Cómic Cinematográfico",
+      "identidad": "Novela gráfica moderna con peso dramático. Para conflicto, confrontaciones, escenas intensas, giros.",
+      "style_prompt": "cinematic modern graphic novel illustration, dramatic scene with characters in conflict inside a domestic interior, high contrast theatrical lighting, marked hard shadows, expressive ink linework, powerful composition, tense atmosphere, limited elegant palette of black dark-red beige petrol-blue and muted yellow, editorial comic look with solid shadow blocks, high visual legibility",
+      "negative_prompt": "childish comic, exaggerated superhero costume, speech bubbles, messy linework, flat boring lighting, low detail hands, distorted proportions",
+      "motion_bias": "dynamic",
+      "music_moods": ["venganza-triunfal", "misterio-investigativo"],
+      "asset_tags": ["confrontation", "interior", "hard-shadow", "conflict"]
+    },
+    {
+      "style_id": "low-poly-estilizado",
+      "name": "3D Low-Poly Estilizado",
+      "identidad": "Videojuego indie moderno. Perfecto para escalar producción, reutilizar personajes y escenarios, consistencia.",
+      "style_prompt": "high quality stylized low-poly 3d scene, modern apartment interior with expressive geometric characters, soft cinematic lighting, stylized global illumination, matte materials, clean elegant narrative indie game aesthetic, clear composition, simple but refined shapes, cozy setting, high visual legibility, balanced warm and cool tones without excessive saturation",
+      "negative_prompt": "ultra realistic, hyper detailed pores, low resolution, ugly polygon mess, broken anatomy, realistic human face, chaotic background, oversaturated",
+      "motion_bias": "standard",
+      "music_moods": ["dramatico-emocional", "documental-serio"],
+      "asset_tags": ["interior", "geometric", "indie-game", "cozy"]
+    },
+    {
+      "style_id": "pixel-art-moderno",
+      "name": "Pixel Art Moderno",
+      "identidad": "Pixel art premium (no retro básico). Excelente para terror, misterio, drama urbano, escenas atmosféricas.",
+      "style_prompt": "modern cinematic pixel art scene, rainy night street with window lights and street lamps, small character walking alone, melancholic mysterious atmosphere, limited controlled palette of dark blues muted greens lamp-yellow faint red and damp greys, advanced pixel lighting, depth through layers, strong visual composition, refined retro-modern aesthetic, subtle dithering",
+      "negative_prompt": "blurry pixels, messy sprite, low-quality pixel art, childish game art, overly bright colors, bad composition",
+      "motion_bias": "subtle",
+      "music_moods": ["paranormal-tension", "misterio-investigativo"],
+      "asset_tags": ["street-night", "rain", "layered-depth", "atmosphere"]
+    },
+    {
+      "style_id": "recortes-de-papel",
+      "name": "Recortes de Papel",
+      "identidad": "Maqueta artesanal con capas de papel. Útil para relatos irónicos, humor, historias absurdas, storytelling.",
+      "style_prompt": "layered paper cut-out illustration style, room or apartment with characters built as handcrafted paper figures, soft shadows between the layers, cardstock texture, clean creative composition, refined handmade aesthetic, simple but expressive shapes, warm narrative mood, pastel and earthy palette of muted reds creams soft blues and dry greens",
+      "negative_prompt": "plastic 3d render, realistic skin, chaotic collage, too many elements, ugly cut edges, bad anatomy, overly glossy materials",
+      "motion_bias": "standard",
+      "music_moods": ["confesion-intimo", "documental-serio"],
+      "asset_tags": ["paper-craft", "layered", "handmade", "warm"]
+    },
+    {
+      "style_id": "analog-horror-vhs",
+      "name": "Analog Horror / VHS",
+      "identidad": "Grabación encontrada, cámara de seguridad o cinta vieja. Brutal para inquietante, stalkers, desapariciones, paranormal.",
+      "style_prompt": "unsettling analog horror VHS frame, dark hallway recorded by a security camera, flickering fluorescent lighting, deteriorated tape texture, analog noise, chromatic distortion, scanlines, disturbing atmosphere, a barely visible human silhouette in the background, uncomfortable framing, silent threat, palette of sickly green dirty grey deep black dark blue and minimal red",
+      "negative_prompt": "clean modern image, bright happy colors, polished commercial look, cartoon, sharp beautiful portrait, unrealistic monster, overdesigned scene",
+      "motion_bias": "subtle",
+      "music_moods": ["paranormal-tension"],
+      "asset_tags": ["security-cam", "hallway", "vhs-noise", "silhouette"]
+    },
+    {
+      "style_id": "editorial-minimalista",
+      "name": "Ilustración Editorial Minimalista",
+      "identidad": "Limpio, sofisticado, conceptual. Muy bueno para historias psicológicas, dilemas morales, relaciones, culpa.",
+      "style_prompt": "minimalist editorial illustration, clean sophisticated composition, characters simplified through shapes and silhouettes, reduced background, few visual elements, limited palette of muted colors beige black blue-grey muted green and a symbolic coral or red accent, conceptual and emotional focus, modern elegant symbolic magazine-illustration design, semi-flat lighting",
+      "negative_prompt": "busy composition, too many objects, realistic portrait, anime eyes, excessive detail, clutter, bright neon chaos",
+      "motion_bias": "subtle",
+      "music_moods": ["dramatico-emocional", "misterio-investigativo"],
+      "asset_tags": ["minimal", "symbolic", "clean", "conceptual"]
+    },
+    {
+      "style_id": "realismo-cinematografico-ilustrado",
+      "name": "Realismo Cinematográfico Ilustrado",
+      "identidad": "Escena de película pero ilustrada. Muy útil para relatos serios, intensos o altamente inmersivos.",
+      "style_prompt": "semi-realistic cinematic illustration, intimate scene between anonymous people in a cafe or apartment, dramatic natural lighting, refined painterly texture, film-like composition with depth of field, subtle expressions, strong body language, muted realistic colors of natural browns cool blues muted greens natural skin tones and soft warm oranges, emotional atmosphere, elegant mature finish, fine digital brushwork",
+      "negative_prompt": "hyperrealistic face clone, celebrity likeness, plastic skin, cartoon proportions, low detail, messy composition",
+      "motion_bias": "standard",
+      "music_moods": ["dramatico-emocional", "documental-serio"],
+      "asset_tags": ["cafe", "interior", "cinematic", "intimate"]
+    },
+    {
+      "style_id": "diorama-isometrico",
+      "name": "Diorama Isométrico",
+      "identidad": "Espacio como maqueta en ángulo isométrico. Perfecto para casa, oficina, vecinos, parejas, escenas paralelas.",
+      "style_prompt": "detailed isometric diorama of an apartment or house, several rooms visible at once, small expressive characters interacting in different zones, refined three-dimensional model aesthetic, warm soft lighting, very clear narrative composition, strong visual order, elegant attractive style, harmonious balanced warm and cool palette",
+      "negative_prompt": "messy floorplan, unrealistic perspective, too much clutter, hyperrealism, broken furniture proportions, chaotic composition",
+      "motion_bias": "standard",
+      "music_moods": ["documental-serio", "dramatico-emocional"],
+      "asset_tags": ["isometric", "diorama", "multi-room", "narrative-space"]
+    }
+  ]
+}

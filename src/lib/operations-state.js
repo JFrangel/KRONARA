@@ -34,6 +34,8 @@ export function appendChatResponse(state, response) {
         content: response.answer,
         citations: response.citations ?? [],
         traceIds: response.tool_trace_ids ?? [],
+        // Fase 1f guided flow: quick-reply chips for this assistant turn.
+        options: response.options ?? [],
       },
     ],
   };

@@ -7,9 +7,13 @@
       "weekday": "lunes",
       "genre": "Dilemas y conflictos personales",
       "description": "Un personaje enfrenta una eleccion sin salida limpia; ambas opciones cuestan.",
-      "visual_style_id": "decisiones-dificiles",
+      "visual_style_id": "editorial-minimalista",
       "target_duration_seconds": 90,
-      "platforms": ["youtube", "facebook", "instagram"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "instagram"
+      ]
     },
     {
       "program_id": "confesiones-anonimas",
@@ -17,9 +21,13 @@
       "weekday": "martes",
       "genre": "Secretos y experiencias",
       "description": "Una voz en primera persona revela un secreto por capas.",
-      "visual_style_id": "confesiones-anonimas",
+      "visual_style_id": "acuarela-melancolica",
       "target_duration_seconds": 90,
-      "platforms": ["youtube", "facebook", "instagram"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "instagram"
+      ]
     },
     {
       "program_id": "cronicas-de-justicia",
@@ -27,9 +35,13 @@
       "weekday": "miercoles",
       "genre": "Traiciones, pruebas y consecuencias",
       "description": "Injusticia comprensible mas protagonista subestimado mas evidencia que cambia el poder.",
-      "visual_style_id": "cronicas-de-justicia",
+      "visual_style_id": "realismo-cinematografico-ilustrado",
       "target_duration_seconds": 90,
-      "platforms": ["youtube", "facebook", "instagram"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "instagram"
+      ]
     },
     {
       "program_id": "mentes-ocultas",
@@ -37,9 +49,13 @@
       "weekday": "jueves",
       "genre": "Psicologia, manipulacion y misterio",
       "description": "Un manipulador con logica interna; la protagonista descubre el patron.",
-      "visual_style_id": "mentes-ocultas",
+      "visual_style_id": "anime-neo-noir",
       "target_duration_seconds": 90,
-      "platforms": ["youtube", "facebook", "instagram"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "instagram"
+      ]
     },
     {
       "program_id": "viernes-paranormal",
@@ -47,9 +63,14 @@
       "weekday": "viernes",
       "genre": "Terror y fenomenos sobrenaturales",
       "description": "Estructura de 10 fases: incidente inquietante hasta residuo inquietante final.",
-      "visual_style_id": "viernes-paranormal",
+      "visual_style_id": "analog-horror-vhs",
       "target_duration_seconds": 120,
-      "platforms": ["youtube", "facebook", "instagram", "tiktok"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "instagram",
+        "tiktok"
+      ]
     },
     {
       "program_id": "historias-medianoche",
@@ -57,9 +78,13 @@
       "weekday": "sabado",
       "genre": "Relatos largos y cinematograficos",
       "description": "Arco amplio, varias escenas, apto para multi-parte.",
-      "visual_style_id": "historias-medianoche",
+      "visual_style_id": "pixel-art-moderno",
       "target_duration_seconds": 180,
-      "platforms": ["youtube", "facebook", "spotify"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "spotify"
+      ]
     },
     {
       "program_id": "caso-de-la-semana",
@@ -67,9 +92,13 @@
       "weekday": "domingo",
       "genre": "Episodio premium o especial",
       "description": "Pieza mayor que combina investigacion, personajes y revelacion de alto impacto.",
-      "visual_style_id": "caso-de-la-semana",
+      "visual_style_id": "comic-cinematografico",
       "target_duration_seconds": 240,
-      "platforms": ["youtube", "facebook", "spotify"]
+      "platforms": [
+        "youtube",
+        "facebook",
+        "spotify"
+      ]
     }
   ]
 }

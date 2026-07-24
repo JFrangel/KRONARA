@@ -97,8 +97,15 @@ class OperationsChatAgent:
     # responder applies to itself: an action_intent must be a deterministic,
     # auditable function of the literal text, never a guess.
     CREATION_VERB_PATTERN = re.compile(
-        r"\b(crea|crear|creame|cr[eé]ame|genera|generar|produce|producir|arma|armame)\b"
+        r"\b(crea|crear|creame|cr[eé]ame|genera|generar|produce|producir|arma|armame|quiero|hacer|haz)\b"
     )
+    # A creation verb alone ("genera un resumen") isn't enough to start the
+    # guided video flow -- it must also name a content noun so we don't hijack
+    # unrelated requests.
+    CONTENT_NOUN_PATTERN = re.compile(
+        r"\b(video|v[ií]deo|reel|historia|episodio|contenido|corto|clip)\b"
+    )
+    CANCEL_PATTERN = re.compile(r"\b(cancela|cancelar|cancelalo|olv[ií]dalo|d[eé]jalo|detente|mejor no)\b")
 
     def __init__(
         self,
@@ -112,6 +119,7 @@ class OperationsChatAgent:
         context_builder: OperationsContextBuilder | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         programs: tuple[ProgramDescriptor, ...] = (),
+        styles_provider: Callable[[], list[dict[str, Any]]] | None = None,
     ):
         self.tools = tools
         self.store = store
@@ -123,8 +131,22 @@ class OperationsChatAgent:
         self.clock = clock
         self._programs = programs
         self._program_by_id = {program.program_id: program for program in programs}
+        # Fase 1f guided creation: lists the visual styles for the "estilo"
+        # question; defaults to none so the flow still works (style stays
+        # automatic) when no provider is wired.
+        self._styles_provider = styles_provider or (lambda: [])
+        # Per-conversation slot-filling state for the guided flow. In-memory:
+        # a guided creation spans a few turns within one session.
+        self._creation_drafts: dict[str, dict[str, Any]] = {}
 
     def answer(self, request: OperationsChatRequest) -> OperationsChatResponse:
+        # Fase 1f: the guided creation flow is deterministic and cheap -- it
+        # runs before the tool/context machinery and returns early when it owns
+        # the turn (an active draft, or a fresh "quiero crear un video").
+        guided = self._guided_creation(request)
+        if guided is not None:
+            self._save_turns(request, guided)
+            return guided
         intent = self._classify(request.message)
         run_id = f"chat:{request.request_id}"
         tool_values: dict[str, dict[str, Any]] = {}
@@ -196,6 +218,12 @@ class OperationsChatAgent:
                 gaps=(),
                 action_intent=None,
             )
+        self._save_turns(request, response)
+        return response
+
+    def _save_turns(
+        self, request: OperationsChatRequest, response: OperationsChatResponse
+    ) -> None:
         now = self.clock()
         self.store.save_conversation_turn(
             conversation_id=request.conversation_id,
@@ -209,7 +237,6 @@ class OperationsChatAgent:
             content=self._durable_turn_summary("assistant", response.answer),
             created_at=now,
         )
-        return response
 
     @staticmethod
     def _durable_turn_summary(role: str, content: str) -> str:
@@ -253,6 +280,177 @@ class OperationsChatAgent:
             if program.name.casefold() in normalized_message:
                 return program
         return None
+
+    # ---- Guided creation flow (Fase 1f) -------------------------------------
+
+    def _guided_creation(
+        self, request: OperationsChatRequest
+    ) -> OperationsChatResponse | None:
+        """Slot-filling state machine: programa → estilo → duración → propuesta.
+        Owns the turn only when a draft is active for this conversation, or when
+        the message is a *vague* creation request ("quiero crear un video") that
+        names no program. A creation request that already names a program keeps
+        the existing one-shot fast path (see _classify)."""
+        conv = request.conversation_id
+        normalized = request.message.casefold()
+        draft = self._creation_drafts.get(conv)
+
+        if draft is None:
+            starts = bool(
+                self.CREATION_VERB_PATTERN.search(normalized)
+                and self.CONTENT_NOUN_PATTERN.search(normalized)
+            )
+            if not starts or self._match_program(normalized) is not None:
+                return None  # not a vague creation request -> let _classify decide
+            self._creation_drafts[conv] = {"step": "program"}
+            return self._ask_program(request)
+
+        if self.CANCEL_PATTERN.search(normalized):
+            self._creation_drafts.pop(conv, None)
+            return self._plain(
+                request, "Listo, cancelé la creación guiada. ¿En qué más te ayudo?"
+            )
+
+        step = draft["step"]
+        if step == "program":
+            program = self._match_program(normalized)
+            if program is None:
+                return self._ask_program(request, retry=True)
+            draft["program_id"] = program.program_id
+            draft["step"] = "style"
+            return self._ask_style(request)
+        if step == "style":
+            draft["style_id"] = self._match_style(normalized)
+            draft["step"] = "duration"
+            return self._ask_style_confirmed_ask_duration(request, draft)
+        if step == "duration":
+            draft["target_duration_seconds"] = self._match_duration(normalized)
+            self._creation_drafts.pop(conv, None)
+            return self._propose_creation(request, draft)
+        # Unknown step -> reset defensively.
+        self._creation_drafts.pop(conv, None)
+        return None
+
+    def _ask_program(
+        self, request: OperationsChatRequest, *, retry: bool = False
+    ) -> OperationsChatResponse:
+        names = [program.name for program in self._programs]
+        text = (
+            "No reconocí ese programa. ¿Para cuál de estos quieres el video?"
+            if retry
+            else "¡Perfecto! Vamos a crear un video. ¿Para qué programa?"
+        )
+        return self._options_response(request, text, names)
+
+    def _ask_style(self, request: OperationsChatRequest) -> OperationsChatResponse:
+        options = ["Automático (según programa)"] + [
+            str(style.get("name", style.get("style_id", "")))
+            for style in self._styles_provider()
+        ]
+        return self._options_response(
+            request, "¿Qué estilo visual prefieres para este video?", options
+        )
+
+    def _ask_style_confirmed_ask_duration(
+        self, request: OperationsChatRequest, draft: dict[str, Any]
+    ) -> OperationsChatResponse:
+        return self._options_response(
+            request,
+            "Anotado. ¿Qué duración quieres?",
+            ["Corta · 60s", "Media · 90s", "Larga · 180s"],
+        )
+
+    def _propose_creation(
+        self, request: OperationsChatRequest, draft: dict[str, Any]
+    ) -> OperationsChatResponse:
+        arguments: dict[str, Any] = {"program_id": draft["program_id"]}
+        if draft.get("style_id"):
+            arguments["style_id"] = draft["style_id"]
+        if draft.get("target_duration_seconds"):
+            arguments["target_duration_seconds"] = draft["target_duration_seconds"]
+        intent = ChatIntent(
+            kind="administrative_action",
+            tools=(),
+            action_kind="create_episode",
+            action_arguments=arguments,
+        )
+        action_intent = self._action_intent(request, intent)
+        program = self._program_by_id.get(draft["program_id"])
+        name = program.name if program is not None else draft["program_id"]
+        style_label = draft.get("style_id") or "automático (según programa)"
+        seconds = draft.get("target_duration_seconds") or (
+            program.target_duration_seconds if program is not None else 90
+        )
+        answer = (
+            f'Listo para crear un episodio de "{name}" · estilo {style_label} · '
+            f"{seconds}s. Apruébalo para ejecutarlo; todavía no se ha creado nada."
+        )
+        return OperationsChatResponse(
+            schema_version=1,
+            request_id=request.request_id,
+            status="completed",
+            answer=answer,
+            citations=(),
+            tool_trace_ids=(),
+            gaps=(),
+            action_intent=action_intent,
+        )
+
+    def _match_style(self, normalized_message: str) -> str:
+        """Map a free-text / chip answer to a style_id. 'automático'/'auto' (or
+        anything unrecognized) -> '' so the program's configured style decides."""
+        if "auto" in normalized_message:
+            return ""
+        for style in self._styles_provider():
+            style_id = str(style.get("style_id", ""))
+            name = str(style.get("name", "")).casefold()
+            if (name and name in normalized_message) or (
+                style_id and style_id.casefold() in normalized_message
+            ):
+                return style_id
+        return ""
+
+    @staticmethod
+    def _match_duration(normalized_message: str) -> int:
+        """Map an answer to seconds. Explicit digits win; else the qualitative
+        labels corta/media/larga; else 90s (the standard reel length)."""
+        digits = re.search(r"(\d{2,4})", normalized_message)
+        if digits:
+            return max(30, min(600, int(digits.group(1))))
+        if "corta" in normalized_message or "corto" in normalized_message:
+            return 60
+        if "larga" in normalized_message or "largo" in normalized_message:
+            return 180
+        return 90
+
+    def _plain(
+        self, request: OperationsChatRequest, text: str
+    ) -> OperationsChatResponse:
+        return OperationsChatResponse(
+            schema_version=1,
+            request_id=request.request_id,
+            status="completed",
+            answer=text,
+            citations=(),
+            tool_trace_ids=(),
+            gaps=(),
+            action_intent=None,
+        )
+
+    def _options_response(
+        self, request: OperationsChatRequest, text: str, options: list[str]
+    ) -> OperationsChatResponse:
+        return OperationsChatResponse(
+            schema_version=1,
+            request_id=request.request_id,
+            status="completed",
+            answer=text,
+            citations=(),
+            tool_trace_ids=(),
+            gaps=(),
+            action_intent=None,
+            options=tuple(dict.fromkeys(option for option in options if option)),
+        )
 
     def _confirmation_text(self, intent: ChatIntent, action_intent: ActionIntent) -> str:
         if intent.action_kind == "create_episode":

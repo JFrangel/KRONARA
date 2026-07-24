@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
@@ -15,6 +15,21 @@
   let contentResult = $state(null);
   let notice = $state('');
   let activeTab = $state('en_vivo');
+
+  // Fase 1e: pick a visual style for this episode. Empty = automatic (the
+  // program's configured style). The list comes from styles.list (base 10 +
+  // any custom styles the user added in Configuración → Estilos).
+  let styles = $state([]);
+  let selectedStyleId = $state('');
+
+  onMount(async () => {
+    try {
+      const result = await callOperations('styles.list', {});
+      styles = result.styles ?? [];
+    } catch (error) {
+      styles = [];
+    }
+  });
 
   // Live view state (FASE B): polls run.diagnostics every 2s while a
   // generation is active so the user watches the research, script and
@@ -99,6 +114,9 @@
         sort: 'hot',
         limit: 25,
         target_duration_seconds: 90,
+        // Only send style_id when the user picked one; empty means "let the
+        // program's configured style decide" (the resolver falls back to it).
+        ...(selectedStyleId ? { style_id: selectedStyleId } : {}),
       });
       contentResult = result;
       await refreshTimeline(result.run_id);
@@ -254,6 +272,18 @@
             placeholder="Historias"
             autocomplete="off"
           />
+        </label>
+        <label class="min-w-[200px]">
+          <span class="mb-1 block text-[11px] text-ink-tertiary">Estilo visual</span>
+          <select
+            class="w-full rounded-full border border-line bg-surface-inset px-4 py-2 text-[13px] text-ink focus:border-purple-500 focus:outline-none"
+            bind:value={selectedStyleId}
+          >
+            <option value="">Automático (según programa)</option>
+            {#each styles as style (style.style_id)}
+              <option value={style.style_id}>{style.name}</option>
+            {/each}
+          </select>
         </label>
         <button
           class="rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"

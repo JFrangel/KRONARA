@@ -146,6 +146,7 @@ class ProductionContentPipeline:
         image_provider: "object | None" = None,
         renderer: "object | None" = None,
         visual_style_registry: "object | None" = None,
+        style_resolver: "object | None" = None,
         asset_library: "object | None" = None,
         opportunity_store: "object | None" = None,
         rate_learner: "object | None" = None,
@@ -174,6 +175,11 @@ class ProductionContentPipeline:
         self._image_provider = image_provider
         self._renderer = renderer
         self._visual_style_registry = visual_style_registry
+        # v0.8 Fase 1: resolves the named visual style (10-style library) for an
+        # episode, honoring a per-episode style_id override, then the program's
+        # configured visual_style_id, falling back to the legacy per-program
+        # registry above. When absent, the legacy registry path is used alone.
+        self._style_resolver = style_resolver
         self._asset_library = asset_library
         # Optional: caches the no-credential RSS fallback's harvest so a
         # scheduled program firing repeatedly doesn't re-hit Reddit's live
@@ -402,7 +408,11 @@ class ProductionContentPipeline:
         # freshly-created episode showed its video in the moment (Estudio's
         # own contentResult), but the SAME episode loaded later from
         # Programas/Episodios had no way to know a video existed at all.
-        video = self._produce_video(story_id=story_id, brief=brief, result=result, run_id=run_id)
+        style_id_override = str(params["style_id"]) if params.get("style_id") else None
+        video = self._produce_video(
+            story_id=story_id, brief=brief, result=result, run_id=run_id,
+            style_id=style_id_override,
+        )
         artifact = self.artifacts.put_bytes(result.script.text.encode("utf-8"))
         artifact_uri = f"kronara://sha256/{artifact.sha256}"
         self.store.save_owned_story_artifact(
@@ -639,7 +649,8 @@ class ProductionContentPipeline:
         return " ".join(text.split())[:max_chars]
 
     def _produce_video(
-        self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str
+        self, *, story_id: str, brief: StoryBrief, result: Any, run_id: str,
+        style_id: str | None = None,
     ) -> dict[str, Any] | None:
         """V8: render the full visual episode (V0-V6) when the pipeline is
         configured for it and real per-scene narration audio was measured.
@@ -654,7 +665,13 @@ class ProductionContentPipeline:
         if not voice_duration.audio_refs or any(not ref for ref in voice_duration.audio_refs):
             return None
         visual_style = None
-        if self._visual_style_registry is not None and brief.program_id:
+        if self._style_resolver is not None:
+            # Fase 1: named-style resolution (per-episode override → program's
+            # visual_style_id → legacy fallback), all handled by the resolver.
+            visual_style = self._style_resolver.resolve(
+                program_id=brief.program_id, style_id=style_id
+            )
+        elif self._visual_style_registry is not None and brief.program_id:
             try:
                 visual_style = self._visual_style_registry.get(brief.program_id)
             except KeyError:

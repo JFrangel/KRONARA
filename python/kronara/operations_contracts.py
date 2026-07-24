@@ -231,6 +231,10 @@ class OperationsChatResponse:
     tool_trace_ids: tuple[str, ...]
     gaps: tuple[str, ...]
     action_intent: ActionIntent | None
+    # Quick-reply options for a guided flow (Fase 1f): the frontend renders
+    # these as clickable chips whose text becomes the user's next message.
+    # Empty for ordinary answers.
+    options: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:

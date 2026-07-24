@@ -9,11 +9,12 @@
   let question = $state('');
   let approving = $state(false);
 
-  async function ask() {
-    const message = question.trim();
+  async function ask(overrideMessage) {
+    const raw = typeof overrideMessage === 'string' ? overrideMessage : question;
+    const message = raw.trim();
     if (!message || state.chatStatus === 'thinking') return;
     const requestId = `req_${crypto.randomUUID()}`;
-    question = '';
+    if (typeof overrideMessage !== 'string') question = '';
     state = appendUserMessage(state, message);
     try {
       const response = await callOperations('operations.chat', {
@@ -34,6 +35,11 @@
 
   function dismissAction() {
     state = { ...state, pendingAction: null };
+  }
+
+  // Fase 1f: clicking a guided-flow chip sends its text as the next message.
+  function sendQuickReply(text) {
+    ask(text);
   }
 
   async function approveAction() {
@@ -80,16 +86,29 @@
     <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
       {#if state.messages.length === 0}
         <p class="text-[13px] leading-relaxed text-ink-secondary">
-          Pregunta por agentes, bloqueos, evidencia, métricas o decisiones -- o pide "crea un episodio de &lt;programa&gt;". Los cambios se proponen; no se ejecutan desde el chat sin tu aprobación.
+          Pregunta por agentes, bloqueos, evidencia, métricas o decisiones -- o di "quiero crear un video" y te guío paso a paso. Los cambios se proponen; no se ejecutan desde el chat sin tu aprobación.
         </p>
       {/if}
-      {#each state.messages as message}
+      {#each state.messages as message, index}
         <article class="max-w-[92%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed" class:ml-auto={message.role === 'user'} class:bg-purple-500={message.role === 'user'} class:text-ink={message.role === 'user'} class:bg-surface={message.role === 'assistant'} class:border={message.role === 'assistant'} class:border-line={message.role === 'assistant'} class:text-ink-secondary={message.role === 'assistant'}>
           <p>{message.content}</p>
           {#if message.citations?.length}
             <p class="mt-1.5 text-[11px] text-ink-tertiary">{message.citations.length} evidencia(s) enlazada(s)</p>
           {/if}
         </article>
+        {#if message.role === 'assistant' && message.options?.length && index === state.messages.length - 1}
+          <div class="flex flex-wrap gap-1.5">
+            {#each message.options as option}
+              <button
+                class="rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-[11.5px] text-purple-200 transition-colors hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                onclick={() => sendQuickReply(option)}
+                disabled={connection !== 'connected' || state.chatStatus === 'thinking'}
+              >
+                {option}
+              </button>
+            {/each}
+          </div>
+        {/if}
       {/each}
       {#if state.pendingAction}
         <aside class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-[12px] text-warning">

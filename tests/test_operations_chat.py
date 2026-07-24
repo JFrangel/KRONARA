@@ -53,7 +53,7 @@ def request(
     )
 
 
-def chat_fixture(tmp_path, *, with_evidence: bool = True, programs: tuple = ()):
+def chat_fixture(tmp_path, *, with_evidence: bool = True, programs: tuple = (), styles: tuple = ()):
     store = KronaraStore(tmp_path / "chat.db")
     store.initialize()
 
@@ -89,6 +89,7 @@ def chat_fixture(tmp_path, *, with_evidence: bool = True, programs: tuple = ()):
         persona=persona(),
         responder=responder,
         programs=programs,
+        styles_provider=lambda: list(styles),
     )
     return agent, store, responder
 
@@ -178,12 +179,95 @@ def test_chat_recognizes_a_creation_request_naming_a_real_program(tmp_path):
     store.close()
 
 
-def test_chat_ignores_creation_verbs_without_a_recognizable_program(tmp_path):
+def test_chat_vague_creation_request_starts_the_guided_flow(tmp_path):
+    """Fase 1f: a creation request that names no program no longer dead-ends --
+    it opens the guided flow, asking which program with quick-reply options,
+    but proposes nothing yet."""
     agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
 
-    response = agent.answer(request("Crea un episodio nuevo"))
+    response = agent.answer(request("Quiero crear un video"))
 
     assert response.action_intent is None
+    assert "Viernes Paranormal" in response.options
+    assert "programa" in response.answer.casefold()
+    store.close()
+
+
+CUSTOM_STYLES = (
+    {"style_id": "anime-neo-noir", "name": "Anime Neo-Noir"},
+    {"style_id": "acuarela-melancolica", "name": "Acuarela Melancólica"},
+)
+
+
+def test_guided_flow_walks_program_style_duration_to_a_proposal(tmp_path):
+    agent, store, _ = chat_fixture(
+        tmp_path, programs=(viernes_paranormal(),), styles=CUSTOM_STYLES
+    )
+
+    first = agent.answer(request("quiero crear un reel", request_id="g1"))
+    assert first.action_intent is None
+    assert "Viernes Paranormal" in first.options
+
+    second = agent.answer(request("Viernes Paranormal", request_id="g2"))
+    assert second.action_intent is None
+    assert "Anime Neo-Noir" in second.options
+    assert any("Autom" in option for option in second.options)
+
+    third = agent.answer(request("Anime Neo-Noir", request_id="g3"))
+    assert third.action_intent is None
+    assert any("60" in option for option in third.options)
+
+    fourth = agent.answer(request("Media · 90s", request_id="g4"))
+    assert fourth.action_intent is not None
+    assert fourth.action_intent.kind == "create_episode"
+    assert fourth.action_intent.arguments == {
+        "program_id": "viernes-paranormal",
+        "style_id": "anime-neo-noir",
+        "target_duration_seconds": 90,
+    }
+    assert "todavía no se ha creado nada" in fourth.answer
+    store.close()
+
+
+def test_guided_flow_automatic_style_omits_style_id(tmp_path):
+    agent, store, _ = chat_fixture(
+        tmp_path, programs=(viernes_paranormal(),), styles=CUSTOM_STYLES
+    )
+
+    agent.answer(request("quiero crear un video", request_id="a1"))
+    agent.answer(request("Viernes Paranormal", request_id="a2"))
+    agent.answer(request("Automático (según programa)", request_id="a3"))
+    final = agent.answer(request("Corta · 60s", request_id="a4"))
+
+    assert final.action_intent.arguments == {
+        "program_id": "viernes-paranormal",
+        "target_duration_seconds": 60,
+    }
+    store.close()
+
+
+def test_guided_flow_can_be_cancelled_midway(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
+
+    agent.answer(request("quiero crear un video", request_id="c1"))
+    cancelled = agent.answer(request("cancela", request_id="c2"))
+
+    assert cancelled.action_intent is None
+    assert "cancel" in cancelled.answer.casefold()
+    # After cancelling, a normal question is handled normally (no stuck draft).
+    followup = agent.answer(request("¿Qué está pasando?", request_id="c3"))
+    assert followup.tool_trace_ids
+    store.close()
+
+
+def test_guided_flow_reasks_program_when_answer_is_unrecognized(tmp_path):
+    agent, store, _ = chat_fixture(tmp_path, programs=(viernes_paranormal(),))
+
+    agent.answer(request("quiero crear un video", request_id="r1"))
+    retry = agent.answer(request("un programa que no existe", request_id="r2"))
+
+    assert retry.action_intent is None
+    assert "Viernes Paranormal" in retry.options
     store.close()
 
 
