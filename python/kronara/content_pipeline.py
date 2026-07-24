@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from kronara.agents import super_agent
 from kronara.artifacts import ArtifactStore
 from kronara.authority_client import AuthorityClient, AuthorityInvocationError
 from kronara.model_registry_v2 import ModelCapabilityRegistryV2, ModelRequirements
@@ -46,7 +47,7 @@ class TracingAuthorityClient:
         event = ToolTraceEvent.started(
             event_id=f"trace_{uuid4().hex}",
             run_id=self.run_id,
-            agent_id=self._agent(tool_id, arguments),
+            agent_id=super_agent(self._agent(tool_id, arguments)),
             tool_id=tool_id,
             arguments=self._safe_arguments(tool_id, arguments),
             started_at=started_at,
@@ -529,7 +530,7 @@ class ProductionContentPipeline:
             run_id,
             "agent.log",
             {
-                "agent_id": agent_id,
+                "agent_id": super_agent(agent_id),
                 "action": action,
                 "detail": detail,
                 "payload": payload,
@@ -725,7 +726,7 @@ class ProductionContentPipeline:
         event = ToolTraceEvent.started(
             event_id=f"trace_{uuid4().hex}",
             run_id=run_id,
-            agent_id="context_engineer",
+            agent_id=super_agent("context_engineer"),
             tool_id="knowledge.retrieve",
             arguments={"query_hash": str(abs(hash(query))), "limit": 8},
             started_at=started,

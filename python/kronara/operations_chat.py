@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Callable, Protocol
 
+from kronara.agents import super_agent
 from kronara.observable_tools import ObservableToolRegistry, ToolExecutionContext
 from kronara.operations_contracts import (
     ActionIntent,
@@ -154,7 +155,7 @@ class OperationsChatAgent:
             outcome = self.tools.invoke(
                 ToolExecutionContext(
                     run_id=run_id,
-                    agent_id="operations_chat",
+                    agent_id=super_agent("operations_chat"),
                     allowed_tools=self.ALLOWED_TOOLS,
                     cost_budget_usd=0.05,
                 ),

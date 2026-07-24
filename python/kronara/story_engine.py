@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from typing import Any, Callable, Protocol
 
+from kronara.agents import super_agent
 from kronara.context import ContextBuilder
 from kronara.narrative_craft import CraftReport, LiteraryCraftEvaluator
 from kronara.narrative_quality import NarrativeQualityEvaluator, NarrativeQualityReport
@@ -975,7 +976,7 @@ class StoryEngine:
         outcome: ToolResult = tools.invoke(
             ToolExecutionContext(
                 run_id=run_id,
-                agent_id=self._agent_for_tool(tool_id),
+                agent_id=super_agent(self._agent_for_tool(tool_id)),
                 allowed_tools=self.TOOLS,
                 cost_budget_usd=2.0,
             ),
@@ -1318,7 +1319,7 @@ class StoryEngine:
             run_id,
             "agent.log",
             {
-                "agent_id": agent_id,
+                "agent_id": super_agent(agent_id),
                 "action": action,
                 "detail": detail,
                 "payload": payload,

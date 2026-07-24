@@ -70,6 +70,11 @@ const TOOL_LABELS = {
   'meta.metrics.read': 'Métricas',
 };
 const AGENT_LABELS = {
+  // v0.8 Fase 3: the three super-agents a run actually emits.
+  estratega: 'Estratega',
+  guionista: 'Guionista',
+  productor: 'Productor',
+  // Legacy ids kept as fallbacks for old persisted runs / diagnostics.
   writer_room: 'Guionista',
   automated_qc: 'Crítica automática',
   voice_director: 'Director de voz',
