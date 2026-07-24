@@ -144,7 +144,7 @@ class RAGV3Index:
         self.reranker = reranker
         self.chunker = chunker or HierarchicalChunker()
         self.decomposer = decomposer or QueryDecomposer()
-        self.connection = sqlite3.connect(self.database)
+        self.connection = sqlite3.connect(self.database, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self._vector_available = True
         self._vector_table = self._safe_vector_table(descriptor.version_hash)

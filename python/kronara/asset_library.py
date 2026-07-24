@@ -131,7 +131,7 @@ class AssetLibraryStore:
     def _conn(self) -> sqlite3.Connection:
         if self._connection is None:
             target = self.database if self.database == ":memory:" else str(self.database)
-            self._connection = sqlite3.connect(target)
+            self._connection = sqlite3.connect(target, check_same_thread=False)
             self._connection.row_factory = sqlite3.Row
         return self._connection
 

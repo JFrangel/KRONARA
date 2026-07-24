@@ -289,7 +289,7 @@ class KronaraGraph:
 
     def _conn(self) -> sqlite3.Connection:
         if self._connection is None:
-            self._connection = sqlite3.connect(self.database)
+            self._connection = sqlite3.connect(self.database, check_same_thread=False)
             self._connection.row_factory = sqlite3.Row
         return self._connection
 

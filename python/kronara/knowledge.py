@@ -43,7 +43,7 @@ class LocalHybridIndex:
 
     def initialize(self) -> None:
         self.database.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.database)
+        connection = sqlite3.connect(self.database, check_same_thread=False)
         connection.enable_load_extension(True)
         sqlite_vec.load(connection)
         connection.enable_load_extension(False)

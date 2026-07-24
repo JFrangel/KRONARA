@@ -32,10 +32,17 @@ class KronaraStore:
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.connection is None:
-            self.connection = sqlite3.connect(self.path)
+            # check_same_thread=False: content.run runs the whole pipeline in a
+            # background worker thread (fire-and-poll) and writes traces/events
+            # here, while the main thread polls run.diagnostics -- both share
+            # this connection. WAL + busy_timeout below let those reads/writes
+            # coexist without "database is locked". Access stays effectively
+            # serialized (one active run) so no cross-thread corruption.
+            self.connection = sqlite3.connect(self.path, check_same_thread=False)
         self.connection.executescript(
             """
             PRAGMA journal_mode=WAL;
+            PRAGMA busy_timeout=5000;
             CREATE TABLE IF NOT EXISTS workflow_events (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,

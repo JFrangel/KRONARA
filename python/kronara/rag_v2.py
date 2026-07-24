@@ -367,7 +367,7 @@ class RAGV2Index:
         if self.database is None or self.connection is not None:
             return
         self.database.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.database)
+        self.connection = sqlite3.connect(self.database, check_same_thread=False)
         self.connection.executescript(
             """
             PRAGMA journal_mode=WAL;

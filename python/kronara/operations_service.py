@@ -1144,6 +1144,13 @@ class OperationsService:
                         "story_title": (result.get("story") or {}).get("title"),
                     }
             except Exception as error:  # noqa: BLE001 - background thread must never raise
+                import traceback as _tb
+
+                # Surface the real traceback to the sidecar log: the worker
+                # thread swallows the exception (only error_code/error_detail
+                # reach the UI), so without this a failing run leaves no
+                # diagnosable trace of WHERE it broke.
+                _tb.print_exc()
                 with self._lock:
                     self._states[run_id] = {
                         **self._states[run_id],

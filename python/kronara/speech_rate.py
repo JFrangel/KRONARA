@@ -36,7 +36,7 @@ class SpeechRateLearner:
     def __init__(self, db_path: "str | Path"):
         self._path = str(db_path)
         Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self._path)
+        self._conn = sqlite3.connect(self._path, check_same_thread=False)
 
     def initialize(self) -> "SpeechRateLearner":
         self._conn.execute(
