@@ -118,6 +118,31 @@
   const SOURCE_LABEL = { base: 'De fábrica', custom: 'Personalizado', 'custom-override': 'Editado' };
 
   // --- Voces (Fase 2: VoiceBox) ---
+  // Cosecha de video-loops (Pexels): da movimiento real a las escenas (fuente
+  // video_loop) en vez de solo imágenes fijas. Requiere KRONARA_PEXELS_ENABLED=1.
+  let harvestingLoops = $state(false);
+  let harvestReport = $state(null);
+  let harvestError = $state('');
+
+  async function harvestVideoLoops() {
+    if (harvestingLoops) return;
+    harvestingLoops = true;
+    harvestReport = null;
+    harvestError = '';
+    try {
+      const result = await callOperations('library.harvest_video_loops', {});
+      if (result.status === 'library_unavailable') {
+        harvestError = 'La biblioteca de assets no está disponible en esta sesión.';
+      } else {
+        harvestReport = result;
+      }
+    } catch (error) {
+      harvestError = 'Pexels no respondió. Activa KRONARA_PEXELS_ENABLED=1 y revisa KRONARA_PEXELS_API_KEY.';
+    } finally {
+      harvestingLoops = false;
+    }
+  }
+
   let voiceInfo = $state(null);
   let voicesLoaded = $state(false);
 
@@ -501,6 +526,38 @@
         </div>
       </Card>
     </div>
+
+    <Card title="Video-loops (animación)" subtitle="Metraje real en movimiento de Pexels para las escenas — no solo imágenes fijas">
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          class="rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+          onclick={harvestVideoLoops}
+          disabled={harvestingLoops}
+        >
+          {harvestingLoops ? 'Cosechando de Pexels…' : 'Cosechar video-loops'}
+        </button>
+        <p class="text-[11.5px] text-ink-tertiary">
+          Descarga clips verticales por mood (noche, lluvia, niebla…) y los siembra con su licencia
+          <a class="text-purple-300 hover:underline" href="https://www.pexels.com/license/" target="_blank" rel="noopener noreferrer">Pexels</a>.
+          Requiere <code class="text-purple-300">KRONARA_PEXELS_ENABLED=1</code>.
+        </p>
+      </div>
+      {#if harvestError}
+        <p class="mt-3 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-[12px] text-error">{harvestError}</p>
+      {/if}
+      {#if harvestReport}
+        <div class="mt-3 border-t border-line pt-3">
+          <p class="text-[12px] text-ink">Sembrados <strong class="text-ink">{harvestReport.seeded}</strong> loop(s) nuevo(s).</p>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {#each harvestReport.reports ?? [] as row}
+              <span class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${row.status === 'seeded' ? 'border-success text-success' : row.status === 'duplicate' ? 'border-line text-ink-secondary' : 'border-line text-ink-tertiary'}`}>
+                {row.tag}: {row.status}
+              </span>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </Card>
   {:else if activeTab === 'voces'}
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_1fr]">
     <Card title="Motor de voz — VoiceBox" subtitle="Voz clonada, auto-hospedada (reemplaza edge-tts)">
