@@ -678,12 +678,33 @@ class ProductionContentPipeline:
             except KeyError:
                 visual_style = None
         try:
-            from kronara.visual_production import produce_episode_video
+            from kronara.visual_production import (
+                _dominant_character_names,
+                produce_episode_video,
+            )
 
             cover_text = next(
                 (item.hook for item in result.concepts if item.concept_id == result.selected_concept_id),
                 brief.premise,
             )
+            # Character bible: one cheap model call -> canonical appearance per
+            # recurring character, injected into every scene prompt so the same
+            # person renders consistently. Best-effort: {} degrades to the prior
+            # name-only text anchors (see character_bible.build_character_bible).
+            character_descriptions: dict[str, Any] = {}
+            try:
+                from kronara.character_bible import build_character_bible
+                from kronara.routed_story_provider import AuthorityModelRouter
+
+                character_descriptions = build_character_bible(
+                    AuthorityModelRouter(authority=self.authority, registry=self.model_registry),
+                    character_names=_dominant_character_names(result.scenes),
+                    premise=brief.premise,
+                    theme=brief.theme,
+                    program_id=brief.program_id,
+                )
+            except Exception:
+                character_descriptions = {}
             production = produce_episode_video(
                 scenes=result.scenes,
                 voice_duration=voice_duration,
@@ -694,6 +715,7 @@ class ProductionContentPipeline:
                 visual_style=visual_style,
                 library=self._asset_library,
                 cover_text=cover_text,
+                character_descriptions=character_descriptions,
                 progress_callback=lambda payload: self.store.append_event(
                     run_id,
                     "content.video_progress",

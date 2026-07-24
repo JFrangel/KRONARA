@@ -308,3 +308,15 @@ def test_character_seed_is_deterministic_per_episode_and_name():
     )
     assert _character_seeds(scenes, "ep-1")["ana"] == _character_seeds(scenes, "ep-1")["ana"]
     assert _character_seeds(scenes, "ep-1")["ana"] != _character_seeds(scenes, "ep-2")["ana"]
+
+
+def test_episode_context_injects_character_appearance_when_a_bible_is_present():
+    from kronara.visual_production import _episode_visual_context
+
+    scenes = (StoryScene("s0", "p", "Ana entra al faro.", 5, ("Ana",), (), ()),)
+    ctx = _episode_visual_context(
+        scenes, None, character_descriptions={"ana": "mujer 30s, pelo negro corto"}
+    )
+    assert "Ana: mujer 30s, pelo negro corto" in ctx
+    # Without a bible, it falls back to the generic consistency anchor.
+    assert "same faces" in _episode_visual_context(scenes, None)

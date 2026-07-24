@@ -162,6 +162,7 @@ def _episode_visual_context(
     visual_style: VisualStyleDescriptor | None,
     *,
     max_words: int = 44,
+    character_descriptions: "dict[str, str] | None" = None,
 ) -> str:
     narrations = " ".join(
         " ".join(str(getattr(scene, "narration", "")).split())
@@ -186,10 +187,23 @@ def _episode_visual_context(
     # still land close enough visually across shots that the episode
     # reads as one story instead of a slideshow of disconnected photos.
     # See docs/BUGS_CONOCIDOS.md consistency finding.
-    characters = _dominant_characters(scenes)
-    if characters:
-        parts.append(f"recurring characters throughout the episode: {characters}")
-        parts.append("same faces, same wardrobe, same age and features across every shot")
+    descriptions = character_descriptions or {}
+    dominant = _dominant_character_names(scenes)
+    if dominant:
+        parts.append(f"recurring characters throughout the episode: {', '.join(dominant)}")
+        # Canonical per-character appearance (the character bible) pins the SAME
+        # face/wardrobe/age in every shot -- the load-bearing lever on hosted
+        # Flux providers, which ignore reference images. Falls back to the
+        # generic "same faces" anchor when no bible was generated.
+        canon = [
+            f"{name}: {descriptions[name.casefold()]}"
+            for name in dominant
+            if name.casefold() in descriptions
+        ]
+        if canon:
+            parts.append("consistent character design -- " + "; ".join(canon))
+        else:
+            parts.append("same faces, same wardrobe, same age and features across every shot")
     parts.append("consistent color palette, consistent lighting mood, consistent location")
     # Film-stock/grain wording is a photographic-realism default: keep it for
     # legacy styles but drop it for named master styles so pixel-art, watercolor
@@ -436,6 +450,7 @@ def produce_episode_video(
     negative_prompt: str = "",
     crossfade_ms: int = DEFAULT_CROSSFADE_MS,
     cover_text: str = "",
+    character_descriptions: "dict[str, str] | None" = None,
     progress_callback: Callable[[dict], None] | None = None,
 ) -> VisualProductionResult:
     if len(voice_duration.per_scene_ms) != len(scenes):
@@ -453,7 +468,9 @@ def produce_episode_video(
             progress_callback({"stage": stage, "detail": detail, **extra})
 
     effective_cover_text = cover_text.strip() or (scenes[0].narration if scenes else episode_id)
-    episode_visual_context = _episode_visual_context(scenes, visual_style)
+    episode_visual_context = _episode_visual_context(
+        scenes, visual_style, character_descriptions=character_descriptions
+    )
     cover_image_path = os.path.join(output_dir, f"{episode_id}_cover.png")
     try:
         progress("cover", "Generando portada obligatoria del episodio.")
