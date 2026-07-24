@@ -44,4 +44,25 @@
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-display: "Iowan Old Style", "Palatino Linotype", "Georgia", "Segoe UI Variable Display", serif;
   --font-mono: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+
+  /* Elevation tuned for the near-black canvas: Tailwind's default `shadow`
+     (rgba black ~0.1) is invisible on #090b12, so every card reads flat.
+     These layer a tight contact shadow, an ambient drop, and a 1px top
+     rim-light (inset white) that catches the top-right radial light --
+     the single strongest "premium vs generic" depth cue, applied to every
+     card for free. Hover adds a faint purple-tinted ambient lift that ties
+     depth to the primary accent. */
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  --shadow-card-hover:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 22px 50px -14px color-mix(in srgb, var(--color-purple-600) 24%, rgba(0, 0, 0, 0.62));
+
+  /* Shared motion curves so every hover/reveal reads as one system rather
+     than ad-hoc per component. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.3, 0.6, 0.2, 1);
 }

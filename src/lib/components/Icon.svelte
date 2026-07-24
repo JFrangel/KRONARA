@@ -26,9 +26,16 @@
     bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9ZM13.73 21a2 2 0 0 1-3.46 0',
     'chevron-left': 'M15 18l-6-6 6-6',
     'chevron-right': 'M9 18l6-6-6-6',
+    'chevron-down': 'M6 9l6 6 6-6',
+    'chevron-up': 'M18 15l-6-6-6 6',
     plus: 'M12 5v14M5 12h14',
     refresh: 'M21 12a9 9 0 0 1-15.5 6.3L3 16M3 16v5h5M3 12A9 9 0 0 1 18.5 5.7L21 8M21 8V3h-5',
     'external-link': 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3',
+    x: 'M18 6 6 18M6 6l12 12',
+    info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01',
+    'alert-triangle': 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0ZM12 9v4M12 17h.01',
+    sparkles: 'M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9ZM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9ZM5 14l.6 1.4L7 16l-1.4.6L5 18l-.6-1.4L3 16l1.4-.6Z',
+    signal: 'M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 20V4',
   };
 
   let { name, size = 18, class: className = '' } = $props();
@@ -41,9 +48,10 @@
   stroke-width="2"
   stroke-linecap="round"
   stroke-linejoin="round"
-  class={className}
+  class="transition-colors duration-150 {className}"
   width={size}
   height={size}
+  aria-hidden="true"
 >
   <path d={PATHS[name] || ''} />
 </svg>

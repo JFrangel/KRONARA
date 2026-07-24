@@ -15,9 +15,15 @@ body {
   margin: 0;
   min-width: 320px;
   color: var(--color-ink);
+  /* Two-source lighting: the primary purple wash top-right, plus a much
+     fainter cool wash bottom-left for depth so the canvas doesn't read as a
+     flat field at cinema scale. Fixed so the lighting stays put while
+     content scrolls -- a subtle premium cue. Stays within palette. */
   background:
     radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--color-purple-600) 30%, transparent) 0%, transparent 34%),
+    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--color-info) 7%, transparent) 0%, transparent 42%),
     var(--color-bg);
+  background-attachment: fixed;
 }
 
 ::selection {
@@ -25,14 +31,53 @@ body {
   color: var(--color-ink);
 }
 
+/* Evidentiary data reads as case-file annotation: tabular figures keep IDs,
+   timestamps and citations aligned in columns; the slashed zero reinforces
+   the technical-ledger tone. */
 code, kbd {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
 }
 
+/* The serif display face carries the product's literary premise -- refine it
+   so headlines don't render with default tracking/orphans. */
+.font-display {
+  letter-spacing: -0.011em;
+  text-wrap: balance;
+  font-feature-settings: "liga", "dlig";
+}
+p {
+  text-wrap: pretty;
+}
+
+/* Ring hugs the element's own shape (rounded-2xl cards, pill badges) instead
+   of a fixed 4px that cuts inside rounded corners. */
 :focus-visible {
   outline: 2px solid var(--color-purple-400);
   outline-offset: 2px;
-  border-radius: 4px;
+}
+
+/* On-palette scrollbars -- native chrome/light bars break the cinema
+   immersion on every scroll container. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border: 2px solid var(--color-bg);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-hover);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -53,4 +98,37 @@ code, kbd {
 
 .live-dot {
   animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+/* Shimmer loading skeleton -- global so both the <Skeleton> component and raw
+   `kronara-skeleton` / `kron-shimmer` blocks placed inline across views (poster
+   grids, stat tiles) get the same sweeping sheen. A steady linear sweep with a
+   brand-tinted highlight band reads as "loading", not a frozen bar. The global
+   prefers-reduced-motion guard above already freezes it for opt-out users. */
+@keyframes kron-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.kron-shimmer,
+.kronara-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--color-surface-inset) 30%,
+    color-mix(in srgb, var(--color-surface-hover) 82%, var(--color-purple-400) 18%) 50%,
+    var(--color-surface-inset) 70%
+  );
+  background-size: 200% 100%;
+  animation: kron-shimmer 1.6s linear infinite;
+  border-radius: 0.5rem;
+}
+
+/* Staggered content reveal -- grids/lists set `style="--i:N"` so items rise in
+   sequence ("the factory coming to life") instead of popping in flat. */
+@keyframes kron-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.rise {
+  animation: kron-rise var(--dur, 280ms) var(--ease-out-expo) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
 }
