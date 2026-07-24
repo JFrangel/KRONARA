@@ -810,6 +810,15 @@
       </Card>
     {/if}
   {:else if activeTab === 'publicacion'}
+    <Card title="Conectar redes — Postiz (agregador)" subtitle="Una sola llave publica a todas las redes; open-source y auto-hospedado">
+      <ol class="ml-4 list-decimal space-y-1 text-[12px] text-ink-secondary">
+        <li>Hospeda Postiz local con Docker y ábrelo en <a class="text-purple-300 hover:underline" href="http://localhost:4007" target="_blank" rel="noopener noreferrer">localhost:4007</a>.</li>
+        <li>En Postiz conecta tus redes (ahí completas el OAuth de cada plataforma).</li>
+        <li>Copia tu API key (Postiz → Settings) y ponla en <code class="text-purple-300">.env</code>: <code class="text-purple-300">KRONARA_AGGREGATOR_API_KEY</code>.</li>
+      </ol>
+      <p class="mt-2 text-[11.5px] text-ink-tertiary">Guía completa en <code class="text-purple-300">docs/POSTIZ.md</code>. Sin la llave, la publicación reporta “no configurada” con honestidad.</p>
+    </Card>
+
     <Card title="Cuentas de publicación" subtitle="Multi-cuenta por plataforma y modo — los tokens viven en .env, aquí solo se lee su estado">
       {#if accountsError}
         <p class="text-[13px] text-ink-secondary">{accountsError}</p>
