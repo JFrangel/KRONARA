@@ -149,6 +149,7 @@ class OperationsService:
             "library.harvest_freesound": self.harvest_freesound,
             "media.animate_scene": self.animate_scene,
             "accounts.list": self.accounts_list,
+            "podcast.feed": self.podcast_feed,
             "social.packaging": self.social_packaging,
             "social.comment_reply": self.social_comment_reply,
             "pulse.analyze": self.pulse_analyze,
@@ -288,6 +289,42 @@ class OperationsService:
             "schema_version": 1,
             **trend_brief(router, samples=list(params.get("samples") or []), niche=str(params.get("niche") or "")),
         }
+
+    def podcast_feed(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Feed RSS de pódcast de los episodios (todos los programas o uno). Sirve
+        para los programas de Reddit y para reflexión/bíblico: extrae el audio del
+        MP4 de cada episodio (cacheado en assets/podcast) y arma el RSS que Spotify
+        for Podcasters puede ingerir cuando el feed se sirve en una URL pública."""
+        from kronara.podcast import build_rss, extract_audio
+
+        program_id = params.get("program_id")
+        episodes = self.store.list_owned_story_artifacts(
+            limit=int(params.get("limit", 100)), program_id=str(program_id) if program_id else None
+        )
+        items: list[dict[str, Any]] = []
+        for episode in episodes:
+            metadata = episode.get("metadata", {})
+            video_path = metadata.get("video_path")
+            if not video_path or not Path(video_path).exists():
+                continue
+            mp3 = self.data_dir / "assets" / "podcast" / f"{episode['story_id']}.mp3"
+            if not mp3.exists():
+                try:
+                    extract_audio(video_path, mp3)
+                except Exception:
+                    continue
+            items.append({
+                "title": metadata.get("title") or episode["story_id"],
+                "description": metadata.get("hook") or metadata.get("theme") or "",
+                "audio_url": str(mp3),
+                "audio_bytes": mp3.stat().st_size,
+                "duration_seconds": int(metadata.get("duration_seconds") or 0),
+                "pub_ts": int(episode.get("created_at") or 0),
+                "guid": episode["story_id"],
+            })
+        channel_title = f"Kronara — {program_id}" if program_id else "Kronara"
+        rss = build_rss(title=channel_title, description="Relatos y casos reconstruidos, en audio.", episodes=items)
+        return {"schema_version": 1, "episode_count": len(items), "rss": rss}
 
     def social_packaging(self, params: dict[str, Any]) -> dict[str, Any]:
         """El agente genera packaging por plataforma (título/descripción/hashtags)
