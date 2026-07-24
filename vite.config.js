@@ -32,6 +32,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'styles.delete',
   'voice.profiles',
   'voice.clone',
+  'voice.preview',
   'voice.add_sample',
   'voice.delete_profile',
   'voice.settings',
@@ -76,6 +77,9 @@ const MIME_TYPES = {
   '.mp4': 'video/mp4',
   '.png': 'image/png',
   '.webm': 'video/webm',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
 };
 
 function localAssetPath(requestPath) {

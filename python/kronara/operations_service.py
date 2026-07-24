@@ -142,6 +142,7 @@ class OperationsService:
             "styles.delete": self.styles_delete,
             "voice.profiles": self.voice_profiles,
             "voice.clone": self.voice_clone,
+            "voice.preview": self.voice_preview,
             "voice.add_sample": self.voice_add_sample,
             "voice.delete_profile": self.voice_delete_profile,
             "voice.settings": self.voice_settings,
@@ -852,6 +853,51 @@ class OperationsService:
             "status": "created",
             "profile": {"id": profile_id, "name": name, "language": language, "voice_type": "cloned"},
             **self._voice_state(),
+        }
+
+    def voice_preview(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Escuchar cómo suena una voz (clonada o preset) antes de usarla:
+        sintetiza un clip corto con VoiceBox y devuelve la ruta del audio para
+        reproducirlo en Configuración → Voces. Respeta la velocidad configurada
+        (voice_settings) para que suene como sonará la narración. Best-effort:
+        sin VoiceBox devuelve status:'error' (no revienta)."""
+        from kronara.voice import VoiceBoxVoiceProvider, VoiceSynthesisRequest
+
+        profile_id = str(params.get("profile_id", "")).strip()
+        if not profile_id:
+            raise ValueError("profile_id es obligatorio")
+        # A preview is a short taste, not a full narration.
+        default_text = (
+            "En Kronara reconstruimos casos reales con voz propia. "
+            "Esta es una muestra de cómo sonaría tu narración."
+        )
+        text = (str(params.get("text") or "").strip() or default_text)[:280]
+        language = str(params.get("language") or os.environ.get("KRONARA_VOICEBOX_LANGUAGE") or "es")
+        engine = str(params.get("engine") or os.environ.get("KRONARA_VOICEBOX_ENGINE") or "") or None
+        provider = VoiceBoxVoiceProvider(
+            profile_id=profile_id,
+            language=language,
+            engine=engine,
+            audio_dir=str(self.data_dir / "assets" / "voice_preview"),
+            settings_path=str(self.data_dir / "voice_settings.v1.json"),
+        )
+        try:
+            result = provider.synthesize(VoiceSynthesisRequest(text=text, voice_id=profile_id))
+        except Exception:
+            return {
+                "schema_version": 1,
+                "status": "error",
+                "detail": "VoiceBox no generó el preview (¿el servidor está activo?).",
+            }
+        if not result.audio_ref or not Path(result.audio_ref).is_file():
+            return {"schema_version": 1, "status": "error", "detail": "No se recibió audio de VoiceBox."}
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "profile_id": profile_id,
+            "text": text,
+            "audio_path": result.audio_ref,
+            "duration_ms": result.duration_ms,
         }
 
     def voice_delete_profile(self, params: dict[str, Any]) -> dict[str, Any]:

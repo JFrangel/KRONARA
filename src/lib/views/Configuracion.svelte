@@ -3,7 +3,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Icon from '../components/Icon.svelte';
-  import { callOperations } from '../local-operations.js';
+  import { assetSrc, callOperations } from '../local-operations.js';
 
   const TABS = ['general', 'ia', 'estilos', 'voces', 'publicacion', 'almacenamiento', 'seguridad'];
   const TAB_LABELS = {
@@ -293,6 +293,29 @@
       if (result.profiles !== undefined) voiceInfo = result;
     } catch (error) {
       cloneNotice = 'No se pudo quitar la voz.';
+    }
+  }
+
+  // Preview de voz: sintetiza un clip corto con la voz elegida y lo reproduce
+  // para escuchar cómo sonaría la narración antes de asignarla a un programa.
+  let previewingId = $state('');
+  let previewError = $state('');
+  async function previewVoice(profile) {
+    if (previewingId) return;
+    previewingId = profile.id;
+    previewError = '';
+    try {
+      const result = await callOperations('voice.preview', { profile_id: profile.id });
+      if (result.status === 'ok' && result.audio_path) {
+        const src = assetSrc(result.audio_path);
+        if (src) new Audio(src).play().catch(() => (previewError = 'No se pudo reproducir el audio.'));
+      } else {
+        previewError = result.detail || 'VoiceBox no generó el preview.';
+      }
+    } catch (error) {
+      previewError = 'No se pudo generar el preview (¿VoiceBox activo?).';
+    } finally {
+      previewingId = '';
     }
   }
 
@@ -653,6 +676,14 @@
                 {#if profile.voice_type}<Badge tone="neutral">{profile.voice_type}</Badge>{/if}
                 {#if profile.sample_count}<span class="text-[10px] text-ink-tertiary">{profile.sample_count} muestra{profile.sample_count === 1 ? '' : 's'}</span>{/if}
                 {#if profile.id === voiceInfo.configured_profile}<Badge tone="success">Predeterminada</Badge>{/if}
+                <button
+                  class="inline-flex items-center gap-1 rounded-lg border border-purple-500/40 px-2 py-1 text-[11px] text-purple-200 transition-colors hover:bg-purple-500/10 disabled:opacity-40"
+                  onclick={() => previewVoice(profile)}
+                  disabled={previewingId !== ''}
+                  title="Escuchar una muestra de esta voz"
+                >
+                  {#if previewingId === profile.id}Generando…{:else}<Icon name="play" size={11} /> Escuchar{/if}
+                </button>
                 {#if profile.voice_type === 'cloned'}
                   <button
                     class="rounded-lg border border-purple-500/40 px-2 py-1 text-[11px] text-purple-200 transition-colors hover:bg-purple-500/10"
@@ -672,6 +703,7 @@
               </li>
             {/each}
           </ul>
+          {#if previewError}<p class="mt-2 rounded-lg border border-warning/25 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">{previewError}</p>{/if}
         {:else}
           <p class="mt-3 text-[12px] text-ink-secondary">No hay voces todavía. Clona una abajo (sube unos segundos de audio con su texto exacto) y aparecerá aquí.</p>
         {/if}
