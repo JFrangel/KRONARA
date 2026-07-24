@@ -61,21 +61,14 @@
     programOpenToken += 1;
   }
 
-  // Detener el proceso en el servidor: le pide al backend abortar el run
-  // (run.cancel libera el sidecar del trabajo pesado) y limpia el indicador,
-  // aunque el cancel falle. Útil cuando una generación se atasca o satura.
-  let stopping = $state(false);
-  async function stopGeneration() {
-    const storyId = $episodeGeneration?.storyId;
-    stopping = true;
-    try {
-      if (storyId) await callOperations('run.cancel', { run_id: `content:${storyId}` });
-    } catch (error) {
-      // best-effort: incluso si el backend no responde, limpiamos el indicador.
-    } finally {
-      clearEpisodeGeneration();
-      stopping = false;
-    }
+  // Finalizar el proceso en el servidor: quita el indicador AL INSTANTE y MATA
+  // el sidecar (system.stop_sidecar en la autoridad Node). Es la única forma
+  // garantizada de detener un content.run: el pipeline no tiene cancelación
+  // cooperativa, así que run.cancel solo marcaría el estado. El sidecar se
+  // re-spawnea solo en la próxima llamada, así que la app se recupera sola.
+  function stopGeneration() {
+    clearEpisodeGeneration();
+    callOperations('system.stop_sidecar', {}).catch(() => {});
   }
 </script>
 
@@ -126,12 +119,11 @@
           </div>
         </button>
         <button
-          class="flex shrink-0 items-center gap-1.5 border-l border-ember-500/25 px-3 text-[11.5px] font-medium text-ember-400 transition-colors hover:bg-error/15 hover:text-error disabled:opacity-50 sm:px-4"
+          class="flex shrink-0 items-center gap-1.5 border-l border-ember-500/25 px-3 text-[11.5px] font-medium text-ember-400 transition-colors hover:bg-error/15 hover:text-error sm:px-4"
           onclick={stopGeneration}
-          disabled={stopping}
           title="Detener el proceso en el servidor y liberar la generación"
         >
-          <Icon name="x" size={13} /> {stopping ? 'Deteniendo…' : 'Detener'}
+          <Icon name="x" size={13} /> Detener
         </button>
       </div>
     {/if}

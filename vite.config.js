@@ -548,6 +548,21 @@ class LocalSidecarHost {
     this.pending.clear();
   }
 
+  // Matar el proceso del sidecar a petición del usuario ("Finalizar proceso").
+  // Es la única forma garantizada de DETENER un content.run: el pipeline no
+  // tiene cancelación cooperativa, así que run.cancel solo marca el estado.
+  // handleExit() pone this.child=null, y la próxima RPC lo re-spawnea solo,
+  // así que la app se recupera transparente tras matar.
+  kill() {
+    const had = !!this.child;
+    if (this.child) {
+      try { this.child.kill('SIGKILL'); } catch {}
+      this.child = null;
+    }
+    this.rejectAll('sidecar detenido por el usuario');
+    return had;
+  }
+
   async request(method, params, options = {}) {
     if (!options.skipStart) await this.start();
     const id = this.nextId++;
@@ -632,7 +647,16 @@ function localRpcPlugin() {
     }
     try {
       const body = JSON.parse(await readRequestBody(req) || '{}');
-      const result = await host.call(String(body.method ?? ''), body.params ?? {});
+      const method = String(body.method ?? '');
+      // "Finalizar proceso": mata el sidecar aquí, en la autoridad Node, sin
+      // pasar por el propio sidecar (que puede estar colgado en un content.run).
+      if (method === 'system.stop_sidecar') {
+        const stopped = host.kill();
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ result: { status: stopped ? 'stopped' : 'not_running' } }));
+        return;
+      }
+      const result = await host.call(method, body.params ?? {});
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ result }));
     } catch (error) {

@@ -206,6 +206,14 @@
     }
   }
 
+  // "Abandonar" ahora detiene de verdad: mata el sidecar (system.stop_sidecar)
+  // además de limpiar el indicador. El content_pipeline no es cancelable de
+  // otro modo, así que solo limpiar el indicador dejaba el proceso corriendo.
+  function abandonAndStop() {
+    clearEpisodeGeneration();
+    callOperations('system.stop_sidecar', {}).catch(() => {});
+  }
+
   function generationFailureMessage(code, diagnostics = null) {
     const quality = diagnostics?.quality_failure;
     const programQuality = diagnostics?.program_quality_failure;
@@ -666,7 +674,7 @@
                 </button>
                 <button
                   class="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
-                  onclick={clearEpisodeGeneration}
+                  onclick={abandonAndStop}
                 >
                   Abandonar
                 </button>
@@ -674,7 +682,7 @@
             {:else if selectedGeneration.status === 'running'}
               <button
                 class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
-                onclick={clearEpisodeGeneration}
+                onclick={abandonAndStop}
                 title="Solo limpia el indicador local. Si el backend sigue corriendo, mátalo con Get-Process kronara-sidecar."
               >
                 Ocultar indicador
@@ -1302,7 +1310,7 @@
               {#if listGeneration.status === 'failed' || listGeneration.status === 'running'}
                 <button
                   class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-tertiary transition hover:border-ink-tertiary hover:text-ink"
-                  onclick={clearEpisodeGeneration}
+                  onclick={abandonAndStop}
                 >
                   Abandonar
                 </button>
