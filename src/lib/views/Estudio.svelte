@@ -235,6 +235,49 @@
       generatingPackaging = false;
     }
   }
+
+  // #96: community -- el agente redacta una respuesta a un comentario anclada al
+  // guion (social.comment_reply). No publica: es un borrador para aprobación.
+  let commentInput = $state('');
+  let commentReply = $state(null);
+  let replying = $state(false);
+
+  async function draftReply() {
+    const script = contentResult?.story?.script;
+    if (!script || !commentInput.trim() || replying) return;
+    replying = true;
+    commentReply = null;
+    try {
+      commentReply = await callOperations('social.comment_reply', { script, comment: commentInput.trim() });
+    } catch (error) {
+      commentReply = { reply: 'El agente no respondió.', grounded: false };
+    } finally {
+      replying = false;
+    }
+  }
+
+  // #96: animar una escena bajo demanda (media.animate_scene, i2v opt-in).
+  let animatingScene = $state('');
+  let animateNotice = $state('');
+
+  async function animateScene(scene) {
+    if (animatingScene) return;
+    animatingScene = scene.scene_id;
+    animateNotice = '';
+    try {
+      const result = await callOperations('media.animate_scene', {
+        image_path: scene.asset_path,
+        prompt: 'movimiento sutil de cámara, atmósfera cinemática',
+      });
+      animateNotice = result.status === 'completed'
+        ? `Escena ${scene.scene_index} animada.`
+        : (result.detail || 'i2v no disponible en esta sesión.');
+    } catch (error) {
+      animateNotice = 'La animación no respondió.';
+    } finally {
+      animatingScene = '';
+    }
+  }
 </script>
 
 <div class="space-y-4">
@@ -536,6 +579,7 @@
   {:else if activeTab === 'storyboard'}
     {#if hasEpisode}
       <Card title="Storyboard" subtitle={`${video.scene_count} escenas · ${video.shot_count} tomas`}>
+        {#if animateNotice}<p class="mb-3 rounded-lg border border-line bg-surface-inset px-3 py-2 text-[11.5px] text-ink-secondary">{animateNotice}</p>{/if}
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {#each sceneManifest as scene (scene.scene_id)}
             <figure class="overflow-hidden rounded-xl border border-line bg-surface-inset">
@@ -550,7 +594,14 @@
               </div>
               <figcaption class="flex items-center justify-between gap-2 px-2.5 py-2">
                 <Badge tone={SOURCE_KIND_TONE[scene.source_kind] ?? 'neutral'}>{SOURCE_KIND_LABELS[scene.source_kind] ?? scene.source_kind}</Badge>
-                <span class="text-[10.5px] text-ink-tertiary">{scene.shot_count} tomas · {TIER_LABELS[scene.tier] ?? scene.tier}</span>
+                <button
+                  class="rounded-full border border-line px-2 py-0.5 text-[10.5px] text-ink-secondary transition-colors hover:border-purple-500 hover:text-ink disabled:opacity-40"
+                  onclick={() => animateScene(scene)}
+                  disabled={animatingScene !== ''}
+                  title="Animar esta escena (i2v, opt-in)"
+                >
+                  {animatingScene === scene.scene_id ? 'Animando…' : 'Animar'}
+                </button>
               </figcaption>
             </figure>
           {/each}
@@ -754,6 +805,28 @@
                 {/if}
               </div>
             {/each}
+          </div>
+        {/if}
+      </Card>
+
+      <Card title="Responder comentario" subtitle="El agente redacta la respuesta anclada al guion — borrador para aprobar, no publica">
+        <textarea
+          class="w-full rounded-lg border border-line bg-surface-inset px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-tertiary focus:border-purple-500 focus:outline-none"
+          rows="2"
+          bind:value={commentInput}
+          placeholder="Pega un comentario o pregunta del público…"
+        ></textarea>
+        <button
+          class="mt-2 rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+          onclick={draftReply}
+          disabled={replying || !commentInput.trim()}
+        >
+          {replying ? 'Redactando…' : 'Redactar respuesta'}
+        </button>
+        {#if commentReply}
+          <div class="mt-3 rounded-lg border border-line bg-surface-inset p-3">
+            <Badge tone={commentReply.grounded ? 'success' : 'warning'}>{commentReply.grounded ? 'Anclada al guion' : 'Fuera del guion'}</Badge>
+            <p class="mt-1.5 text-[12.5px] leading-relaxed text-ink">{commentReply.reply}</p>
           </div>
         {/if}
       </Card>
