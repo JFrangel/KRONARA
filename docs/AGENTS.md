@@ -1,26 +1,50 @@
-# Catálogo de agentes v0.5
+# Catálogo de agentes v0.8
 
-Hay 24 manifiestos en `config/agents` y 35 habilidades versionadas en `config/skills/catalog.v1.json`. Una habilidad orienta el trabajo; no concede autoridad.
+Kronara consolidó los 24 manifiestos originales en **3 super-agentes** (clase
+Agente B), cableados como **nodos LangGraph reales** con checkpointing
+(`content_pipeline.run_graph` sobre `langgraph_runtime.persistent_graph`). El
+mapeo 24→3 vive en `agents.py` (`LEGACY_TO_SUPER`, `super_agent()`), y la vista
+**Agentes** los muestra (`agents.overview`).
 
-| Equipo | Agentes |
-|---|---|
-| Dirección | `executive_orchestrator`, `editorial_executive`, `context_engineer`, `operations_chat` |
-| Oportunidad e investigación | `opportunity_intelligence`, `research_executive`, `evidence_analyst`, `rights_provenance` |
-| Narrativa | `concept_architect`, `narrative_planner`, `writer_room`, `hook_retention`, `automated_qc` |
-| Producción | `voice_director`, `visual_director`, `audio_director`, `video_composer`, `packaging`, `distribution` |
-| Aprendizaje y conocimiento | `performance_scientist`, `memory_curator`, `rag_curator`, `evaluation_scientist`, `training_data_curator` |
+| Super-agente | Rol | Absorbe (legacy) |
+|---|---|---|
+| **estratega** | Decide, investiga, aprende, mide | executive_orchestrator, editorial_executive, opportunity_intelligence, research_executive, context_engineer, evidence_analyst, rag_curator, operations_chat, performance_scientist, evaluation_scientist, memory_curator |
+| **guionista** | Escribe y se autocritica | concept_architect, narrative_planner, writer_room, hook_retention, automated_qc, rights_provenance, training_data_curator |
+| **productor** | Guion → video publicado | visual_director, video_composer, audio_director, voice_director, packaging, distribution |
 
-## Perfil narrativo por agente
+## Agentes de capacidad (v0.8)
 
-Cada agente puede llevar un perfil narrativo versionado que define cómo comunica, cómo razona, qué evita y cuándo da por cerrada una respuesta. Este perfil se integra como una capa separada del prompt stack, por debajo del rol y por encima del contexto operativo.
+Lógica de agente pura, sobre el guion/datos (no tocan la red); se enchufan a la
+conexión de red (Postiz/nativo):
+
+- **Packaging** (`social_agent.platform_packaging`): título/descripción/hashtags
+  por plataforma desde el guion — RPC `social.packaging`.
+- **Community** (`social_agent.draft_comment_reply`): redacta respuestas a
+  comentarios ancladas al guion; honesto (`grounded=false`) si el guion no lo
+  respalda — RPC `social.comment_reply`.
+- **Kronara Pulse** (`pulse_agent`): a partir de métricas/muestras da qué
+  funciona, qué cambiar, fórmulas de título y tendencias — RPC `pulse.analyze` /
+  `pulse.trends`.
+
+## Ganchos y estilo
+
+El guionista abre como expediente documental (no "un usuario de Reddit"): la
+biblioteca de ganchos (`config/hooks/hooks.v1.json` + `hooks_library.py`) se
+inyecta como `hook_playbook` sin exponer el texto de los ejemplos (anti-eco). En
+modo reconstrucción fiel, el estratega trae el hilo real (`reddit_thread.py`) y el
+guionista lo reconstruye anonimizado (`brief.source_case`).
 
 ## Reglas no anulables
 
-- Opportunity Intelligence guarda señales abstractas, no bodies de Reddit.
-- Rights and Provenance bloquea derechos insuficientes.
-- Writer Room no se autocertifica: la crítica debe usar otra familia cuando exista alternativa sana.
-- Distribution solo solicita una intención; Rust valida publicación, idempotencia y estado remoto.
-- Training Data Curator solo acepta historias propias o licenciadas con evidencia.
-- Memory Curator mantiene hipótesis rivales; no sobrescribe contradicciones.
+- El estratega guarda señales abstractas; en reconstrucción fiel trae el hilo real
+  pero anonimiza (nunca publica identidades).
+- El guionista no se autocertifica: la crítica usa otra familia de modelo cuando
+  existe alternativa sana. Solo dominio público en Bíblico; aforismos originales
+  en Frases.
+- El productor solo solicita una intención de publicación; **el Node authority**
+  (`vite.config.js`) valida publicación, idempotencia y estado remoto, y la
+  gobernanza de autonomía (`policy.py`) decide cuándo se dispara.
 
-Las herramientas son default-deny. El agente no puede invocar una tool que no esté en su manifest ni importar módulos, abrir shell o leer secretos.
+Las herramientas son default-deny: un agente no invoca una tool fuera de su
+allowlist, ni importa módulos, abre shell o lee secretos. La autoridad de red y
+los secretos viven en el Node, no en el sidecar cognitivo.

@@ -1,8 +1,23 @@
-# Kronara — Documentación de funcionalidades (v0.6)
+# Kronara — Documentación de funcionalidades
 
 > **Para quién:** el equipo visual/frontend y cualquiera que necesite conectar,
 > integrar o extender Kronara. Documenta **qué hace cada pieza, sus entradas y
 > salidas, y cómo se conectan**. Es el contrato entre el backend (cerebro) y la UI.
+
+> **⚠️ Actualización v0.8 — lo que cambió respecto a lo de abajo (v0.6):**
+> - **Autoridad = Node** (`vite.config.js`), no Rust. Se eliminó `src-tauri/` (app
+>   web pura + `Iniciar-Kronara.cmd`). Ver [ARCHITECTURE.md](ARCHITECTURE.md).
+> - **Voz = VoiceBox** (clonada, local), edge-tts eliminado. Ver [VOICEBOX.md](VOICEBOX.md).
+> - **24 agentes → 3 super-agentes** (estratega/guionista/productor, nodos LangGraph)
+>   + agentes de capacidad (packaging/community/Pulse). Ver [AGENTS.md](AGENTS.md).
+> - **4 modos de contenido** (`content_kind`: historia/reflexión/bíblico/frase),
+>   selector en Estudio → Resumen; historias REALES reconstruidas de Reddit.
+> - **Imágenes por API** (Pollinations→Cloudflare), animación (Pexels loops + i2v
+>   fal.ai), y **publicación vía Postiz** (agregador). Ver [INTEGRATIONS.md](INTEGRATIONS.md)
+>   y [POSTIZ.md](POSTIZ.md).
+>
+> Lo de abajo (v0.6) sigue siendo válido en su estructura general; donde diga
+> "Rust", "edge-tts" o "24 agentes", léase según esta actualización.
 
 ## 1. Mapa de la aplicación
 
