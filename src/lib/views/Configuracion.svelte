@@ -426,7 +426,7 @@
       <Card title="Almacenamiento local" subtitle="Archivos y caché">
         <div class="rounded-xl border border-line bg-surface-inset p-3"><p class="text-[10px] uppercase tracking-wide text-ink-tertiary">Ruta de trabajo</p><p class="mt-1 truncate font-mono text-[11px] text-ink">D:\Proyecto Redit\.kronara</p></div>
         <div class="mt-3 flex items-center justify-between text-[11.5px]"><span class="text-ink-tertiary">Modelos SDXL</span><span class="text-success">Instalados</span></div>
-        <div class="mt-2 h-1.5 rounded-full bg-line"><div class="h-full w-[42%] rounded-full bg-purple-500"></div></div>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-line"><div class="h-full w-[42%] rounded-full bg-gradient-to-r from-purple-600 via-purple-500 to-purple-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[width] duration-700 ease-out"></div></div>
       </Card>
     </div>
   {:else if activeTab === 'ia'}
@@ -445,7 +445,7 @@
           ></div>
         </div>
       {:else}
-        <p class="text-[13px] text-ink-secondary">Cargando…</p>
+        <div class="space-y-2"><div class="kron-shimmer h-3 w-1/3 rounded-full"></div><div class="kron-shimmer h-3 w-1/2 rounded-full"></div><div class="kron-shimmer h-3 w-2/5 rounded-full"></div></div>
       {/if}
     </Card>
 
@@ -471,11 +471,15 @@
         {#if stylesError}
           <p class="text-[13px] text-ink-secondary">{stylesError}</p>
         {:else if !stylesLoaded}
-          <p class="text-[13px] text-ink-secondary">Cargando estilos…</p>
+          <div class="space-y-2">
+            {#each Array(3) as _}
+              <div class="rounded-xl border border-line bg-surface-inset p-3"><div class="kron-shimmer h-3 w-1/3 rounded-full"></div><div class="kron-shimmer mt-2 h-2.5 w-1/2 rounded-full"></div></div>
+            {/each}
+          </div>
         {:else}
           <ul class="space-y-2">
             {#each styles as style (style.style_id)}
-              <li class="flex items-start gap-3 rounded-xl border border-line bg-surface-inset p-3">
+              <li class="flex items-start gap-3 rounded-xl border border-line bg-surface-inset p-3 transition-all duration-150 hover:border-purple-500/25 hover:bg-surface-hover">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
                     <p class="truncate text-[12.5px] font-medium text-ink">{style.name}</p>
@@ -630,7 +634,7 @@
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_1fr]">
     <Card title="Motor de voz — VoiceBox" subtitle="Voz clonada, auto-hospedada (reemplaza edge-tts)">
       {#if !voicesLoaded}
-        <p class="text-[13px] text-ink-secondary">Comprobando el servidor VoiceBox…</p>
+        <div class="space-y-2"><div class="kron-shimmer h-3 w-2/5 rounded-full"></div><div class="kron-shimmer h-3 w-1/2 rounded-full"></div></div>
       {:else if voiceInfo?.reachable}
         <div class="flex items-center gap-2 rounded-xl border border-success/25 bg-success/10 p-3">
           <span class="h-2 w-2 rounded-full bg-success"></span>
@@ -640,7 +644,7 @@
         {#if voiceInfo.profiles?.length}
           <ul class="mt-3 space-y-2">
             {#each voiceInfo.profiles as profile (profile.id)}
-              <li class="flex items-center gap-3 rounded-xl border border-line bg-surface-inset p-3">
+              <li class="flex items-center gap-3 rounded-xl border border-line bg-surface-inset p-3 transition-all duration-150 hover:border-purple-500/25 hover:bg-surface-hover">
                 <div class="grid h-8 w-8 place-items-center rounded-lg bg-purple-500/15 text-purple-300"><Icon name="wand" size={15} /></div>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-[12.5px] font-medium text-ink">{profile.name || profile.id}</p>
@@ -717,7 +721,11 @@
           Para español usa <span class="font-mono">qwen</span> (multilingüe) y clona tu voz, o <span class="font-mono">kokoro</span> para voces preset listas (inglés). El motor se fija con <code class="text-purple-300">KRONARA_VOICEBOX_ENGINE</code>.
         </p>
       {:else}
-        <p class="text-[13px] text-ink-secondary">Cargando motores…</p>
+        <div class="space-y-2">
+          {#each Array(3) as _}
+            <div class="rounded-xl border border-line bg-surface-inset p-3"><div class="kron-shimmer h-3 w-1/3 rounded-full"></div><div class="kron-shimmer mt-2 h-2.5 w-1/2 rounded-full"></div></div>
+          {/each}
+        </div>
       {/if}
     </Card>
     </div>
@@ -823,13 +831,17 @@
       {#if accountsError}
         <p class="text-[13px] text-ink-secondary">{accountsError}</p>
       {:else if !accountsLoaded}
-        <p class="text-[13px] text-ink-secondary">Cargando cuentas…</p>
+        <div class="space-y-2">
+          {#each Array(3) as _}
+            <div class="rounded-xl border border-line bg-surface-inset p-3"><div class="kron-shimmer h-3 w-2/5 rounded-full"></div><div class="kron-shimmer mt-2 h-2.5 w-1/2 rounded-full"></div></div>
+          {/each}
+        </div>
       {:else if accounts.length === 0}
         <p class="text-[13px] text-ink-secondary">Sin cuentas configuradas en <code class="text-purple-300">config/accounts/accounts.v1.json</code>.</p>
       {:else}
         <ul class="space-y-2">
           {#each accounts as account (account.id)}
-            <li class="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-inset p-3">
+            <li class="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-inset p-3 transition-all duration-150 hover:border-purple-500/25 hover:bg-surface-hover">
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <p class="truncate text-[12.5px] font-medium text-ink">{account.label}</p>
