@@ -41,6 +41,8 @@ const ALLOWED_RPC_METHODS = new Set([
   'accounts.list',
   'social.packaging',
   'social.comment_reply',
+  'pulse.analyze',
+  'pulse.trends',
   'agents.overview',
   'episodes.list',
   'episodes.get',

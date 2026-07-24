@@ -151,6 +151,8 @@ class OperationsService:
             "accounts.list": self.accounts_list,
             "social.packaging": self.social_packaging,
             "social.comment_reply": self.social_comment_reply,
+            "pulse.analyze": self.pulse_analyze,
+            "pulse.trends": self.pulse_trends,
             "agents.overview": self.agents_overview,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
@@ -259,6 +261,33 @@ class OperationsService:
             reports["sfx"] = result["reports"]
             seeded += result["seeded"]
         return {"schema_version": 1, "seeded": seeded, "reports": reports}
+
+    def pulse_analyze(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Kronara Pulse: recomendaciones editoriales a partir de las métricas de
+        episodios. Las métricas reales las trae la conexión de red (aquí llegan en
+        params['episodes']); sin datos devuelve no_data honesto."""
+        from kronara.pulse_agent import analyze_performance
+        from kronara.routed_story_provider import AuthorityModelRouter
+
+        router = AuthorityModelRouter(authority=self.authority, registry=self._model_registry)
+        return {
+            "schema_version": 1,
+            **analyze_performance(
+                router, episodes=list(params.get("episodes") or []), program=str(params.get("program") or "")
+            ),
+        }
+
+    def pulse_trends(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Kronara Pulse: extrae fórmulas de título/ángulos que funcionan de
+        muestras de contenido similar/en tendencia (params['samples'])."""
+        from kronara.pulse_agent import trend_brief
+        from kronara.routed_story_provider import AuthorityModelRouter
+
+        router = AuthorityModelRouter(authority=self.authority, registry=self._model_registry)
+        return {
+            "schema_version": 1,
+            **trend_brief(router, samples=list(params.get("samples") or []), niche=str(params.get("niche") or "")),
+        }
 
     def social_packaging(self, params: dict[str, Any]) -> dict[str, Any]:
         """El agente genera packaging por plataforma (título/descripción/hashtags)
