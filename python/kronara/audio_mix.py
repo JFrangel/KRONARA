@@ -17,25 +17,46 @@ from typing import Mapping, Sequence
 
 # Narration word -> SFX tag. Curated, extensible (see knowledge/reddit-sources
 # style curation notes for how the equivalent audio library is seeded).
+# Broadened to the actual vocabulary of the programs (terror, justicia,
+# confesiones, psicología): more scenes now anchor an effect. Safe to widen --
+# match_sfx_cues still gates by a 4s per-tag cooldown + a 15-cue cap and the
+# mix keeps SFX at ~0.032 gain, so this stays texture, never a sound-effects
+# reel. Single-word keys only (the matcher tokenizes per word).
 DEFAULT_KEYWORD_SFX: dict[str, str] = {
-    "puerta": "door_creak",
-    "puertas": "door_creak",
-    "pasos": "footsteps",
-    "paso": "footsteps",
-    "viento": "wind",
-    "corazón": "heartbeat",
-    "corazon": "heartbeat",
-    "teléfono": "phone_ring",
-    "telefono": "phone_ring",
-    "página": "page_turn",
-    "pagina": "page_turn",
-    "páginas": "page_turn",
-    "estática": "static",
-    "estatica": "static",
-    "susurro": "whisper",
-    "susurra": "whisper",
-    "susurró": "whisper",
-    "susurraron": "whisper",
+    # door_creak -- thresholds, locks, entrances
+    "puerta": "door_creak", "puertas": "door_creak", "portón": "door_creak",
+    "porton": "door_creak", "cerradura": "door_creak", "picaporte": "door_creak",
+    "bisagra": "door_creak", "umbral": "door_creak",
+    # footsteps -- movement, flight, stairs
+    "pasos": "footsteps", "paso": "footsteps", "pisadas": "footsteps",
+    "pisada": "footsteps", "caminó": "footsteps", "caminaba": "footsteps",
+    "corrió": "footsteps", "corría": "footsteps", "huyó": "footsteps",
+    "huía": "footsteps", "escaleras": "footsteps", "escalera": "footsteps",
+    # wind -- weather, dread, open spaces
+    "viento": "wind", "vientos": "wind", "ráfaga": "wind", "rafaga": "wind",
+    "ventisca": "wind", "tormenta": "wind", "brisa": "wind", "temporal": "wind",
+    # heartbeat -- fear, panic, tension
+    "corazón": "heartbeat", "corazon": "heartbeat", "latido": "heartbeat",
+    "latidos": "heartbeat", "pulso": "heartbeat", "pánico": "heartbeat",
+    "panico": "heartbeat", "terror": "heartbeat", "pavor": "heartbeat",
+    # phone_ring -- calls, contact
+    "teléfono": "phone_ring", "telefono": "phone_ring", "celular": "phone_ring",
+    "móvil": "phone_ring", "movil": "phone_ring", "llamada": "phone_ring",
+    "timbre": "phone_ring", "timbró": "phone_ring", "timbro": "phone_ring",
+    # page_turn -- documents, records, letters
+    "página": "page_turn", "pagina": "page_turn", "páginas": "page_turn",
+    "paginas": "page_turn", "hoja": "page_turn", "hojas": "page_turn",
+    "carta": "page_turn", "cartas": "page_turn", "diario": "page_turn",
+    "cuaderno": "page_turn", "expediente": "page_turn", "documento": "page_turn",
+    # static -- screens, radio, interference
+    "estática": "static", "estatica": "static", "radio": "static",
+    "televisor": "static", "televisión": "static", "television": "static",
+    "interferencia": "static", "señal": "static", "senal": "static",
+    "pantalla": "static",
+    # whisper -- confidences, murmurs
+    "susurro": "whisper", "susurros": "whisper", "susurra": "whisper",
+    "susurró": "whisper", "susurraron": "whisper", "murmullo": "whisper",
+    "murmura": "whisper", "murmuró": "whisper", "murmuro": "whisper",
 }
 
 _WORD_STRIP_CHARS = ".,;:!?¡¿\"'()[]"
