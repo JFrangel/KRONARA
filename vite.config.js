@@ -354,6 +354,72 @@ async function searchPexelsVideos(argumentsValue, env) {
   return { schema_version: 1, videos, next_page: json.next_page ? page + 1 : null };
 }
 
+// --- Agregador de redes: Postiz (open-source, auto-hospedado local) -----------
+// Publica a FB/IG/TikTok/YouTube/Reddit/etc. con UNA sola API. Self-host por
+// defecto en http://localhost:4007 (POSTIZ_URL); la API pública vive en
+// {POSTIZ_URL}/public/v1 y autentica con el header Authorization: <apiKey>.
+// Docs: https://docs.postiz.com/public-api  (ver docs/POSTIZ.md).
+function aggregatorConfig(env) {
+  const base = String(env.POSTIZ_URL || 'http://localhost:4007').replace(/\/+$/, '');
+  return { base: `${base}/public/v1`, apiKey: env.KRONARA_AGGREGATOR_API_KEY || '' };
+}
+
+async function postizIntegrations(env) {
+  const { base, apiKey } = aggregatorConfig(env);
+  const response = await fetch(`${base}/integrations`, { headers: { Authorization: apiKey } });
+  if (!response.ok) throw new Error(`postiz integrations failed with status ${response.status}`);
+  const json = await response.json();
+  return Array.isArray(json) ? json : (json.integrations ?? []);
+}
+
+async function postizUploadLocalVideo(env, videoRef) {
+  // Sube un archivo LOCAL a Postiz. Guard anti-traversal: solo bajo .kronara.
+  const root = path.resolve(process.cwd(), '.kronara');
+  const resolved = path.resolve(String(videoRef || ''));
+  if (!resolved.startsWith(root + path.sep) || !existsSync(resolved)) {
+    throw new Error('video_ref must be an existing file inside .kronara');
+  }
+  const { base, apiKey } = aggregatorConfig(env);
+  const form = new FormData();
+  form.append('file', new Blob([readFileSync(resolved)]), path.basename(resolved));
+  const response = await fetch(`${base}/upload`, { method: 'POST', headers: { Authorization: apiKey }, body: form });
+  if (!response.ok) throw new Error(`postiz upload failed with status ${response.status}`);
+  return response.json(); // { id, path }
+}
+
+async function postizPublish(env, args) {
+  const { apiKey, base } = aggregatorConfig(env);
+  if (!apiKey) return { status: 'not_configured', external_effect: false };
+  // Mapear la plataforma pedida -> integración conectada en Postiz.
+  const platform = String(args.platform || '').toLowerCase();
+  const integrations = await postizIntegrations(env);
+  const target = integrations.find((item) =>
+    String(item.identifier ?? item.providerIdentifier ?? item.platform ?? item.name ?? '').toLowerCase().includes(platform)
+  );
+  if (!target) return { status: 'failed', detail: `no hay integración de Postiz para "${platform}"`, external_effect: false };
+  const media = await postizUploadLocalVideo(env, args.video_ref);
+  const body = {
+    type: 'now',
+    date: new Date().toISOString(),
+    shortLink: false,
+    tags: [],
+    posts: [{
+      integration: { id: target.id },
+      value: [{ content: String(args.description || ''), image: [{ id: media.id, path: media.path }] }],
+      settings: { __type: String(target.identifier ?? platform) },
+    }],
+  };
+  const response = await fetch(`${base}/posts`, {
+    method: 'POST',
+    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) return { status: 'failed', detail: `postiz posts failed with status ${response.status}`, external_effect: false };
+  const remoteId = String(json.id ?? (Array.isArray(json) && json[0] && json[0].id) ?? '');
+  return { status: 'published', remote_id: remoteId, external_effect: true };
+}
+
 function jsonRpcResult(id, result) {
   return { jsonrpc: '2.0', id, result };
 }
@@ -511,7 +577,18 @@ class LocalSidecarHost {
       if (toolId === 'meta.metrics.read') throw new Error('meta_disabled_by_policy');
       if (toolId === 'pexels.search_videos') return jsonRpcResult(id, await searchPexelsVideos(args, this.env));
       if (toolId === 'voice.synthesize') throw new Error('voice_authority_unavailable_in_web_mode');
-      if (toolId === 'publication.publish') return jsonRpcResult(id, { status: 'not_configured', external_effect: false });
+      if (toolId === 'publication.publish') {
+        // Publica vía el agregador Postiz cuando está configurado
+        // (KRONARA_AGGREGATOR_API_KEY). Sin llave -> not_configured honesto, no
+        // se afirma que se publica. La gobernanza de autonomía (policy.py) decide
+        // CUÁNDO llamar esto; aquí solo vive el transporte.
+        if (!this.env.KRONARA_AGGREGATOR_API_KEY) {
+          return jsonRpcResult(id, { status: 'not_configured', external_effect: false });
+        }
+        if (args.mode === 'upload') return jsonRpcResult(id, await postizPublish(this.env, args));
+        // reconcile: sin lookup persistente todavía -> ambiguo (no re-publica a ciegas).
+        return jsonRpcResult(id, { status: 'ambiguous', remote_id: null, external_effect: false });
+      }
       return jsonRpcError(id, -32601, 'authority tool is not allowed');
     } catch (error) {
       return jsonRpcError(id, -32020, error instanceof Error ? error.message : 'authority invocation failed');
