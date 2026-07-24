@@ -56,7 +56,10 @@ def analyze_performance(
             system=(
                 "Eres Kronara Pulse, analista de rendimiento editorial. A partir de las MÉTRICAS "
                 "propias identificas qué funciona y qué cambiar, con recomendaciones ACCIONABLES y "
-                "honestas (no inventes causas que los datos no respaldan). Idioma indicado."
+                "honestas (no inventes causas que los datos no respaldan). Cuando los episodios "
+                "traigan señales de formato (content_kind, style_id, video_source_kind_counts = mix "
+                "de fuentes de animación), correlaciónalas con el resultado: qué tipo de contenido, "
+                "estilo visual o mezcla de metraje rinde mejor. Idioma indicado."
             ),
             input_payload={"language": language, "program": program, "episodes": episodes[:40]},
             response_schema=_PERFORMANCE_SCHEMA,

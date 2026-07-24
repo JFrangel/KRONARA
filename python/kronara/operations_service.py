@@ -434,6 +434,11 @@ class OperationsService:
                     "critic_family": episode["metadata"].get("critic_family"),
                     "narrative_passed": episode["metadata"].get("narrative_passed"),
                     "originality_passed": episode["metadata"].get("originality_passed"),
+                    "content_kind": episode["metadata"].get("content_kind") or "narrative_story",
+                    "style_id": episode["metadata"].get("style_id") or "",
+                    "video_source_kind_counts": dict(
+                        episode["metadata"].get("video_source_kind_counts", {})
+                    ),
                     "video_status": episode["metadata"].get("video_status"),
                     "video_path": episode["metadata"].get("video_path") or None,
                     "cover_image_path": episode["metadata"].get("cover_image_path") or None,
@@ -471,6 +476,8 @@ class OperationsService:
             "critic_family": metadata.get("critic_family"),
             "narrative_passed": metadata.get("narrative_passed"),
             "originality_passed": metadata.get("originality_passed"),
+            "content_kind": metadata.get("content_kind") or "narrative_story",
+            "style_id": metadata.get("style_id") or "",
             "evidence_refs": list(metadata.get("evidence_refs", [])),
             "video_status": metadata.get("video_status"),
             "video_path": metadata.get("video_path") or None,
@@ -481,6 +488,7 @@ class OperationsService:
             "video_scene_count": metadata.get("video_scene_count"),
             "video_shot_count": metadata.get("video_shot_count"),
             "video_source_kind_counts": dict(metadata.get("video_source_kind_counts", {})),
+            "scene_manifest": list(metadata.get("scene_manifest", [])),
             "music_path": metadata.get("music_path") or None,
             "sfx_cue_tags": list(metadata.get("sfx_cue_tags", [])),
             "sfx_resolved_paths": dict(metadata.get("sfx_resolved_paths", {})),

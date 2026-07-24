@@ -98,6 +98,27 @@
   function programName(programId) {
     return programs.find((p) => p.program_id === programId)?.name ?? programId ?? '—';
   }
+
+  // Etiquetas legibles para las señales estructuradas del episodio (#103).
+  const CONTENT_KIND_LABELS = {
+    narrative_story: 'Historia',
+    reflection: 'Reflexión',
+    scripture: 'Bíblico',
+    quote: 'Frase',
+  };
+  const SOURCE_KIND_LABELS = {
+    generated_image: 'Imagen IA',
+    ken_burns: 'Ken Burns',
+    stock_loop: 'Loop stock',
+    i2v: 'Generativo i2v',
+    placeholder: 'Placeholder',
+  };
+
+  function assetBasename(path) {
+    if (!path) return '—';
+    const parts = String(path).split(/[\\/]/);
+    return parts[parts.length - 1] || path;
+  }
 </script>
 
 <div class="space-y-4">
@@ -219,6 +240,17 @@
                 <p class="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">{selectedEpisodeDetail.script}</p>
               </div>
             {/if}
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              {#if selectedEpisodeDetail.content_kind}
+                <Badge tone="purple">{CONTENT_KIND_LABELS[selectedEpisodeDetail.content_kind] ?? selectedEpisodeDetail.content_kind}</Badge>
+              {/if}
+              {#if selectedEpisodeDetail.style_id}
+                <Badge tone="info">Estilo · {selectedEpisodeDetail.style_id}</Badge>
+              {/if}
+              {#each Object.entries(selectedEpisodeDetail.video_source_kind_counts ?? {}) as [kind, count]}
+                <Badge tone="neutral">{SOURCE_KIND_LABELS[kind] ?? kind}: {count}</Badge>
+              {/each}
+            </div>
             <dl class="mt-3 grid grid-cols-2 gap-2 text-[11.5px] sm:grid-cols-4">
               <div>
                 <dt class="text-ink-tertiary">Generador</dt>
@@ -237,6 +269,25 @@
                 <dd class="mt-0.5 text-ink">{selectedEpisodeDetail.video_shot_count ?? '—'}</dd>
               </div>
             </dl>
+            {#if selectedEpisodeDetail.scene_manifest?.length}
+              <div class="mt-3">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">Recursos por escena</p>
+                <ul class="mt-1.5 divide-y divide-line-subtle rounded-lg border border-line bg-surface-inset">
+                  {#each selectedEpisodeDetail.scene_manifest as asset}
+                    <li class="flex items-center justify-between gap-2 px-3 py-2 text-[11.5px]">
+                      <span class="flex items-center gap-2 min-w-0">
+                        <span class="shrink-0 rounded bg-surface px-1.5 py-0.5 font-mono text-[10.5px] text-ink-tertiary">#{asset.scene_index}</span>
+                        <span class="truncate font-mono text-ink-secondary">{assetBasename(asset.asset_path)}</span>
+                      </span>
+                      <span class="flex shrink-0 items-center gap-1.5">
+                        <Badge tone="neutral">{SOURCE_KIND_LABELS[asset.source_kind] ?? asset.source_kind}</Badge>
+                        {#if asset.duration_ms}<span class="text-ink-tertiary">{Math.round(asset.duration_ms / 1000)}s</span>{/if}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
           </Card>
         {/if}
       {/if}

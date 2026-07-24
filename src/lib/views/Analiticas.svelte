@@ -52,6 +52,9 @@
         duration_seconds: e.duration_seconds,
         narrative_passed: e.narrative_passed,
         originality_passed: e.originality_passed,
+        content_kind: e.content_kind,
+        style_id: e.style_id,
+        video_source_kind_counts: e.video_source_kind_counts,
       }));
       const result = await callOperations('pulse.analyze', { episodes: eps });
       if (result.status === 'ok') pulse = result;

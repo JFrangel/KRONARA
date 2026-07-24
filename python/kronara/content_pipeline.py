@@ -648,6 +648,27 @@ class ProductionContentPipeline:
                 "video_scene_count": video.get("scene_count") if video else None,
                 "video_shot_count": video.get("shot_count") if video else None,
                 "video_source_kind_counts": video.get("source_kind_counts", {}) if video else {},
+                # Señal estructurada para que los agentes aprendan qué funcionó:
+                # el tipo de contenido y el estilo visual del episodio, junto al
+                # mix de fuentes de animación (video_source_kind_counts).
+                "content_kind": brief.content_kind,
+                "style_id": str(params.get("style_id") or ""),
+                # Manifiesto compacto por escena: cada asset individual con su
+                # procedencia (fuente/tier/ruta) para que la Biblioteca liste los
+                # recursos uno a uno y los agentes vean la trazabilidad. Se omite
+                # la narración (ya vive en el guion) para no inflar los metadatos.
+                "scene_manifest": [
+                    {
+                        "scene_index": entry.get("scene_index"),
+                        "scene_id": entry.get("scene_id"),
+                        "source_kind": entry.get("source_kind"),
+                        "tier": entry.get("tier"),
+                        "duration_ms": entry.get("duration_ms"),
+                        "shot_count": entry.get("shot_count"),
+                        "asset_path": entry.get("asset_path"),
+                    }
+                    for entry in (video.get("scene_manifest", []) if video else [])
+                ],
                 "music_path": video.get("music_path", "") if video else "",
                 "sfx_cue_tags": video.get("sfx_cue_tags", []) if video else [],
                 "sfx_resolved_paths": video.get("sfx_resolved_paths", {}) if video else {},
