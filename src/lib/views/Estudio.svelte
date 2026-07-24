@@ -282,6 +282,20 @@
       </div>
     </div>
 
+    {#if liveDiagnostics?.script}
+      {@const s = liveDiagnostics.script}
+      <Card title="Guion en vivo" subtitle={`${s.word_count ?? 0} palabras · ~${Math.round(s.estimated_seconds ?? 0)}s${s.revision_count ? ` · ${s.revision_count} revisión(es)` : ''}`}>
+        <div class="flex items-center gap-2">
+          <span class="live-dot h-2 w-2 rounded-full bg-success"></span>
+          <p class="text-[11.5px] text-ink-tertiary">Guion aprobado por el crítico. Se muestra mientras la producción de video (lo lento) sigue corriendo.</p>
+        </div>
+        {#if s.hook}
+          <p class="mt-3 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-[12.5px] font-medium leading-relaxed text-ink">{s.hook}</p>
+        {/if}
+        <p class="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap pr-1 text-[12.5px] leading-relaxed text-ink-secondary">{s.script}</p>
+      </Card>
+    {/if}
+
     {#if liveDiagnostics?.program_quality_failure}
       <Card title="Falla en la plantilla del programa">
         <p class="text-[12px] text-ink">Programa: <code class="text-purple-300">{liveDiagnostics.program_quality_failure.program_id}</code></p>

@@ -494,6 +494,22 @@ class ProductionContentPipeline:
                     "rag_citations": state["citations"],
                 },
             }
+        # Guion en vivo: publica el guion aprobado ANTES de la producción de video
+        # (la etapa lenta), para que Estudio → En Vivo lo muestre mientras se
+        # generan las escenas.
+        self.store.append_event(
+            run_id,
+            "content.script_ready",
+            {
+                "story_id": state["story_id"],
+                "title": brief.title,
+                "hook": result.retention.hook if result.retention else "",
+                "script": result.script.text,
+                "word_count": result.script.word_count,
+                "estimated_seconds": result.script.estimated_seconds,
+                "revision_count": result.revision_count,
+            },
+        )
         return {**state, "result": result}
 
     def _stage_productor(self, state: dict[str, Any]) -> dict[str, Any]:

@@ -1407,6 +1407,13 @@ class OperationsService:
             (event.payload for event in reversed(workflow) if event.kind == "story.program_quality_failed"),
             None,
         )
+        # Guion en vivo: el escritor emite content.script_ready en cuanto el guion
+        # está aprobado (antes de la producción de video, que es lo lento), así el
+        # usuario lo lee mientras se renderizan las escenas.
+        script_ready = next(
+            (event.payload for event in reversed(workflow) if event.kind == "content.script_ready"),
+            None,
+        )
         phases = self._diagnostic_phases(workflow, quality_failure, program_quality_failure)
         agent_logs = [
             {
@@ -1439,6 +1446,7 @@ class OperationsService:
             "phases": phases,
             "agent_logs": agent_logs[-80:],
             "tool_events": tool_events,
+            "script": script_ready,
         }
 
     @staticmethod
