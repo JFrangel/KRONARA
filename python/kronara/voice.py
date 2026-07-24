@@ -2,13 +2,14 @@
 
 Kronara used to *estimate* narration length as ``words / 2.5``. That is fine for a
 first pass but drifts from what the ear actually hears. This module measures the
-**real** duration by synthesizing each scene with a neural voice (Microsoft Edge
-neural voices via the ``voice.synthesize`` authority tool) and reading the
-returned audio duration and per-word timings.
+**real** duration by synthesizing each scene with a cloned voice (a self-hosted
+**VoiceBox** server, primary as of v0.8 -- see :class:`VoiceBoxVoiceProvider`) and
+reading the returned audio's real duration.
 
-The effect is governed by Rust (``voice.synthesize`` is on the authority
-allowlist); Python only asks for it. When the tool is unavailable the measurer
-degrades explicitly to the word-rate estimate so the pipeline still runs.
+When VoiceBox is unavailable the measurer degrades explicitly, via
+:class:`FallbackVoiceProvider`, to the word-rate estimate so the pipeline still
+runs (silently, without a crash). Older paths could also route synthesis through
+the Rust-governed ``voice.synthesize`` authority tool.
 """
 
 from __future__ import annotations
@@ -131,92 +132,153 @@ class AuthorityVoiceProvider:
         return result
 
 
-class EdgeTtsVoiceProvider:
-    """Real synthesis via the Microsoft Edge neural voices (``edge-tts`` library).
+class VoiceBoxVoiceProvider:
+    """Real synthesis via a self-hosted **VoiceBox** server
+    (github.com/jamiepine/voicebox, MIT). Kronara's primary voice as of v0.8 --
+    replaces edge-tts. Clones a voice once (a VoiceBox *profile*) and reuses it
+    per program, so narration keeps one consistent identity.
 
-    Uses the library's ``WordBoundary`` events for true per-word timings and a
-    real duration (the end of the last word). Requires the optional ``edge-tts``
-    dependency and network access; callers should treat ``ImportError`` /
-    ``RuntimeError`` as "degrade to the estimate". Secret-free (the endpoint needs
-    no credential), so it is safe to run in-process.
+    VoiceBox generates asynchronously: ``POST /generate`` returns a generation id
+    immediately, then the audio becomes fetchable at ``GET /audio/{id}`` (404
+    while it's still rendering). Duration is measured from the returned audio with
+    ffprobe -- the same source of truth the rest of the pipeline uses -- not
+    trusted from the API. Secret-free (a local server, default
+    ``http://127.0.0.1:17493``); callers treat any error as "degrade to the
+    estimate" via :class:`FallbackVoiceProvider`.
+
+    Config (env or constructor): ``KRONARA_VOICEBOX_URL``,
+    ``KRONARA_VOICEBOX_PROFILE`` (the cloned voice's profile_id; a per-program
+    ``voice_id`` overrides it), ``KRONARA_VOICEBOX_LANGUAGE`` (default ``es``),
+    ``KRONARA_VOICEBOX_ENGINE`` (default: VoiceBox's own default, ``qwen``).
     """
 
-    # edge-tts offsets/durations are in 100-nanosecond ticks.
-    _TICKS_PER_MS = 10_000
+    DEFAULT_URL = "http://127.0.0.1:17493"
 
-    def __init__(self, *, audio_dir: "str | None" = None):
+    def __init__(
+        self,
+        *,
+        base_url: "str | None" = None,
+        profile_id: "str | None" = None,
+        language: "str | None" = None,
+        engine: "str | None" = None,
+        audio_dir: "str | None" = None,
+        timeout: float = 180.0,
+        poll_interval: float = 1.0,
+        ffprobe: "str | None" = None,
+        opener=None,
+    ):
+        self.base_url = (
+            base_url or os.environ.get("KRONARA_VOICEBOX_URL") or self.DEFAULT_URL
+        ).rstrip("/")
+        self.profile_id = profile_id or os.environ.get("KRONARA_VOICEBOX_PROFILE") or ""
+        self.language = language or os.environ.get("KRONARA_VOICEBOX_LANGUAGE") or "es"
+        self.engine = engine or os.environ.get("KRONARA_VOICEBOX_ENGINE") or ""
         self.audio_dir = audio_dir
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self._ffprobe = ffprobe
+        # Injectable for tests: a callable(url, data, headers, method) -> (status, bytes).
+        self._opener = opener or self._urlopen
+
+    @staticmethod
+    def _urlopen(url, data=None, headers=None, method="GET", timeout=30):
+        import urllib.request
+
+        req = urllib.request.Request(
+            url, data=data, headers=headers or {}, method=method
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return int(getattr(response, "status", 200) or 200), response.read()
 
     def synthesize(self, request: VoiceSynthesisRequest) -> VoiceSynthesisResult:
-        import asyncio
+        import json
+        import time
+        import urllib.error
 
+        profile_id = self.profile_id or request.voice_id
+        if not profile_id:
+            raise RuntimeError(
+                "VoiceBox profile_id is required "
+                "(set KRONARA_VOICEBOX_PROFILE or a per-program voice_id)"
+            )
+        body = {"profile_id": profile_id, "text": request.text, "language": self.language}
+        if self.engine:
+            body["engine"] = self.engine
         try:
-            import edge_tts
-        except ImportError as error:  # pragma: no cover - environment dependent
-            raise RuntimeError("edge-tts is not installed") from error
+            _, created_bytes = self._opener(
+                f"{self.base_url}/generate",
+                data=json.dumps(body).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            generation_id = str(json.loads(created_bytes.decode("utf-8")).get("id") or "")
+        except (urllib.error.URLError, OSError, ValueError) as error:
+            raise RuntimeError(f"VoiceBox /generate failed: {type(error).__name__}") from error
+        if not generation_id:
+            raise RuntimeError("VoiceBox /generate returned no generation id")
 
-        def _pct(value: float, unit: str) -> str:
-            amount = round(value * 100)
-            sign = "+" if amount >= 0 else ""
-            return f"{sign}{amount}{unit}"
-
-        async def _run() -> tuple[bytes, list[WordBoundary]]:
-            # Prefer word-level timings; fall back to whatever boundary the
-            # installed edge-tts version supports (older ones only emit sentences).
-            try:
-                communicate = edge_tts.Communicate(
-                    request.text,
-                    request.voice_id,
-                    rate=_pct(request.rate, "%"),
-                    pitch=_pct(request.pitch, "Hz"),
-                    boundary="WordBoundary",
-                )
-            except TypeError:
-                communicate = edge_tts.Communicate(
-                    request.text,
-                    request.voice_id,
-                    rate=_pct(request.rate, "%"),
-                    pitch=_pct(request.pitch, "Hz"),
-                )
-            audio = bytearray()
-            boundaries: list[WordBoundary] = []
-            async for chunk in communicate.stream():
-                kind = chunk.get("type")
-                if kind == "audio":
-                    audio.extend(chunk["data"])
-                elif isinstance(kind, str) and kind.endswith("Boundary"):
-                    boundaries.append(
-                        WordBoundary(
-                            word=str(chunk.get("text", "")),
-                            offset_ms=int(chunk["offset"] / self._TICKS_PER_MS),
-                            duration_ms=int(chunk["duration"] / self._TICKS_PER_MS),
-                        )
-                    )
-            return bytes(audio), boundaries
-
-        try:
-            audio, boundaries = asyncio.run(_run())
-        except Exception as error:  # network / voice errors -> caller degrades
-            raise RuntimeError(f"edge-tts synthesis failed: {type(error).__name__}") from error
-
-        duration_ms = (
-            max(b.offset_ms + b.duration_ms for b in boundaries) if boundaries else 0
-        )
+        audio = self._poll_audio(generation_id)
         audio_ref = None
         if self.audio_dir and audio:
-            import os
-
             os.makedirs(self.audio_dir, exist_ok=True)
-            path = os.path.join(self.audio_dir, f"{request.cache_key()}.mp3")
-            with open(path, "wb") as handle:
+            audio_ref = os.path.join(self.audio_dir, f"{request.cache_key()}.wav")
+            with open(audio_ref, "wb") as handle:
                 handle.write(audio)
-            audio_ref = path
+        duration_ms = self._duration_ms(audio_ref) if audio_ref else 0
+        if duration_ms <= 0:
+            # Never return a zero duration -- fall back to a word-rate estimate so
+            # subtitle/SFX timing stays sane even if ffprobe is unavailable.
+            duration_ms = int(
+                round(len(request.text.split()) / DEFAULT_WORDS_PER_SECOND * 1000)
+            )
         return VoiceSynthesisResult(
             voice_id=request.voice_id,
             duration_ms=duration_ms,
             audio_ref=audio_ref,
-            word_boundaries=tuple(boundaries),
+            degraded=False,
         )
+
+    def _poll_audio(self, generation_id: str) -> bytes:
+        import time
+        import urllib.error
+
+        url = f"{self.base_url}/audio/{generation_id}"
+        elapsed = 0.0
+        while elapsed < self.timeout:
+            try:
+                status, payload = self._opener(url, method="GET")
+                if status == 200 and payload:
+                    return payload
+            except urllib.error.HTTPError as error:
+                if error.code != 404:  # 404 == still generating (or failed)
+                    raise RuntimeError(
+                        f"VoiceBox /audio failed: HTTP {error.code}"
+                    ) from error
+            except (urllib.error.URLError, OSError) as error:
+                raise RuntimeError(f"VoiceBox /audio failed: {type(error).__name__}") from error
+            time.sleep(self.poll_interval)
+            elapsed += self.poll_interval
+        raise RuntimeError("VoiceBox generation timed out")
+
+    def _duration_ms(self, path: str) -> int:
+        from kronara.render import find_ffmpeg
+
+        ffprobe = self._ffprobe or find_ffmpeg("ffprobe")
+        if not ffprobe:
+            return 0
+        try:
+            completed = subprocess.run(
+                [
+                    ffprobe, "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1", path,
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if completed.returncode == 0 and completed.stdout.strip():
+                return int(round(float(completed.stdout.strip()) * 1000))
+        except Exception:
+            return 0
+        return 0
 
 
 class EstimatingVoiceProvider:
@@ -286,8 +348,9 @@ class EstimatingVoiceProvider:
 
 
 class FallbackVoiceProvider:
-    """Tries `primary` (e.g. EdgeTtsVoiceProvider, which needs network) and
-    falls back to `secondary` (e.g. EstimatingVoiceProvider) on any error.
+    """Tries `primary` (e.g. VoiceBoxVoiceProvider, which needs the local
+    VoiceBox server) and falls back to `secondary` (e.g. EstimatingVoiceProvider)
+    on any error.
     Required for unattended autonomous operation: a transient network/service
     failure in the primary must never crash the whole content.run --
     SceneDurationMeasurer.measure() does not itself catch synthesis errors,

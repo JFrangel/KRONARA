@@ -67,10 +67,9 @@ class VisualProductionResult:
 def concatenate_audio(ffmpeg: str, paths: Sequence[str], output_path: str, *, timeout: int = 300) -> None:
     """Join per-scene audio files in order via ffmpeg's concat demuxer.
     Re-encodes (``-c:a libmp3lame``) rather than stream-copying: production
-    audio_refs are real same-format mp3s from EdgeTtsVoiceProvider, where a
-    stream copy would work, but re-encoding costs nothing noticeable on a
-    few scenes of narration and stays correct regardless of what format a
-    future voice provider happens to write."""
+    audio_refs come from VoiceBoxVoiceProvider (wav), and re-encoding to a
+    single mp3 track costs nothing noticeable on a few scenes of narration and
+    stays correct regardless of what format a voice provider happens to write."""
     if not paths:
         raise ValueError("at least one audio path is required")
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -411,7 +410,7 @@ def produce_episode_video(
     if any(not ref for ref in voice_duration.audio_refs):
         raise ValueError(
             "real per-scene narration audio is required to produce video "
-            "(use a voice provider that writes audio_dir, e.g. EdgeTtsVoiceProvider)"
+            "(use a voice provider that writes audio_dir, e.g. VoiceBoxVoiceProvider)"
         )
 
     os.makedirs(output_dir, exist_ok=True)

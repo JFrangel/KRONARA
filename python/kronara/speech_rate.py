@@ -1,6 +1,6 @@
 """Learns the real narration speech rate (words/second) from measured voice
 synthesis, in place of the fixed "words / 2.5" guess that turned out to be
-~43% off real edge-tts output (measured ~3.59 words/sec, not 2.5).
+~43% off real synthesized output (measured ~3.59 words/sec, not 2.5).
 
 Every real (non-degraded) SceneDurationMeasurer.measure() call is a data
 point that already cost nothing extra to obtain: `word_count` words really

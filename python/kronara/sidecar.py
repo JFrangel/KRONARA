@@ -65,22 +65,30 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
     like it always could; this never blocks sidecar startup.
 
     voice_provider is wrapped in FallbackVoiceProvider regardless of
-    whether the rest of the stack is available: real per-word timing from
-    edge-tts is valuable for duration_qc accuracy on its own, and the
-    fallback means a transient network failure degrades gracefully to the
-    word-rate estimate instead of crashing content.run outright.
+    whether the rest of the stack is available: real cloned-voice audio from
+    VoiceBox is what makes narration sound human, and the fallback means a
+    VoiceBox server that's down (or not yet installed) degrades gracefully to
+    the silent word-rate estimate instead of crashing content.run outright.
 
     rate_learner persists the real words/second rate observed from actual
-    edge-tts measurements (see speech_rate.py), replacing the original
+    VoiceBox measurements (see speech_rate.py), replacing the original
     words/2.5 guess with a running average as real production accumulates.
-    Shared with EstimatingVoiceProvider so even the no-network fallback
-    reflects what has actually been learned."""
+    Shared with EstimatingVoiceProvider so even the no-server fallback
+    reflects what has actually been learned.
+
+    VoiceBox (github.com/jamiepine/voicebox, MIT) is the primary voice as of
+    v0.8; see docs/VOICEBOX.md for the server setup. It's configured via env:
+    KRONARA_VOICEBOX_URL / KRONARA_VOICEBOX_PROFILE / _LANGUAGE / _ENGINE."""
     from kronara.speech_rate import SpeechRateLearner
-    from kronara.voice import EdgeTtsVoiceProvider, EstimatingVoiceProvider, FallbackVoiceProvider
+    from kronara.voice import (
+        EstimatingVoiceProvider,
+        FallbackVoiceProvider,
+        VoiceBoxVoiceProvider,
+    )
 
     rate_learner = SpeechRateLearner(data_dir / "speech_rate.db").initialize()
     voice_provider = FallbackVoiceProvider(
-        EdgeTtsVoiceProvider(audio_dir=str(data_dir / "voice")),
+        VoiceBoxVoiceProvider(audio_dir=str(data_dir / "voice")),
         EstimatingVoiceProvider(audio_dir=str(data_dir / "voice"), rate_learner=rate_learner),
     )
 

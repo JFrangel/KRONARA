@@ -138,6 +138,46 @@ def test_styles_delete_reverts_override_to_base(tmp_path):
     service.close()
 
 
+def test_voice_profiles_lists_reachable_server_and_degrades_when_down(tmp_path, monkeypatch):
+    """Fase 2: voice.profiles proxies VoiceBox GET /profiles. Down -> reachable
+    False (not an error) so the Voces tab shows setup guidance; up -> the
+    profile list flows through."""
+    import json as _json
+
+    server, service = _server(tmp_path)
+
+    # Nothing is serving :17493 in the test env -> reachable False, empty list.
+    down = server.handle(_request("voice.profiles", {}))["result"]
+    assert down["reachable"] is False
+    assert down["profiles"] == []
+    assert down["base_url"]
+
+    class _Resp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def read(self):
+            return _json.dumps(self._payload).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda url, timeout=5: _Resp(
+            [{"id": "v1", "name": "Mara", "language": "es", "voice_type": "cloned"}]
+        ),
+    )
+    up = server.handle(_request("voice.profiles", {}))["result"]
+    assert up["reachable"] is True
+    assert up["profiles"][0]["id"] == "v1"
+    assert up["profiles"][0]["name"] == "Mara"
+    service.close()
+
+
 def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path):
     server, service = _server(tmp_path)
 

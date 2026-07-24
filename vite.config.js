@@ -30,6 +30,7 @@ const ALLOWED_RPC_METHODS = new Set([
   'styles.list',
   'styles.upsert',
   'styles.delete',
+  'voice.profiles',
   'episodes.list',
   'episodes.get',
   'episodes.delete',

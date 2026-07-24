@@ -1,3 +1,9 @@
+import json
+import urllib.error
+from pathlib import Path
+
+import pytest
+
 from kronara.speech_rate import DEFAULT_WORDS_PER_SECOND, SpeechRateLearner
 from kronara.story_engine import (
     DeterministicIndependentCritic,
@@ -10,10 +16,34 @@ from kronara.voice import (
     EstimatingVoiceProvider,
     FallbackVoiceProvider,
     SceneDurationMeasurer,
+    VoiceBoxVoiceProvider,
     VoiceSynthesisRequest,
     VoiceSynthesisResult,
     WordBoundary,
 )
+
+
+class FakeVoiceBoxServer:
+    """Simulates VoiceBox's async HTTP contract for the provider tests without a
+    real server: POST /generate returns a generation id, then GET /audio/{id}
+    404s ``pending`` times (still rendering) before returning the audio bytes."""
+
+    def __init__(self, *, audio: bytes = b"RIFFfakeaudio", pending: int = 1, gen_id: str = "gen-1"):
+        self.audio = audio
+        self.pending = pending
+        self.gen_id = gen_id
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, url, data=None, headers=None, method="GET", timeout=30):
+        self.calls.append((method, url))
+        if method == "POST" and url.endswith("/generate"):
+            return 200, json.dumps({"id": self.gen_id, "status": "generating"}).encode("utf-8")
+        if method == "GET" and url.endswith(f"/audio/{self.gen_id}"):
+            if self.pending > 0:
+                self.pending -= 1
+                raise urllib.error.HTTPError(url, 404, "not ready", {}, None)
+            return 200, self.audio
+        raise AssertionError(f"unexpected VoiceBox call {method} {url}")
 
 
 def brief(**overrides):
@@ -153,30 +183,64 @@ def test_estimating_provider_marks_degraded_but_measures():
     assert result.duration_ms > 0
 
 
-def test_edge_tts_live_measures_real_duration(tmp_path):
-    """Live check: real edge-tts synthesis yields a plausible measured duration.
-
-    Skips cleanly when edge-tts or the network is unavailable so CI stays green.
-    """
-    import pytest
-
-    pytest.importorskip("edge_tts")
-    from kronara.voice import EdgeTtsVoiceProvider
-
-    provider = EdgeTtsVoiceProvider(audio_dir=str(tmp_path / "audio"))
-    request = VoiceSynthesisRequest(
-        text="Mara escucha el audio incompleto y decide restaurarlo esa misma noche.",
-        voice_id="es-BO-SofiaNeural",
+def test_voicebox_generates_via_poll_and_writes_real_audio(tmp_path):
+    """VoiceBox's async contract, end to end against a fake server: POST
+    /generate, poll /audio/{id} past its "still rendering" 404s, then persist
+    the returned audio as a non-degraded result."""
+    server = FakeVoiceBoxServer(pending=2)
+    provider = VoiceBoxVoiceProvider(
+        profile_id="my-cloned-voice",
+        audio_dir=str(tmp_path / "audio"),
+        poll_interval=0.0,
+        opener=server,
     )
-    try:
-        result = provider.synthesize(request)
-    except RuntimeError as error:
-        pytest.skip(f"edge-tts unavailable: {error}")
+
+    result = provider.synthesize(
+        VoiceSynthesisRequest(text="una dos tres cuatro", voice_id="ignored")
+    )
 
     assert result.degraded is False
-    assert result.duration_ms > 1000  # a real sentence lasts more than a second
-    assert len(result.word_boundaries) >= 1  # word- or sentence-level, version dependent
-    assert result.audio_ref is not None
+    assert result.audio_ref is not None and Path(result.audio_ref).exists()
+    assert result.duration_ms > 0  # ffprobe reads real audio, else word estimate
+    assert ("POST", f"{provider.base_url}/generate") in server.calls
+    # the request body carried the configured profile, not the edge voice_id
+    assert server.calls.count(("GET", f"{provider.base_url}/audio/gen-1")) == 3
+
+
+def test_voicebox_requires_a_profile_id(tmp_path):
+    provider = VoiceBoxVoiceProvider(profile_id="", opener=FakeVoiceBoxServer())
+    with pytest.raises(RuntimeError):
+        provider.synthesize(VoiceSynthesisRequest(text="hola mundo", voice_id=""))
+
+
+def test_voicebox_times_out_when_audio_never_ready(tmp_path):
+    """A never-completing generation raises (FallbackVoiceProvider then degrades
+    to the estimate) rather than hanging content.run forever."""
+    provider = VoiceBoxVoiceProvider(
+        profile_id="v",
+        audio_dir=str(tmp_path / "audio"),
+        timeout=0.05,
+        poll_interval=0.01,
+        opener=FakeVoiceBoxServer(pending=10_000),
+    )
+    with pytest.raises(RuntimeError):
+        provider.synthesize(VoiceSynthesisRequest(text="hola", voice_id="v"))
+
+
+def test_voicebox_degrades_through_fallback_when_server_is_down(tmp_path):
+    """The production wiring: VoiceBox unreachable -> FallbackVoiceProvider hands
+    off to the silent estimate so a run never crashes on a missing server."""
+
+    def dead_opener(*args, **kwargs):
+        raise urllib.error.URLError("connection refused")
+
+    voice = FallbackVoiceProvider(
+        VoiceBoxVoiceProvider(profile_id="v", opener=dead_opener),
+        EstimatingVoiceProvider(rate_learner=None),
+    )
+    result = voice.synthesize(VoiceSynthesisRequest(text="una dos tres", voice_id="v"))
+    assert result.degraded is True
+    assert result.duration_ms > 0
 
 
 def test_duration_qc_target_word_count_uses_the_learned_rate_not_the_fixed_guess(tmp_path):

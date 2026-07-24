@@ -117,6 +117,20 @@
   const SOURCE_TONE = { base: 'neutral', custom: 'success', 'custom-override': 'warning' };
   const SOURCE_LABEL = { base: 'De fábrica', custom: 'Personalizado', 'custom-override': 'Editado' };
 
+  // --- Voces (Fase 2: VoiceBox) ---
+  let voiceInfo = $state(null);
+  let voicesLoaded = $state(false);
+
+  async function loadVoices() {
+    try {
+      voiceInfo = await callOperations('voice.profiles', {});
+    } catch (error) {
+      voiceInfo = { reachable: false, profiles: [], base_url: '', configured_profile: '' };
+    } finally {
+      voicesLoaded = true;
+    }
+  }
+
   onMount(async () => {
     try {
       context = await callOperations('operations.context', {});
@@ -124,6 +138,7 @@
       loadError = true;
     }
     loadStyles();
+    loadVoices();
   });
 
   const PROVIDERS = [
@@ -371,6 +386,55 @@
         </div>
       </Card>
     </div>
+  {:else if activeTab === 'voces'}
+    <Card title="Motor de voz — VoiceBox" subtitle="Voz clonada, auto-hospedada (reemplaza edge-tts)">
+      {#if !voicesLoaded}
+        <p class="text-[13px] text-ink-secondary">Comprobando el servidor VoiceBox…</p>
+      {:else if voiceInfo?.reachable}
+        <div class="flex items-center gap-2 rounded-xl border border-success/25 bg-success/10 p-3">
+          <span class="h-2 w-2 rounded-full bg-success"></span>
+          <span class="text-[12px] font-medium text-success">VoiceBox conectado</span>
+          <span class="ml-auto font-mono text-[11px] text-ink-tertiary">{voiceInfo.base_url}</span>
+        </div>
+        {#if voiceInfo.profiles?.length}
+          <ul class="mt-3 space-y-2">
+            {#each voiceInfo.profiles as profile (profile.id)}
+              <li class="flex items-center gap-3 rounded-xl border border-line bg-surface-inset p-3">
+                <div class="grid h-8 w-8 place-items-center rounded-lg bg-purple-500/15 text-purple-300"><Icon name="wand" size={15} /></div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[12.5px] font-medium text-ink">{profile.name || profile.id}</p>
+                  <p class="font-mono text-[10.5px] text-ink-tertiary">{profile.id}{profile.language ? ` · ${profile.language}` : ''}</p>
+                </div>
+                {#if profile.voice_type}<Badge tone="neutral">{profile.voice_type}</Badge>{/if}
+                {#if profile.id === voiceInfo.configured_profile}<Badge tone="success">Predeterminada</Badge>{/if}
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="mt-3 text-[12px] text-ink-secondary">No hay voces todavía. Clona una en la app de VoiceBox (sube unos segundos de audio) y aparecerá aquí.</p>
+        {/if}
+        <p class="mt-3 text-[11px] text-ink-tertiary">La voz predeterminada por programa se fija con <code class="text-purple-300">KRONARA_VOICEBOX_PROFILE</code> en tu <code>.env</code> (usa el <span class="font-mono">id</span> de arriba).</p>
+      {:else}
+        <div class="flex items-center gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3">
+          <span class="h-2 w-2 rounded-full bg-warning"></span>
+          <span class="text-[12px] font-medium text-warning">Servidor VoiceBox no detectado</span>
+        </div>
+        <div class="mt-3 space-y-2 text-[12px] text-ink-secondary">
+          <p>VoiceBox es la voz principal (open source, MIT, corre en tu equipo). Para activarlo:</p>
+          <ol class="ml-4 list-decimal space-y-1 text-[11.5px]">
+            <li>Instala Python 3.12 (los paquetes ML no soportan 3.14 aún).</li>
+            <li><code class="text-purple-300">git clone https://github.com/jamiepine/voicebox</code></li>
+            <li>Crea el venv e instala <code>backend/requirements.txt</code>.</li>
+            <li>Arranca solo el backend: <code class="text-purple-300">python -m uvicorn backend.main:app --port 17493</code></li>
+            <li>Clona tu voz en la app y copia su <span class="font-mono">id</span> a <code class="text-purple-300">KRONARA_VOICEBOX_PROFILE</code>.</li>
+          </ol>
+          <p class="text-[11px] text-ink-tertiary">Detalle completo en <code>docs/VOICEBOX.md</code>. Mientras tanto, la generación no se cae: usa el estimador silencioso como respaldo anti-crash.</p>
+        </div>
+        <button class="mt-3 rounded-lg border border-line px-3 py-1.5 text-[11.5px] text-ink-secondary transition-colors hover:text-ink" onclick={loadVoices}>
+          Reintentar conexión
+        </button>
+      {/if}
+    </Card>
   {:else if activeTab === 'seguridad'}
     <Card title="Seguridad">
       <ul class="space-y-2 text-[12.5px] text-ink-secondary">

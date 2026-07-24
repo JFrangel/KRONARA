@@ -139,6 +139,7 @@ class OperationsService:
             "styles.list": self.styles_list,
             "styles.upsert": self.styles_upsert,
             "styles.delete": self.styles_delete,
+            "voice.profiles": self.voice_profiles,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -500,6 +501,41 @@ class OperationsService:
             "status": "deleted" if removed else "not_found",
             "style_id": style_id,
             "styles": list_styles(default_style_library_path(), self._custom_styles_path),
+        }
+
+    def voice_profiles(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 2: list the cloned voices / presets from the local VoiceBox
+        server for Configuración → Voces. Best-effort: when VoiceBox isn't
+        running we return ``reachable: false`` (not an error) so the tab can
+        show setup guidance instead of failing."""
+        import json
+        import urllib.request
+
+        base = (os.environ.get("KRONARA_VOICEBOX_URL") or "http://127.0.0.1:17493").rstrip("/")
+        configured = os.environ.get("KRONARA_VOICEBOX_PROFILE", "")
+        profiles: list[dict[str, Any]] = []
+        reachable = False
+        try:
+            with urllib.request.urlopen(f"{base}/profiles", timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            reachable = True
+            for item in payload if isinstance(payload, list) else []:
+                profiles.append(
+                    {
+                        "id": str(item.get("id", "")),
+                        "name": str(item.get("name", "")),
+                        "language": str(item.get("language", "")),
+                        "voice_type": str(item.get("voice_type", "")),
+                    }
+                )
+        except Exception:
+            reachable = False
+        return {
+            "schema_version": 1,
+            "reachable": reachable,
+            "base_url": base,
+            "configured_profile": configured,
+            "profiles": profiles,
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:
