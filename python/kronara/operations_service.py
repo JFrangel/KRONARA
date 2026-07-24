@@ -141,7 +141,9 @@ class OperationsService:
             "styles.delete": self.styles_delete,
             "voice.profiles": self.voice_profiles,
             "voice.clone": self.voice_clone,
+            "voice.add_sample": self.voice_add_sample,
             "voice.delete_profile": self.voice_delete_profile,
+            "voice.settings": self.voice_settings,
             "episodes.list": self.episodes_list,
             "episodes.get": self.episodes_get,
             "episodes.delete": self.episodes_delete,
@@ -638,6 +640,64 @@ class OperationsService:
             "status": "deleted" if removed else "not_found",
             "profile_id": profile_id,
             **self._voice_state(),
+        }
+
+    def voice_add_sample(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 3: improve an existing cloned voice by attaching another
+        reference sample (audio + transcript). VoiceBox combines all a
+        profile's samples into the voice prompt, so more/better samples ->
+        a better clone."""
+        import base64
+
+        from kronara.voice import VoiceBoxAdmin, VoiceBoxError
+
+        profile_id = str(params.get("profile_id", "")).strip()
+        reference_text = str(params.get("reference_text", "")).strip()
+        audio_b64 = str(params.get("audio_base64", "")).strip()
+        if not profile_id or not reference_text or not audio_b64:
+            raise ValueError("profile_id, reference_text y audio_base64 son obligatorios")
+        if audio_b64.startswith("data:") and "," in audio_b64:
+            audio_b64 = audio_b64.split(",", 1)[1]
+        try:
+            audio = base64.b64decode(audio_b64)
+        except Exception as error:
+            raise ValueError("audio_base64 no es base64 válido") from error
+        filename = str(params.get("filename") or "reference.wav")
+        try:
+            VoiceBoxAdmin().upload_sample(
+                profile_id, audio=audio, filename=filename, reference_text=reference_text
+            )
+        except VoiceBoxError as error:
+            return {"schema_version": 1, "status": "error", "error": str(error), **self._voice_state()}
+        except Exception:
+            return {"schema_version": 1, "status": "error", "error": "VoiceBox no responde", **self._voice_state()}
+        return {"schema_version": 1, "status": "added", "profile_id": profile_id, **self._voice_state()}
+
+    def voice_settings(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Fase 3: read/write narration voice settings (currently ``speed``).
+        Persisted to voice_settings.v1.json in the data_dir; VoiceBoxVoiceProvider
+        reads it per-synthesis (ffmpeg atempo) so a change applies to the next
+        narration without restarting. Passing a ``speed`` writes it; otherwise
+        it's a read."""
+        import json
+
+        path = self.data_dir / "voice_settings.v1.json"
+        current: dict[str, Any] = {}
+        if path.exists():
+            try:
+                current = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                current = {}
+        if params.get("speed") is not None:
+            try:
+                speed = float(params["speed"])
+            except (TypeError, ValueError) as error:
+                raise ValueError("speed debe ser un número") from error
+            current["speed"] = max(0.5, min(2.0, speed))
+            path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {
+            "schema_version": 1,
+            "speed": float(current.get("speed", 1.0)),
         }
 
     def operations_chat(self, params: dict[str, Any]) -> dict[str, Any]:

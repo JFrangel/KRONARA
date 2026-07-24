@@ -88,7 +88,10 @@ def _build_visual_stack(data_dir: Path) -> dict[str, Any]:
 
     rate_learner = SpeechRateLearner(data_dir / "speech_rate.db").initialize()
     voice_provider = FallbackVoiceProvider(
-        VoiceBoxVoiceProvider(audio_dir=str(data_dir / "voice")),
+        VoiceBoxVoiceProvider(
+            audio_dir=str(data_dir / "voice"),
+            settings_path=str(data_dir / "voice_settings.v1.json"),
+        ),
         EstimatingVoiceProvider(audio_dir=str(data_dir / "voice"), rate_learner=rate_learner),
     )
 

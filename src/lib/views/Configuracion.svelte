@@ -136,8 +136,39 @@
   let cloneFile = $state(null);
   let cloning = $state(false);
   let cloneNotice = $state('');
+  let improvingProfile = $state(null); // when set, the form adds a sample to this voice
+  let voiceSpeed = $state(1.0);
 
   const cloneEngines = $derived((voiceInfo?.engines ?? []).filter((e) => e.clone));
+
+  async function loadVoiceSettings() {
+    try {
+      const s = await callOperations('voice.settings', {});
+      voiceSpeed = s.speed ?? 1.0;
+    } catch (error) {
+      voiceSpeed = 1.0;
+    }
+  }
+
+  async function saveVoiceSpeed(value) {
+    voiceSpeed = value;
+    try {
+      await callOperations('voice.settings', { speed: value });
+    } catch (error) {
+      /* best-effort */
+    }
+  }
+
+  function startImprove(profile) {
+    improvingProfile = profile;
+    cloneFile = null;
+    cloneNotice = '';
+  }
+
+  function cancelImprove() {
+    improvingProfile = null;
+    cloneNotice = '';
+  }
 
   function readFileAsBase64(file) {
     return new Promise((resolve, reject) => {
@@ -154,34 +185,50 @@
 
   async function cloneVoice() {
     if (cloning) return;
-    if (!cloneForm.name.trim() || !cloneForm.reference_text.trim() || !cloneFile) {
-      cloneNotice = 'Nombre, texto exacto y audio de referencia son obligatorios.';
+    const needsName = !improvingProfile;
+    if ((needsName && !cloneForm.name.trim()) || !cloneForm.reference_text.trim() || !cloneFile) {
+      cloneNotice = improvingProfile
+        ? 'Texto exacto y audio de referencia son obligatorios.'
+        : 'Nombre, texto exacto y audio de referencia son obligatorios.';
       return;
     }
     cloning = true;
     cloneNotice = '';
     try {
       const audio_base64 = await readFileAsBase64(cloneFile);
-      const result = await callOperations('voice.clone', {
-        name: cloneForm.name.trim(),
-        reference_text: cloneForm.reference_text.trim(),
-        engine: cloneForm.engine,
-        language: cloneForm.language,
-        filename: cloneFile.name,
-        audio_base64,
-      });
-      if (result.status === 'created') {
+      let result;
+      if (improvingProfile) {
+        result = await callOperations('voice.add_sample', {
+          profile_id: improvingProfile.id,
+          reference_text: cloneForm.reference_text.trim(),
+          filename: cloneFile.name,
+          audio_base64,
+        });
+      } else {
+        result = await callOperations('voice.clone', {
+          name: cloneForm.name.trim(),
+          reference_text: cloneForm.reference_text.trim(),
+          engine: cloneForm.engine,
+          language: cloneForm.language,
+          filename: cloneFile.name,
+          audio_base64,
+        });
+      }
+      if (result.status === 'created' || result.status === 'added') {
         voiceInfo = result;
-        cloneNotice = `Voz "${result.profile?.name ?? cloneForm.name.trim()}" clonada. Ya aparece en la lista.`;
+        cloneNotice = improvingProfile
+          ? `Muestra añadida a "${improvingProfile.name || improvingProfile.id}". La voz mejorará en la próxima narración.`
+          : `Voz "${result.profile?.name ?? cloneForm.name.trim()}" clonada. Ya aparece en la lista.`;
+        improvingProfile = null;
         cloneForm = { name: '', reference_text: '', engine: cloneForm.engine, language: cloneForm.language };
         cloneFile = null;
       } else if (result.reachable === false) {
         cloneNotice = 'VoiceBox no está corriendo. Arráncalo e inténtalo de nuevo.';
       } else {
-        cloneNotice = `No se pudo clonar: ${result.error ?? 'error desconocido'}`;
+        cloneNotice = `No se pudo: ${result.error ?? 'error desconocido'}`;
       }
     } catch (error) {
-      cloneNotice = 'No se pudo clonar la voz.';
+      cloneNotice = 'No se pudo completar la operación.';
     } finally {
       cloning = false;
     }
@@ -206,6 +253,7 @@
     }
     loadStyles();
     loadVoices();
+    loadVoiceSettings();
   });
 
   const PROVIDERS = [
@@ -474,7 +522,17 @@
                   <p class="font-mono text-[10.5px] text-ink-tertiary">{profile.id}{profile.language ? ` · ${profile.language}` : ''}</p>
                 </div>
                 {#if profile.voice_type}<Badge tone="neutral">{profile.voice_type}</Badge>{/if}
+                {#if profile.sample_count}<span class="text-[10px] text-ink-tertiary">{profile.sample_count} muestra{profile.sample_count === 1 ? '' : 's'}</span>{/if}
                 {#if profile.id === voiceInfo.configured_profile}<Badge tone="success">Predeterminada</Badge>{/if}
+                {#if profile.voice_type === 'cloned'}
+                  <button
+                    class="rounded-lg border border-purple-500/40 px-2 py-1 text-[11px] text-purple-200 transition-colors hover:bg-purple-500/10"
+                    onclick={() => startImprove(profile)}
+                    title="Añadir otra muestra para mejorar la voz"
+                  >
+                    Mejorar
+                  </button>
+                {/if}
                 <button
                   class="rounded-lg border border-error/25 px-2 py-1 text-[11px] text-error transition-colors hover:bg-error/10"
                   onclick={() => deleteProfile(profile)}
@@ -540,8 +598,12 @@
     </div>
 
     {#if voiceInfo?.reachable}
-      <Card title="Clonar una voz" subtitle="Sube unos segundos de audio + el texto exacto que dice">
+      <Card
+        title={improvingProfile ? `Mejorar "${improvingProfile.name || improvingProfile.id}"` : 'Clonar una voz'}
+        subtitle={improvingProfile ? 'Añade otra muestra de audio + su texto exacto (más muestras = mejor voz)' : 'Sube unos segundos de audio + el texto exacto que dice'}
+      >
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {#if !improvingProfile}
           <label class="block">
             <span class="text-[11px] text-ink-tertiary">Nombre de la voz</span>
             <input class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-ink outline-none focus:border-purple-500" placeholder="Voz narrador terror" bind:value={cloneForm.name} />
@@ -567,6 +629,7 @@
               </select>
             </label>
           </div>
+          {/if}
           <label class="block lg:col-span-2">
             <span class="text-[11px] text-ink-tertiary">Audio de referencia (2–30 s · wav/mp3/m4a/ogg/flac)</span>
             <input
@@ -590,10 +653,35 @@
             onclick={cloneVoice}
             disabled={cloning}
           >
-            {cloning ? 'Clonando…' : 'Clonar voz'}
+            {cloning ? (improvingProfile ? 'Añadiendo…' : 'Clonando…') : improvingProfile ? 'Añadir muestra' : 'Clonar voz'}
           </button>
-          <span class="text-[11px] text-ink-tertiary">Puedes clonar varias voces; cada programa usará la que elijas.</span>
+          {#if improvingProfile}
+            <button class="rounded-lg border border-line px-4 py-2 text-[12px] text-ink-secondary transition-colors hover:text-ink" onclick={cancelImprove}>
+              Cancelar
+            </button>
+          {:else}
+            <span class="text-[11px] text-ink-tertiary">Puedes clonar varias voces; cada programa usará la que elijas.</span>
+          {/if}
         </div>
+      </Card>
+
+      <Card title="Velocidad de la voz" subtitle="Aplica a la narración de todos los videos">
+        <div class="flex items-center gap-4">
+          <input
+            type="range"
+            min="0.5"
+            max="2"
+            step="0.05"
+            value={voiceSpeed}
+            class="h-1.5 flex-1 cursor-pointer accent-purple-500"
+            oninput={(event) => saveVoiceSpeed(parseFloat(event.currentTarget.value))}
+          />
+          <span class="w-16 text-right font-mono text-[13px] text-ink">{voiceSpeed.toFixed(2)}×</span>
+        </div>
+        <div class="mt-1 flex justify-between text-[10.5px] text-ink-tertiary">
+          <span>0.5× lento</span><span>1.0× normal</span><span>2.0× rápido</span>
+        </div>
+        <p class="mt-2 text-[11px] text-ink-tertiary">Se aplica con ffmpeg (mantiene el tono) sobre la narración generada. El cambio afecta la próxima generación.</p>
       </Card>
     {/if}
   {:else if activeTab === 'seguridad'}

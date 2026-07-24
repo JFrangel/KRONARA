@@ -289,6 +289,37 @@ def test_voice_delete_profile_removes_it(tmp_path, monkeypatch):
     service.close()
 
 
+def test_voice_add_sample_improves_existing_voice(tmp_path, monkeypatch):
+    import base64
+
+    fake = _use_fake_voicebox(monkeypatch)
+    fake.profiles["p1"] = {
+        "id": "p1", "name": "Voz", "language": "es", "voice_type": "cloned",
+        "default_engine": "qwen", "sample_count": 1,
+    }
+    server, service = _server(tmp_path)
+    result = server.handle(
+        _request(
+            "voice.add_sample",
+            {"profile_id": "p1", "reference_text": "otra frase", "audio_base64": base64.b64encode(b"a").decode()},
+        )
+    )["result"]
+    assert result["status"] == "added"
+    listed = {p["id"]: p for p in result["profiles"]}
+    assert listed["p1"]["sample_count"] == 2  # the extra reference sample landed
+    service.close()
+
+
+def test_voice_settings_persists_and_clamps_speed(tmp_path):
+    server, service = _server(tmp_path)
+    assert server.handle(_request("voice.settings", {}))["result"]["speed"] == 1.0
+    server.handle(_request("voice.settings", {"speed": 1.35}))
+    assert server.handle(_request("voice.settings", {}))["result"]["speed"] == 1.35
+    server.handle(_request("voice.settings", {"speed": 5.0}))  # clamps to 2.0
+    assert server.handle(_request("voice.settings", {}))["result"]["speed"] == 2.0
+    service.close()
+
+
 def test_operations_chat_is_authenticated_and_returns_visible_trace_ids(tmp_path):
     server, service = _server(tmp_path)
 

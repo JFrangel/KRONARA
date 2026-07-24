@@ -165,6 +165,7 @@ class VoiceBoxVoiceProvider:
         timeout: float = 180.0,
         poll_interval: float = 1.0,
         ffprobe: "str | None" = None,
+        settings_path: "str | None" = None,
         opener=None,
     ):
         self.base_url = (
@@ -177,8 +178,54 @@ class VoiceBoxVoiceProvider:
         self.timeout = timeout
         self.poll_interval = poll_interval
         self._ffprobe = ffprobe
+        # Optional voice_settings.v1.json (data_dir) -- read per-synthesis so a
+        # speed change in Configuración → Voces applies to the next narration
+        # without restarting the sidecar.
+        self._settings_path = settings_path
         # Injectable for tests: a callable(url, data, headers, method) -> (status, bytes).
         self._opener = opener or self._urlopen
+
+    def _speed(self) -> float:
+        """Playback speed multiplier for narration (1.0 = normal). From the
+        voice_settings file when present, else KRONARA_VOICEBOX_SPEED, else 1.0.
+        Clamped to ffmpeg atempo's single-filter range."""
+        speed = 1.0
+        if self._settings_path:
+            try:
+                import json
+
+                speed = float(
+                    json.loads(Path(self._settings_path).read_text(encoding="utf-8")).get(
+                        "speed", 1.0
+                    )
+                )
+            except Exception:
+                speed = 1.0
+        else:
+            env = os.environ.get("KRONARA_VOICEBOX_SPEED")
+            speed = float(env) if env else 1.0
+        return max(0.5, min(2.0, speed))
+
+    def _apply_speed(self, path: str, speed: float) -> None:
+        """Time-stretch the narration in place with ffmpeg ``atempo`` (changes
+        tempo, preserves pitch). No-op when speed≈1 or ffmpeg is missing."""
+        if abs(speed - 1.0) < 0.01:
+            return
+        from kronara.render import find_ffmpeg
+
+        ffmpeg = find_ffmpeg("ffmpeg")
+        if not ffmpeg:
+            return
+        tmp = f"{path}.spd.wav"
+        try:
+            completed = subprocess.run(
+                [ffmpeg, "-y", "-i", path, "-filter:a", f"atempo={speed:.3f}", tmp],
+                capture_output=True, text=True, timeout=90,
+            )
+            if completed.returncode == 0 and os.path.exists(tmp):
+                os.replace(tmp, path)
+        except Exception:
+            pass
 
     @staticmethod
     def _urlopen(url, data=None, headers=None, method="GET", timeout=30):
@@ -224,6 +271,9 @@ class VoiceBoxVoiceProvider:
             audio_ref = os.path.join(self.audio_dir, f"{request.cache_key()}.wav")
             with open(audio_ref, "wb") as handle:
                 handle.write(audio)
+            # Apply the configured narration speed BEFORE measuring, so the
+            # duration reflects what the video will actually play.
+            self._apply_speed(audio_ref, self._speed())
         duration_ms = self._duration_ms(audio_ref) if audio_ref else 0
         if duration_ms <= 0:
             # Never return a zero duration -- fall back to a word-rate estimate so

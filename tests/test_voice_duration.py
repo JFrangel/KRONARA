@@ -207,6 +207,18 @@ def test_voicebox_generates_via_poll_and_writes_real_audio(tmp_path):
     assert server.calls.count(("GET", f"{provider.base_url}/audio/gen-1")) == 3
 
 
+def test_voicebox_speed_reads_settings_file_and_clamps(tmp_path):
+    """Narration speed comes from voice_settings.v1.json per-synthesis, clamped
+    to ffmpeg atempo's single-filter range; missing/invalid -> 1.0."""
+    settings = tmp_path / "voice_settings.v1.json"
+    provider = VoiceBoxVoiceProvider(profile_id="v", settings_path=str(settings))
+    settings.write_text('{"speed": 1.5}', encoding="utf-8")
+    assert provider._speed() == 1.5
+    settings.write_text('{"speed": 9}', encoding="utf-8")
+    assert provider._speed() == 2.0
+    assert VoiceBoxVoiceProvider(profile_id="v", settings_path=str(tmp_path / "nope.json"))._speed() == 1.0
+
+
 def test_voicebox_requires_a_profile_id(tmp_path):
     provider = VoiceBoxVoiceProvider(profile_id="", opener=FakeVoiceBoxServer())
     with pytest.raises(RuntimeError):
