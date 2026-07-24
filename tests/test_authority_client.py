@@ -11,9 +11,9 @@ from kronara.authority_client import (
 
 
 def test_pexels_search_videos_is_an_allowed_authority_tool():
-    # Mirrors sidecar_bridge.rs's ALLOWED_AUTHORITY_TOOLS on the Rust side --
-    # both allowlists must agree or a live Pexels call is silently blocked
-    # by the Python client before it ever reaches Rust.
+    # Must match the Node authority's ALLOWED_AUTHORITY_TOOLS (vite.config.js) --
+    # both allowlists must agree or a live Pexels call is silently blocked by the
+    # Python client before it ever reaches the authority.
     assert "pexels.search_videos" in ALLOWED_AUTHORITY_TOOLS
 
 

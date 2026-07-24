@@ -1,14 +1,23 @@
-# Arquitectura v0.5
+# Arquitectura v0.8 (web pura)
 
 ## Decisión central
 
-Rust es el plano de autoridad. Python es el plano cognitivo aislado. La interfaz Svelte visualiza, configura y solicita operaciones; no conserva secretos ni aplica efectos externos.
+El **Node authority** (`vite.config.js`) es el plano de autoridad: custodia
+secretos/`.env`, hace el routing real de modelos (`model.complete`), la búsqueda
+en Pexels y la publicación, y arranca el sidecar con una lista cerrada de métodos.
+Python es el plano cognitivo aislado. La interfaz Svelte visualiza, configura y
+solicita operaciones; no conserva secretos ni aplica efectos externos.
+
+> **Migración fuera de Tauri (Fase 4):** el plano de autoridad vivía en Rust
+> (`src-tauri/`). Como el Node authority ya cubre todo lo web-crítico, `src-tauri/`
+> fue **eliminado** (app web pura, doble-clic — ver [COMO_INICIAR.md](COMO_INICIAR.md)).
+> Abajo se lee "Rust" por el diseño histórico; hoy ese rol lo cumple el Node authority.
 
 ```mermaid
 flowchart LR
-  UI["Svelte / Tauri UI"] --> R["Rust authority plane"]
+  UI["Svelte UI (web)"] --> R["Node authority (vite.config.js)"]
   R -->|"JSON-RPC local autenticado"| P["Python cognitive sidecar"]
-  R --> S["Secrets, files, network, jobs"]
+  R --> S["Secrets, network, publish"]
   P --> M["Agents, RAG, memory, Guardian"]
   P -->|"typed intent only"| R
 ```
