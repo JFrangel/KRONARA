@@ -209,6 +209,32 @@
   const sfxTags = $derived(video?.sfx_cue_tags ?? []);
   const sfxResolved = $derived(video?.sfx_resolved_paths ?? {});
   const sfxMissing = $derived(video?.sfx_missing_tags ?? []);
+
+  // #96: el agente de packaging genera título/descripción/hashtags por plataforma
+  // desde el guion (social.packaging), listo para adjuntar al publicar.
+  let packaging = $state(null);
+  let generatingPackaging = $state(false);
+  let packagingError = $state('');
+
+  async function generatePackaging() {
+    const script = contentResult?.story?.script;
+    if (!script || generatingPackaging) return;
+    generatingPackaging = true;
+    packaging = null;
+    packagingError = '';
+    try {
+      const result = await callOperations('social.packaging', {
+        script,
+        title: contentResult?.story?.title ?? '',
+        platforms: ['facebook', 'instagram', 'youtube', 'tiktok'],
+      });
+      packaging = result.packaging ?? [];
+    } catch (error) {
+      packagingError = 'El agente de packaging no respondió (revisa la ruta de modelos).';
+    } finally {
+      generatingPackaging = false;
+    }
+  }
 </script>
 
 <div class="space-y-4">
@@ -699,5 +725,38 @@
         <p class="text-[13px] text-ink-secondary">Sin exportaciones todavía. El master 16:9 y sus variantes por plataforma aparecerán aquí una vez que el pipeline visual (V0-V8) produzca un episodio.</p>
       {/if}
     </Card>
+
+    {#if contentResult?.story?.script}
+      <Card title="Packaging para publicar" subtitle="El agente genera título, descripción y hashtags por plataforma desde el guion">
+        <button
+          class="rounded-full bg-purple-500 px-5 py-2.5 text-[13px] font-medium text-ink hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
+          onclick={generatePackaging}
+          disabled={generatingPackaging}
+        >
+          {generatingPackaging ? 'Generando packaging…' : 'Generar packaging por plataforma'}
+        </button>
+        {#if packagingError}
+          <p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">{packagingError}</p>
+        {/if}
+        {#if packaging}
+          <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {#each packaging as pack (pack.platform)}
+              <div class="rounded-xl border border-line bg-surface-inset p-3">
+                <Badge tone="purple">{pack.platform}</Badge>
+                <p class="mt-2 text-[12.5px] font-medium text-ink">{pack.title}</p>
+                <p class="mt-1 text-[11.5px] leading-relaxed text-ink-secondary">{pack.description}</p>
+                {#if (pack.hashtags ?? []).length}
+                  <div class="mt-2 flex flex-wrap gap-1.5">
+                    {#each pack.hashtags as tag}
+                      <span class="rounded-full border border-line px-2 py-0.5 text-[10.5px] text-purple-300">{tag}</span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </Card>
+    {/if}
   {/if}
 </div>
