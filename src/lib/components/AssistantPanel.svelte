@@ -68,6 +68,18 @@
       approving = false;
     }
   }
+
+  // #101: arranque rápido -- pre-carga una consulta común y la envía.
+  const SUGGESTIONS = [
+    'Quiero crear un video',
+    '¿Qué agentes hay y qué hace cada uno?',
+    '¿Hay algo bloqueado ahora y por qué?',
+  ];
+
+  function askSuggestion(text) {
+    question = text;
+    ask();
+  }
 </script>
 
 {#if open}
@@ -88,6 +100,18 @@
         <p class="text-[13px] leading-relaxed text-ink-secondary">
           Pregunta por agentes, bloqueos, evidencia, métricas o decisiones -- o di "quiero crear un video" y te guío paso a paso. Los cambios se proponen; no se ejecutan desde el chat sin tu aprobación.
         </p>
+        <div class="flex flex-wrap gap-1.5 pt-1">
+          {#each SUGGESTIONS as suggestion}
+            <button
+              class="rounded-full border border-line px-3 py-1 text-[11.5px] text-ink-secondary transition-colors hover:border-purple-500 hover:text-ink disabled:opacity-40"
+              onclick={() => askSuggestion(suggestion)}
+              disabled={connection !== 'connected' || state.chatStatus === 'thinking'}
+            >
+              {suggestion}
+            </button>
+          {/each}
+        </div>
+        <p class="pt-1 text-[11px] text-ink-tertiary">Tip: para elegir tipo de contenido (historia/reflexión/bíblico/frase) usa el selector en Estudio → Resumen.</p>
       {/if}
       {#each state.messages as message, index}
         <article class="max-w-[92%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed" class:ml-auto={message.role === 'user'} class:bg-purple-500={message.role === 'user'} class:text-ink={message.role === 'user'} class:bg-surface={message.role === 'assistant'} class:border={message.role === 'assistant'} class:border-line={message.role === 'assistant'} class:text-ink-secondary={message.role === 'assistant'}>
@@ -141,7 +165,7 @@
       <textarea
         class="w-full resize-none rounded-xl border border-line bg-surface-inset p-3 text-[13px] text-ink placeholder:text-ink-tertiary focus:border-purple-500 focus:outline-none"
         rows="3"
-        placeholder="¿Qué agente está bloqueado y qué evidencia lo explica?"
+        placeholder="Crea un video, pregunta por agentes/bloqueos/métricas…"
         bind:value={question}
       ></textarea>
       <button
