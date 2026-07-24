@@ -709,3 +709,51 @@ def test_operations_service_threads_the_visual_stack_through_to_content_run(tmp_
     assert result["video"]["status"] == "completed", result["video"]
     assert Path(result["video"]["output_path"]).exists()
     service.close()
+
+
+def test_run_graph_produces_the_same_completed_result_as_run(tmp_path):
+    """The 3-node LangGraph path (estratega -> guionista -> productor on a
+    checkpointed persistent_graph) runs the SAME three stage bodies as run(),
+    so it produces the same completed episode and persists the same artifact."""
+    authority = FakeProductionAuthority()
+    store = KronaraStore(tmp_path / "runtime.db")
+    store.initialize()
+    rag = RAGV3Index(tmp_path / "knowledge.db", descriptor(), DeterministicHashEmbedder(64))
+    rag.upsert(
+        IngestDocument(
+            document_id="owned-dna-1",
+            title="ADN narrativo propio",
+            content="Las historias propias usan protagonistas activas y decisiones irreversibles.",
+            rights_mode="owned_original",
+            language="es",
+            scope="narrative",
+            valid_from=0,
+            valid_until=None,
+        )
+    )
+    pipeline = ProductionContentPipeline(
+        authority=authority,
+        store=store,
+        rag=rag,
+        model_registry=ModelCapabilityRegistryV2.load(ROOT / "config" / "models" / "registry.v2.json"),
+        artifact_root=tmp_path / "artifacts",
+    )
+
+    result = pipeline.run_graph(
+        {
+            "story_id": "owned-graph-1",
+            "subreddits": ["Historias"],
+            "sort": "hot",
+            "limit": 25,
+            "target_duration_seconds": 90,
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["selected_signal"]["source_id"] == "trend-safe-1"
+    assert result["story"]["generator_family"] == "qwen-routed"
+    # The productor node persisted the artifact just like run() does.
+    artifact = store.load_owned_story_artifact("owned-graph-1")
+    assert Path(artifact["path"]).read_text(encoding="utf-8") == result["story"]["script"]
+    store.close()
+    rag.close()

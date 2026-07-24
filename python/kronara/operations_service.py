@@ -826,11 +826,20 @@ class OperationsService:
         # episode.rs, tests) keep their blocking semantics.
         if params.get("wait") is False or params.get("async") is True:
             return self._content_run_async(params)
-        result = self._content_pipeline().run(params)
+        result = self._run_content(params)
         if result.get("run_id"):
             result = dict(result)
             result["diagnostics"] = self._run_diagnostics(str(result["run_id"]))
         return result
+
+    def _run_content(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Run content generation. Opt-in ``params['graph']=True`` uses the real
+        3-node LangGraph path (run_graph, checkpointed/resumable); otherwise the
+        identical linear run(). Both share the same 3 stage bodies."""
+        pipeline = self._content_pipeline()
+        if params.get("graph") is True:
+            return pipeline.run_graph(params)
+        return pipeline.run(params)
 
     def _content_pipeline(self) -> "ProductionContentPipeline":
         # Rebuild the style resolver per run from disk so a style the user just
@@ -890,7 +899,7 @@ class OperationsService:
                         "status": "running",
                         "node": "content_pipeline",
                     }
-                result = self._content_pipeline().run({**params, "story_id": story_id})
+                result = self._run_content({**params, "story_id": story_id})
                 with self._lock:
                     self._states[run_id] = {
                         **self._states[run_id],

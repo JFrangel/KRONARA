@@ -22,10 +22,16 @@ def persistent_graph(
     database: Path,
     nodes: Mapping[str, Callable[[WorkflowState], dict[str, Any]]],
     workflow: Sequence[str],
+    *,
+    state_schema: Any = WorkflowState,
 ) -> Iterator[Any]:
+    """Build a linear checkpointed graph from ``nodes`` run in ``workflow``
+    order, persisting to ``database`` (SqliteSaver, thread_id-keyed, resumable).
+    ``state_schema`` lets a caller supply its own TypedDict of channels (e.g.
+    content_pipeline's ContentState) instead of the generic WorkflowState."""
     if not workflow:
         raise ValueError("workflow must contain at least one node")
-    builder = StateGraph(WorkflowState)
+    builder = StateGraph(state_schema)
     for name in workflow:
         builder.add_node(name, nodes[name])
     builder.add_edge(START, workflow[0])

@@ -5,7 +5,7 @@ import re
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 from uuid import uuid4
 
 from kronara.agents import super_agent
@@ -132,6 +132,29 @@ class TracingAuthorityClient:
         return "executive_orchestrator"
 
 
+class _ContentState(TypedDict, total=False):
+    """LangGraph channels for the 3-node content graph (estratega -> guionista
+    -> productor). All optional; ``brief``/``result`` carry dataclasses (the
+    default SqliteSaver serde checkpoints them). ``done`` short-circuits
+    productor when guionista failed."""
+
+    params: dict[str, Any]
+    story_id: str
+    run_id: str
+    observed_at: int
+    brief: Any
+    selected_signal: dict[str, Any]
+    rejected_signals: dict[str, Any]
+    receipt: dict[str, Any]
+    citations: list[str]
+    evidence: list[str]
+    series_id: "str | None"
+    part_number: "int | None"
+    result: Any
+    done: bool
+    response: dict[str, Any]
+
+
 class ProductionContentPipeline:
     def __init__(
         self,
@@ -193,6 +216,42 @@ class ProductionContentPipeline:
         self._source_context_by_source_id: dict[str, str] = {}
 
     def run(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Estratega -> guionista -> productor, run linearly. run_graph() runs
+        the SAME three stage methods as real LangGraph nodes with checkpointing;
+        this sequence is the single source of truth so the two never diverge."""
+        state = self._stage_estratega({"params": dict(params)})
+        state = self._stage_guionista(state)
+        state = self._stage_productor(state)
+        return state["response"]
+
+    def run_graph(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Opt-in (params['graph']=True): run the 3 super-agents as real
+        LangGraph nodes on a checkpointed graph (SqliteSaver, thread_id=run_id),
+        so a run is resumable/observable per super-agent. Same node bodies as
+        run()."""
+        from kronara.langgraph_runtime import persistent_graph
+
+        story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
+        nodes = {
+            "estratega": self._stage_estratega,
+            "guionista": self._stage_guionista,
+            "productor": self._stage_productor,
+        }
+        self.artifacts.root.mkdir(parents=True, exist_ok=True)  # SqliteSaver opens a db inside it
+        with persistent_graph(
+            self.artifacts.root / "content_graph.db",
+            nodes,
+            ("estratega", "guionista", "productor"),
+            state_schema=_ContentState,
+        ) as graph:
+            final = graph.invoke(
+                {"params": dict(params)},
+                {"configurable": {"thread_id": f"content:{story_id}"}},
+            )
+        return dict(final["response"])
+
+    def _stage_estratega(self, state: dict[str, Any]) -> dict[str, Any]:
+        params = state["params"]
         story_id = self._story_id(str(params.get("story_id") or f"owned_{uuid4().hex[:16]}"))
         run_id = f"content:{story_id}"
         traced = TracingAuthorityClient(
@@ -383,6 +442,26 @@ class ProductionContentPipeline:
             source_sensitivity=source_sensitivity,
             program_id=str(params["program_id"]) if params.get("program_id") else None,
         )
+        return {
+            "params": params,
+            "story_id": story_id,
+            "run_id": run_id,
+            "observed_at": observed_at,
+            "brief": brief,
+            "selected_signal": self._signal_json(selected),
+            "rejected_signals": filtered.rejected_by_reason,
+            "receipt": dict(receipt),
+            "citations": list(citations),
+            "evidence": list(evidence),
+            "series_id": str(series_id) if series_id else None,
+            "part_number": part_number,
+        }
+
+    def _stage_guionista(self, state: dict[str, Any]) -> dict[str, Any]:
+        brief = state["brief"]
+        run_id = state["run_id"]
+        traced = TracingAuthorityClient(delegate=self.authority, store=self.store, run_id=run_id)
+        router = AuthorityModelRouter(authority=traced, registry=self.model_registry)
         generator = RoutedStoryProvider(router)
         result = StoryEngine(
             store=self.store,
@@ -393,15 +472,40 @@ class ProductionContentPipeline:
         if result.status != "completed" or result.script is None:
             self._release_leased_opportunity()
             return {
-                "schema_version": 1,
-                "run_id": run_id,
-                "status": result.status,
-                "error_code": result.error_code,
-                "selected_signal": self._signal_json(selected),
-                "rejected_signals": filtered.rejected_by_reason,
-                "reddit_receipt_id": receipt.get("receipt_id"),
-                "rag_citations": list(citations),
+                **state,
+                "done": True,
+                "response": {
+                    "schema_version": 1,
+                    "run_id": state["run_id"],
+                    "status": result.status,
+                    "error_code": result.error_code,
+                    "selected_signal": state["selected_signal"],
+                    "rejected_signals": state["rejected_signals"],
+                    "reddit_receipt_id": state["receipt"].get("receipt_id"),
+                    "rag_citations": state["citations"],
+                },
             }
+        return {**state, "result": result}
+
+    def _stage_productor(self, state: dict[str, Any]) -> dict[str, Any]:
+        if state.get("done"):
+            return state  # guionista failed -> pass its response straight through
+        params = state["params"]
+        story_id = state["story_id"]
+        run_id = state["run_id"]
+        observed_at = state["observed_at"]
+        brief = state["brief"]
+        result = state["result"]
+        evidence = state["evidence"]
+        receipt = state["receipt"]
+        citations = state["citations"]
+        series_id = state["series_id"]
+        part_number = state["part_number"]
+        canon_builder = None
+        if self.graph is not None and series_id:
+            from kronara.series import SeriesCanonBuilder
+
+            canon_builder = SeriesCanonBuilder(self.graph)
         # Produced BEFORE the artifact is saved (not after, as this used to
         # be) so the video/cover paths make it into the SAVED metadata --
         # episodes.list only ever sees what's persisted here, not the
@@ -484,29 +588,32 @@ class ProductionContentPipeline:
                 is_final=bool(params.get("is_final", not cliffhanger)),
             )
         return {
-            "schema_version": 1,
-            "run_id": run_id,
-            "status": "completed",
-            "selected_signal": self._signal_json(selected),
-            "rejected_signals": filtered.rejected_by_reason,
-            "reddit_receipt_id": receipt.get("receipt_id"),
-            "rag_citations": list(citations),
-            "artifact_uri": artifact_uri,
-            "video": video,
-            "story": {
-                "story_id": story_id,
-                "title": result.packaging.facebook_reels_title,
-                "hook": result.retention.hook,
-                "script": result.script.text,
-                "word_count": result.script.word_count,
-                "estimated_seconds": result.script.estimated_seconds,
-                "duration_qc": asdict(result.duration_qc),
-                "originality": asdict(result.originality),
-                "quality": asdict(result.quality),
-                "generator_family": result.generator_family,
-                "critic_family": result.critic_family,
-                "revision_count": result.revision_count,
-                "tool_trace_ids": list(result.tool_trace_ids),
+            **state,
+            "response": {
+                "schema_version": 1,
+                "run_id": run_id,
+                "status": "completed",
+                "selected_signal": state["selected_signal"],
+                "rejected_signals": state["rejected_signals"],
+                "reddit_receipt_id": receipt.get("receipt_id"),
+                "rag_citations": list(citations),
+                "artifact_uri": artifact_uri,
+                "video": video,
+                "story": {
+                    "story_id": story_id,
+                    "title": result.packaging.facebook_reels_title,
+                    "hook": result.retention.hook,
+                    "script": result.script.text,
+                    "word_count": result.script.word_count,
+                    "estimated_seconds": result.script.estimated_seconds,
+                    "duration_qc": asdict(result.duration_qc),
+                    "originality": asdict(result.originality),
+                    "quality": asdict(result.quality),
+                    "generator_family": result.generator_family,
+                    "critic_family": result.critic_family,
+                    "revision_count": result.revision_count,
+                    "tool_trace_ids": list(result.tool_trace_ids),
+                },
             },
         }
 
