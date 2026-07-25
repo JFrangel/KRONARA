@@ -338,8 +338,17 @@ _SCENE_ITEM_SCHEMA = {
     "type": "object",
     "properties": {
         "scene_id": {"type": "string"},
-        "purpose": {"type": "string"},
-        "narration": {"type": "string"},
+        "purpose": {"type": "string", "description": "Función dramática de la escena en una frase."},
+        "narration": {
+            "type": "string",
+            "minLength": 60,
+            "description": (
+                "OBLIGATORIO y NUNCA vacío: el texto narrativo COMPLETO en español "
+                "que se leerá en voz alta en esta escena — varias frases de prosa "
+                "sensorial y concreta (no un resumen, no viñetas, no markdown), "
+                "listo para narración. Escribe el guion real de la escena aquí."
+            ),
+        },
         "target_seconds": {"type": "integer"},
         "characters": {"type": "array", "items": {"type": "string"}},
         "seed_ids": {"type": "array", "items": {"type": "string"}},
