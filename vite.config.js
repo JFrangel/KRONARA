@@ -273,10 +273,13 @@ async function completeModel(argumentsValue, providers, health) {
             schema: request.response_schema,
           },
         };
-    // json_object exige la palabra "json" en el prompt (Groq/OpenAI); si el
-    // system no la menciona, la añadimos para no romper la llamada.
-    const systemContent = useJsonObject && !/json/i.test(request.system)
-      ? `${request.system}\n\nResponde ÚNICAMENTE con un objeto JSON válido acorde al esquema pedido.`
+    // Con json_object el modelo NO recibe el schema forzado (a diferencia de
+    // json_schema strict), así que se lo damos en el prompt para que produzca
+    // la estructura exacta; si no, payloadMatchesSchema rechaza la respuesta y
+    // el guion sale vacío. También satisface el requisito de Groq de mencionar
+    // "json" en el prompt.
+    const systemContent = useJsonObject
+      ? `${request.system}\n\nResponde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown) que cumpla EXACTAMENTE este JSON Schema:\n${JSON.stringify(request.response_schema)}`
       : request.system;
     const body = {
       model: candidate.model_id,
@@ -306,12 +309,21 @@ async function completeModel(argumentsValue, providers, health) {
         const json = await response.json();
         if (!response.ok) {
           lastError = `model provider failed with status ${response.status}`;
+          console.error(`[completeModel] ${candidate.model_id}@${provider.provider} HTTP ${response.status}: ${JSON.stringify(json?.error ?? json).slice(0, 220)}`);
           continue;
         }
         const content = json?.choices?.[0]?.message?.content;
-        const payload = typeof content === 'string' ? JSON.parse(content) : content;
+        let payload;
+        try {
+          payload = typeof content === 'string' ? JSON.parse(content) : content;
+        } catch (parseError) {
+          lastError = 'model returned non-JSON content';
+          console.error(`[completeModel] ${candidate.model_id}@${provider.provider} non-JSON: ${String(content).slice(0, 220)}`);
+          continue;
+        }
         if (!payloadMatchesSchema(payload, request.response_schema)) {
           lastError = 'model structured payload failed schema validation';
+          console.error(`[completeModel] ${candidate.model_id}@${provider.provider} schema-fail: ${JSON.stringify(payload).slice(0, 220)}`);
           continue;
         }
         health[candidate.model_id] = 'healthy';
@@ -324,9 +336,11 @@ async function completeModel(argumentsValue, providers, health) {
         };
       } catch (error) {
         lastError = error instanceof Error ? error.message : 'model provider is unavailable';
+        console.error(`[completeModel] ${candidate.model_id}@${provider.provider} threw: ${lastError}`);
       }
     }
   }
+  console.error(`[completeModel] ALL candidates failed for task=${request.task}: ${lastError}`);
   throw new Error(lastError);
 }
 

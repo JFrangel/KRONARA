@@ -484,9 +484,13 @@ class RoutedStoryProvider:
             )
             for item in payload.get("concepts", ())
         )
-        if len(concepts) != 3:
-            raise ValueError("routed provider must return exactly three concepts")
-        return concepts
+        # Con response_format json_object (Groq no soporta json_schema strict)
+        # el modelo NO queda forzado a minItems/maxItems=3, así que puede
+        # devolver más o menos de 3. Toleramos: usamos hasta 3 (el pipeline
+        # elige el mejor) y solo fallamos si no vino ninguno.
+        if not concepts:
+            raise ValueError("routed provider returned no concepts")
+        return concepts[:3]
 
     def blueprint(
         self, brief: StoryBrief, concept: StoryConcept
@@ -527,8 +531,11 @@ class RoutedStoryProvider:
             )
             for item in payload.get("beats", ())
         )
-        if len(beats) < 6:
-            raise ValueError("routed blueprint requires at least six causal beats")
+        # json_object no fuerza minItems=6 (Groq no soporta json_schema strict),
+        # así que toleramos menos: con >=3 beats hay estructura narrativa
+        # suficiente para producir el video; solo fallamos si vinieron muy pocos.
+        if len(beats) < 3:
+            raise ValueError("routed blueprint returned too few causal beats")
         return beats
 
     def scenes(
